@@ -22,7 +22,9 @@ function Optional-File([string]$RelativePath) {
 }
 function Require-Text([string]$Path, [string]$Needle, [string]$Message) {
   $text = [IO.File]::ReadAllText($Path)
-  if (-not $text.Contains($Needle)) { throw $Message }
+  if (-not $text.Contains($Needle)) {
+    throw ("{0} Missing literal in {1}: {2}" -f $Message, $Path, $Needle)
+  }
 }
 function Forbid-Path([string]$RelativePath) {
   $path = Join-Path $Root $RelativePath
@@ -153,13 +155,13 @@ if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-c
 Require-Text $dockerfile "FROM scratch AS export" "Dockerfile must expose one clean export target."
 Require-Text $dockerfile "EMSCRIPTEN_COMMIT" "Dockerfile must carry the exact Emscripten source commit into the toolchain environment."
 
-Require-Text $thirdParty "generated `ffmpeg.wasm`" "Third-party notice must distinguish generated Wasm from the MIT builder source."
+Require-Text $thirdParty 'generated `ffmpeg.wasm`' "Third-party notice must distinguish generated Wasm from the MIT builder source."
 Require-Text $thirdParty "GPL-2.0-or-later" "Third-party notice must state the generated core license."
 Require-Text $licenseIndex "FFmpeg-COPYING.GPLv2" "License index must document FFmpeg GPL license packaging."
 Require-Text $licenseDoc "same GitHub Release" "Licensing docs must keep binaries and corresponding source together."
 Require-Text $readme "GPL-2.0-or-later" "Japanese README must clearly state the generated core license."
 Require-Text $readme "THIRD_PARTY_NOTICES.md" "Japanese README must link third-party notices."
-Require-Text $readmeEn "does **not** relicense generated `ffmpeg.wasm`" "English README must clearly scope the root MIT license."
+Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
 Require-Text $releaseDoc "git tag -a v1.0.0" "Release documentation must include the first stable tag procedure."
 
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
