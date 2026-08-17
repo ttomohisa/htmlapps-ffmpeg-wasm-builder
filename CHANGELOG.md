@@ -8,6 +8,7 @@
 - Add a tag-driven GitHub Release workflow that rebuilds and runs the real browser smoke test before publishing.
 - Add automated `BUILDINFO.txt`, SHA-256 checksums, a binary integration bundle, and a corresponding-source archive.
 - Add `.gitattributes` so shell/Docker inputs stay LF on Windows clones and the MP4 smoke fixture is always treated as binary.
+- Treat `.gitattributes` as recommended repository metadata rather than a hard build prerequisite, so CI reports a warning instead of failing if a copy/push step omits the dotfile.
 - Corresponding-source packaging includes exact FFmpeg, x264, Emscripten sources plus the complete Builder recipe used for the release.
 - Require the pushed tag to exactly match `BUILDER_VERSION`; release creation uses `gh release create --verify-tag`.
 

@@ -6,9 +6,17 @@ $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
 function Require-File([string]$RelativePath) {
   $path = Join-Path $Root $RelativePath
-  if (-not (Test-Path $path)) { throw "Required file is missing: $RelativePath" }
-  if ((Get-Item $path).Length -eq 0) { throw "Required file is empty: $RelativePath" }
-  return $path
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required file is missing: $RelativePath" }
+  $item = Get-Item -LiteralPath $path
+  if ($item.Length -eq 0) { throw "Required file is empty: $RelativePath" }
+  return $item.FullName
+}
+function Optional-File([string]$RelativePath) {
+  $path = Join-Path $Root $RelativePath
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+  $item = Get-Item -LiteralPath $path
+  if ($item.Length -eq 0) { return $null }
+  return $item.FullName
 }
 function Require-Text([string]$Path, [string]$Needle, [string]$Message) {
   $text = [IO.File]::ReadAllText($Path)
@@ -20,7 +28,10 @@ function Forbid-Path([string]$RelativePath) {
 }
 
 $versions = Require-File "versions.env"
-$gitattributes = Require-File ".gitattributes"
+$gitattributes = Optional-File ".gitattributes"
+if ($null -eq $gitattributes) {
+  Write-Warning ".gitattributes is missing. The build can continue, but keeping it is recommended so shell scripts stay LF on Windows clones."
+}
 $dockerfile = Require-File "docker/Dockerfile"
 $buildScript = Require-File "scripts/build-ffmpeg.sh"
 $windowsBuild = Require-File "scripts/build.ps1"
@@ -115,9 +126,11 @@ Require-Text $windowsBuild '"buildx", "build"' "Windows build must use Buildx."
 Require-Text $unixBuild "docker buildx build" "Unix build must use Buildx."
 Require-Text $windowsBuild 'EMSCRIPTEN_COMMIT' "Windows build must pass the Emscripten source commit into Docker."
 Require-Text $unixBuild 'EMSCRIPTEN_COMMIT' "Unix build must pass the Emscripten source commit into Docker."
-Require-Text $gitattributes "*.sh text eol=lf" "Shell scripts must stay LF across Windows clones."
-Require-Text $gitattributes "*.bat text eol=crlf" "Windows batch launchers must use CRLF."
-Require-Text $gitattributes "*.mp4 binary" "Smoke fixture must be marked binary."
+if ($null -ne $gitattributes) {
+  Require-Text $gitattributes "*.sh text eol=lf" "Shell scripts must stay LF across Windows clones."
+  Require-Text $gitattributes "*.bat text eol=crlf" "Windows batch launchers must use CRLF."
+  Require-Text $gitattributes "*.mp4 binary" "Smoke fixture must be marked binary."
+}
 
 $versionsText = [IO.File]::ReadAllText($versions)
 if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.0\.0$') { throw "Builder version must be 1.0.0." }
