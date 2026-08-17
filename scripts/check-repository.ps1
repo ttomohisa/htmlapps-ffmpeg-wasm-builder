@@ -13,10 +13,12 @@ function Require-File([string]$RelativePath) {
 }
 function Optional-File([string]$RelativePath) {
   $path = Join-Path $Root $RelativePath
-  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
-  $item = Get-Item -LiteralPath $path
-  if ($item.Length -eq 0) { return $null }
-  return $item.FullName
+  # Optional files must never make repository validation fail.
+  # Use File.Exists directly instead of Test-Path + Get-Item because some
+  # CI/filesystem combinations can report a transient/virtual path to
+  # Test-Path that Get-Item cannot subsequently resolve.
+  if (-not [IO.File]::Exists($path)) { return $null }
+  return $path
 }
 function Require-Text([string]$Path, [string]$Needle, [string]$Message) {
   $text = [IO.File]::ReadAllText($Path)
