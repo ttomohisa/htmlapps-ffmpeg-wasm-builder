@@ -1,0 +1,186 @@
+/* Browser runtime for the single-thread public-libav runner. No SharedArrayBuffer required. */
+(() => {
+  "use strict";
+  const PROGRESS_PREFIX = "__FFMPEG_WASM_PROGRESS__";
+
+  const WORKER_BODY = String.raw`
+    (() => {
+    "use strict";
+    const PROGRESS_PREFIX = "__FFMPEG_WASM_PROGRESS__";
+    const ensureParent = (FS, path) => {
+      const index = path.lastIndexOf("/");
+      if (index <= 0) return;
+      try { FS.mkdirTree(path.slice(0, index)); } catch (_) {}
+    };
+    self.onmessage = async (event) => {
+      const { wasmBytes, args, files, outputs } = event.data;
+      const sendLine = (stream, value) => {
+        const message = String(value);
+        if (message.startsWith(PROGRESS_PREFIX)) {
+          const progress = Number(message.slice(PROGRESS_PREFIX.length).trim());
+          if (Number.isFinite(progress)) self.postMessage({ type: "progress", progress: Math.max(0, Math.min(1, progress)) });
+          return;
+        }
+        self.postMessage({ type: "log", stream, message });
+      };
+      try {
+        if (typeof createFFmpegCore !== "function") throw new Error("createFFmpegCore factory was not found.");
+        const wasmView = new Uint8Array(wasmBytes);
+        const core = await createFFmpegCore({
+          // Emscripten's generated loader normally resolves ffmpeg.wasm
+          // relative to the JS script.  Our JS runs inside a blob Worker, where
+          // that relative URL is invalid.  Instantiate directly from the bytes
+          // already transferred to this Worker so hosted and file:// single-HTML
+          // execution never depends on URL resolution for the Wasm binary.
+          wasmBinary: wasmView,
+          instantiateWasm: (imports, successCallback) => {
+            const module = new WebAssembly.Module(wasmView);
+            const instance = new WebAssembly.Instance(module, imports);
+            successCallback(instance, module);
+            return instance.exports;
+          },
+          locateFile: (path, prefix) => prefix + path,
+          print: (message) => sendLine("stdout", message),
+          printErr: (message) => sendLine("stderr", message)
+        });
+        for (const file of files) {
+          ensureParent(core.FS, file.name);
+          core.FS.writeFile(file.name, new Uint8Array(file.data));
+        }
+        let exitCode = 0;
+        try {
+          const result = core.callMain(args);
+          if (typeof result === "number") exitCode = result;
+        } catch (error) {
+          if (typeof error?.status === "number" && error.status === 0) exitCode = 0;
+          else throw error;
+        }
+        if (exitCode !== 0) throw new Error("FFmpeg WASM runner exited with code " + exitCode);
+        const resultFiles = [];
+        const transfer = [];
+        for (const name of outputs) {
+          const bytes = core.FS.readFile(name);
+          const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+          resultFiles.push({ name, data: copy });
+          transfer.push(copy);
+        }
+        self.postMessage({ type: "done", exitCode, files: resultFiles }, transfer);
+      } catch (error) {
+        self.postMessage({ type: "error", name: error?.name || "Error", message: error?.message || String(error), stack: error?.stack || "" });
+      }
+    };
+    })();
+  `;
+
+  const toArrayBuffer = async (value) => {
+    if (value instanceof ArrayBuffer) return value.slice(0);
+    if (ArrayBuffer.isView(value)) return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+    if (value instanceof Blob) return await value.arrayBuffer();
+    throw new TypeError("Input data must be Blob, File, ArrayBuffer, or TypedArray.");
+  };
+
+  const isSupported = () => typeof Worker === "function" && typeof WebAssembly === "object" && typeof Blob === "function" && typeof URL?.createObjectURL === "function";
+  const assertSupported = () => { if (!isSupported()) throw new Error("This browser does not support the FFmpeg WASM runtime."); };
+
+  const createWorker = (coreJsText) => {
+    // Keep the generated Emscripten glue and our Worker body in one Blob.
+    // This avoids nested blob-script loading on file:// pages, where nested
+    // blob URL loading is not portable across browsers.
+    const url = URL.createObjectURL(new Blob([coreJsText, "\n;", WORKER_BODY], { type: "text/javascript;charset=utf-8" }));
+    try {
+      return { worker: new Worker(url), url };
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  };
+
+  class FFmpegRunner {
+    constructor(coreJsText, wasmBytes, revokeUrls = []) {
+      this.coreJsText = coreJsText;
+      this.wasmBytes = wasmBytes;
+      this.revokeUrls = revokeUrls;
+      this.disposed = false;
+    }
+    async run(options = {}) {
+      if (this.disposed) throw new Error("Runner has been disposed.");
+      assertSupported();
+      const args = Array.isArray(options.args) ? [...options.args] : [];
+      const outputs = Array.isArray(options.outputs) ? [...options.outputs] : [];
+      const onLog = typeof options.onLog === "function" ? options.onLog : () => {};
+      const onProgress = typeof options.onProgress === "function" ? options.onProgress : () => {};
+      const files = [];
+      const transfer = [];
+      for (const file of Array.isArray(options.files) ? options.files : []) {
+        if (!file?.name) throw new Error("Every input file needs a virtual filesystem name.");
+        const data = await toArrayBuffer(file.data);
+        files.push({ name: file.name, data });
+        transfer.push(data);
+      }
+      const wasmForRun = this.wasmBytes.slice(0);
+      transfer.push(wasmForRun);
+      return await new Promise((resolve, reject) => {
+        const created = createWorker(this.coreJsText);
+        const worker = created.worker;
+        const finish = () => { worker.terminate(); URL.revokeObjectURL(created.url); };
+        worker.onmessage = (event) => {
+          const message = event.data;
+          if (message?.type === "log") { onLog({ stream: message.stream, message: message.message }); return; }
+          if (message?.type === "progress") { onProgress(message.progress); return; }
+          if (message?.type === "done") {
+            finish();
+            resolve({ exitCode: message.exitCode, files: message.files.map((file) => ({ name: file.name, data: new Uint8Array(file.data) })) });
+            return;
+          }
+          if (message?.type === "error") {
+            finish();
+            const error = new Error(message.message); error.name = message.name || "Error"; error.stack = message.stack || error.stack; reject(error);
+          }
+        };
+        worker.onerror = (event) => { finish(); reject(event.error || new Error(event.message || "FFmpeg WASM worker failed.")); };
+        worker.postMessage({ wasmBytes: wasmForRun, args, files, outputs }, transfer);
+      });
+    }
+    dispose() {
+      if (this.disposed) return;
+      this.disposed = true;
+      for (const url of this.revokeUrls) URL.revokeObjectURL(url);
+      this.revokeUrls = [];
+      this.coreJsText = "";
+      this.wasmBytes = new ArrayBuffer(0);
+    }
+  }
+
+  async function loadHosted({ coreJsUrl, wasmUrl }) {
+    assertSupported();
+    const coreHref = new URL(coreJsUrl, document.baseURI).href;
+    const wasmHref = new URL(wasmUrl, document.baseURI).href;
+    const [coreResponse, wasmResponse] = await Promise.all([fetch(coreHref), fetch(wasmHref)]);
+    if (!coreResponse.ok) throw new Error(`Failed to load FFmpeg JS: ${coreResponse.status} ${coreResponse.statusText}`);
+    if (!wasmResponse.ok) throw new Error(`Failed to load FFmpeg WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
+    return new FFmpegRunner(await coreResponse.text(), await wasmResponse.arrayBuffer());
+  }
+
+  async function loadEmbedded({ coreJsText, wasmBytes }) {
+    assertSupported();
+    return new FFmpegRunner(String(coreJsText), await toArrayBuffer(wasmBytes));
+  }
+
+  const videoCompressorArgs = (options = {}) => {
+    const args = ["--input", options.input || "/input.bin", "--output", options.output || "/output.mp4"];
+    const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
+    add("--max-width", options.maxWidth ?? 0);
+    add("--max-height", options.maxHeight ?? 0);
+    add("--fps", options.fps ?? 0);
+    add("--crf", options.crf ?? 28);
+    if (options.videoBitrateKbps) add("--video-bitrate", options.videoBitrateKbps);
+    add("--preset", options.preset || "veryfast");
+    add("--audio-bitrate", options.audioBitrateKbps ?? 128);
+    if (options.noAudio) args.push("--no-audio");
+    if (options.allowUpscale) args.push("--allow-upscale");
+    if (options.faststart === false) args.push("--no-faststart");
+    return args;
+  };
+
+  window.BrowserFFmpeg = Object.freeze({ loadHosted, loadEmbedded, videoCompressorArgs, isSupported });
+})();

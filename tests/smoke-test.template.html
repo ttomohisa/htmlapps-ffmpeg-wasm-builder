@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" data-smoke="running">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FFmpeg WASM smoke test</title>
+</head>
+<body>
+  <pre id="smoke-status">SMOKE_TEST_RUNNING</pre>
+  <pre id="smoke-log"></pre>
+  <script id="ffmpeg-js-gzip" type="application/octet-stream">
+__FFMPEG_JS_GZIP_BASE64__
+  </script>
+  <script id="ffmpeg-wasm-gzip" type="application/octet-stream">
+__FFMPEG_WASM_GZIP_BASE64__
+  </script>
+  <script id="smoke-input" type="application/octet-stream">
+__SMOKE_INPUT_BASE64__
+  </script>
+  <script>
+__FFMPEG_RUNTIME__
+  </script>
+  <script>
+  (() => {
+    "use strict";
+    const status = document.getElementById("smoke-status");
+    const log = document.getElementById("smoke-log");
+    const append = (line) => { log.textContent += String(line) + "\n"; };
+    const decodeBase64 = (id) => {
+      const clean = document.getElementById(id).textContent.replace(/\s+/g, "");
+      const raw = atob(clean);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      return bytes;
+    };
+    const gunzip = async (id, asText) => {
+      if (!("DecompressionStream" in globalThis)) throw new Error("DecompressionStream is unavailable");
+      const compressed = decodeBase64(id);
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+      const response = new Response(stream);
+      return asText ? await response.text() : await response.arrayBuffer();
+    };
+    const containsAscii = (bytes, text) => {
+      const target = new TextEncoder().encode(text);
+      outer: for (let i = 0; i <= bytes.length - target.length; i++) {
+        for (let j = 0; j < target.length; j++) if (bytes[i + j] !== target[j]) continue outer;
+        return true;
+      }
+      return false;
+    };
+    const fail = (error) => {
+      const message = error?.stack || error?.message || String(error);
+      document.documentElement.dataset.smoke = "fail";
+      status.textContent = "SMOKE_TEST_FAIL: " + message;
+      location.replace("about:blank#SMOKE_TEST_FAIL_" + encodeURIComponent(message.slice(0, 500)));
+      append(message);
+    };
+    const pass = (details) => {
+      document.documentElement.dataset.smoke = "pass";
+      status.textContent = "SMOKE_TEST_PASS " + details;
+      location.replace("about:blank#SMOKE_TEST_PASS_" + details.replace(/[^A-Za-z0-9_=.-]/g, "_"));
+    };
+
+    (async () => {
+      try {
+        if (!globalThis.BrowserFFmpeg) throw new Error("BrowserFFmpeg runtime was not loaded");
+        const [coreJsText, wasmBytes] = await Promise.all([
+          gunzip("ffmpeg-js-gzip", true),
+          gunzip("ffmpeg-wasm-gzip", false)
+        ]);
+        const input = decodeBase64("smoke-input");
+        const runner = await BrowserFFmpeg.loadEmbedded({ coreJsText, wasmBytes });
+        const result = await runner.run({
+          files: [{ name: "/input.mp4", data: input }],
+          outputs: ["/output.mp4"],
+          args: BrowserFFmpeg.videoCompressorArgs({
+            input: "/input.mp4",
+            output: "/output.mp4",
+            maxWidth: 96,
+            crf: 35,
+            preset: "ultrafast",
+            audioBitrateKbps: 32
+          }),
+          onLog: ({ message }) => append(message)
+        });
+        runner.dispose();
+
+        if (result.exitCode !== 0) throw new Error("Runner exit code was " + result.exitCode);
+        if (!result.files || result.files.length !== 1) throw new Error("Expected exactly one output file");
+        const output = result.files[0].data;
+        if (!(output instanceof Uint8Array)) throw new Error("Output is not a Uint8Array");
+        if (output.byteLength < 1024) throw new Error("Output MP4 is unexpectedly small: " + output.byteLength);
+        if (String.fromCharCode(...output.slice(4, 8)) !== "ftyp") throw new Error("Output does not contain an MP4 ftyp box at offset 4");
+        if (!containsAscii(output, "moov")) throw new Error("Output MP4 does not contain a moov box");
+        if (!containsAscii(output, "mdat")) throw new Error("Output MP4 does not contain an mdat box");
+        if (!containsAscii(output, "avc1")) throw new Error("Output MP4 does not advertise H.264/avc1 video");
+        if (!containsAscii(output, "mp4a")) throw new Error("Output MP4 does not advertise AAC/mp4a audio");
+        pass("bytes=" + output.byteLength);
+      } catch (error) {
+        fail(error);
+      }
+    })();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+dist/
+release/
+.cache/
+*.zip
+*.tar.gz
+.DS_Store

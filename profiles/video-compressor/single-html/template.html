@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FFmpeg WASM single HTML demo</title>
+  <style>body{font-family:system-ui,sans-serif;max-width:720px;margin:32px auto;padding:0 16px;line-height:1.6}button,input{font:inherit}button{padding:10px 16px}pre{min-height:150px;padding:12px;background:#f4f4f4;white-space:pre-wrap;overflow:auto}.ok{padding:10px 12px;background:#eef8f1;border-radius:8px}progress{width:100%}</style>
+</head>
+<body>
+  <h1>FFmpeg WASM single HTML</h1>
+  <p class="ok">SharedArrayBuffer / COOP / COEP は不要です。ダブルクリックの <code>file://</code> 起動にも対応します。</p>
+  <input id="file" type="file" accept="video/*"> <button id="run">変換する</button> <a id="download" hidden>結果を保存</a>
+  <progress id="progress" value="0" max="1"></progress><pre id="log"></pre>
+  <script id="ffmpeg-js-gzip" type="application/octet-stream">__FFMPEG_JS_GZIP_BASE64__</script>
+  <script id="ffmpeg-wasm-gzip" type="application/octet-stream">__FFMPEG_WASM_GZIP_BASE64__</script>
+  <script>__FFMPEG_RUNTIME__</script>
+  <script>
+    const $ = (id) => document.getElementById(id); let runnerPromise;
+    function base64Blob(text){const clean=text.replace(/\s+/g,"");const chunks=[];for(let o=0;o<clean.length;o+=32768){const b=atob(clean.slice(o,o+32768));const a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);chunks.push(a)}return new Blob(chunks,{type:"application/gzip"})}
+    async function gunzip(id,text){if(!("DecompressionStream" in window))throw new Error("DecompressionStream 非対応ブラウザーです。");const r=new Response(base64Blob($(id).textContent).stream().pipeThrough(new DecompressionStream("gzip")));return text?await r.text():await r.arrayBuffer()}
+    async function prepare(){if(!runnerPromise)runnerPromise=(async()=>BrowserFFmpeg.loadEmbedded({coreJsText:await gunzip("ffmpeg-js-gzip",true),wasmBytes:await gunzip("ffmpeg-wasm-gzip",false)}))();return runnerPromise}
+    $("run").onclick=async()=>{const f=$("file").files[0];if(!f)return alert("動画を選んでください。");$("run").disabled=true;$("log").textContent="";$("download").hidden=true;try{const runner=await prepare();const result=await runner.run({files:[{name:"/input.bin",data:f}],outputs:["/output.mp4"],args:BrowserFFmpeg.videoCompressorArgs({maxWidth:1280,crf:28}),onLog:({message})=>$("log").textContent+=message+"\n",onProgress:v=>$("progress").value=v});const url=URL.createObjectURL(new Blob([result.files[0].data],{type:"video/mp4"}));$("download").href=url;$("download").download="compressed.mp4";$("download").hidden=false}catch(e){$("log").textContent+="ERROR: "+e.message+"\n"}finally{$("run").disabled=false}};
+  </script>
+</body></html>

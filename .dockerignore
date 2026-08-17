@@ -1,0 +1,6 @@
+.git
+dist
+release
+.cache
+*.zip
+*.tar.gz

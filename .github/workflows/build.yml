@@ -1,0 +1,76 @@
+name: Build FFmpeg WASM
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Build profile
+        required: true
+        default: video-compressor
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - "versions.env"
+      - "profiles/**"
+      - "runners/**"
+      - "runtime/**"
+      - "tests/**"
+      - "docker/**"
+      - "scripts/**"
+      - "build.sh"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "versions.env"
+      - "profiles/**"
+      - "runners/**"
+      - "runtime/**"
+      - "tests/**"
+      - "docker/**"
+      - "scripts/**"
+      - "build.sh"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2.2.0
+
+      - name: Source checks
+        shell: pwsh
+        run: ./scripts/check-repository.ps1
+
+      - name: Build and smoke test
+        shell: bash
+        env:
+          FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          chmod +x ./build.sh ./scripts/*.sh
+          ./build.sh "${{ github.event.inputs.profile || 'video-compressor' }}"
+
+      - name: Show manifest
+        shell: bash
+        run: cat "dist/${{ github.event.inputs.profile || 'video-compressor' }}/manifest.json"
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-wasm-${{ github.event.inputs.profile || 'video-compressor' }}-${{ github.sha }}
+          path: dist/${{ github.event.inputs.profile || 'video-compressor' }}/
+          if-no-files-found: error
+          retention-days: 30
