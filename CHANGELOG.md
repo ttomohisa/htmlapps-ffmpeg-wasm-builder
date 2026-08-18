@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0
+
+- Added the `lossless-video-cutter` profile for packet-level cuts without decoding or re-encoding.
+- Added keyframe-aligned `--start` / `--end` handling and optional audio removal.
+- Added `BrowserFFmpeg.losslessVideoCutterArgs()`.
+- Added profile-specific Emscripten WORKERFS support; the cutter can read browser File/Blob inputs on demand without copying the entire input into MEMFS first.
+- Keep the cutter core LGPL-2.1-or-later by leaving GPL-only FFmpeg components and x264 disabled; video-compressor remains GPL-2.0-or-later.
+- Use a two-seek keyframe selection path so interleaved audio packets at the selected start are not accidentally dropped.
+- Generalized profile metadata so each profile declares required FFmpeg config, link libraries, x264 usage, capabilities, and binary license metadata.
+- Generalized browser smoke tests to profile-specific test bodies.
+- Fixed the cutter smoke assertion to parse the combined `requested-start` / `actual-start` status line and validate the reported keyframe boundary.
+- Main/release GitHub Actions now build and smoke-test both release profiles.
+- Release packaging now publishes one binary ZIP and BUILDINFO per profile plus one matching corresponding-source archive.
+
 ## 1.0.0 - First public release
 
 - Promote the compact/public-libav architecture to the first stable public version.

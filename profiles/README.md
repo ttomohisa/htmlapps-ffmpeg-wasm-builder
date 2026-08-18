@@ -1,12 +1,17 @@
 # Build profiles
 
-Each app has one FFmpeg configure flag file and one public-libav runner:
+Each app profile is a small build contract:
 
 ```text
-profiles/<profile>/ffmpeg.flags
+profiles/<profile>/
+├─ profile.env       # required config/link metadata + manifest capabilities
+├─ ffmpeg.flags      # FFmpeg configure flags
+├─ README.md         # profile behavior/limitations
+└─ single-html/      # optional Builder demo shell
+
 runners/<profile>.c
+
+tests/smoke-tests/<profile>.js
 ```
 
-A profile may also provide `profiles/<profile>/single-html/template.html` for one-file packaging.
-
-`ffmpeg.flags` controls which FFmpeg codecs/demuxers/muxers/parsers/protocols/filters are compiled. The C runner determines which operations the browser API actually supports. Both need to be updated when adding a new feature.
+`ffmpeg.flags` starts from `--disable-everything` and enables only the components needed by that tool. `profile.env` tells the linker which FFmpeg static libraries are actually required and whether x264 belongs in the final Wasm. The C runner exposes the operation; the profile-specific smoke test must exercise it in a real browser.

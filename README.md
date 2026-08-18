@@ -1,52 +1,72 @@
 # FFmpeg WASM Builder
 
-FFmpeg + x264 + Emscripten から、ブラウザー向けの小さなFFmpeg WebAssemblyを**自前ビルド**するためのリポジトリです。`@ffmpeg/ffmpeg` / `@ffmpeg/core` の配布済みバイナリには依存しません。
+FFmpeg + Emscripten から、用途ごとに小さく絞ったブラウザー向けFFmpeg WebAssemblyを**自前ビルド**するためのリポジトリです。`@ffmpeg/ffmpeg` / `@ffmpeg/core` の配布済みバイナリには依存しません。
 
-現在は構成を一本化し、**FFmpeg本家CLIは使わず、公開 `libav*` APIの独自runnerだけ**をビルドします。
+FFmpeg本家CLIはリンクせず、各ツール専用のpublic `libav*` runnerだけをWASM化します。
 
 ```text
-FFmpeg / x264 / Emscripten
-          ↓
-  public libav* libraries
-          ↓
-  profile-specific runner
-          ↓
-   ffmpeg.js + ffmpeg.wasm
+pinned FFmpeg / Emscripten / optional x264
+                 ↓
+          profile flags
+                 ↓
+        public libav* runner
+                 ↓
+          ffmpeg.js + ffmpeg.wasm
+                 ↓
+       real browser smoke test
 ```
 
-- FFmpeg更新へ追従しやすい
-- pthread不使用
-- SharedArrayBuffer不要
+- pthread不使用 / SharedArrayBuffer不要
 - COOP / COEP不要
-- Web Workerで処理
+- Web Worker実行
 - `file://` の単一HTMLでも利用可能
-- ビルド後に**実動画変換のsmoke testを自動実行**
-- タグReleaseでは**対応ソースとライセンスを同時配布**
+- `--disable-everything` からprofileごとに必要機能だけ有効化
+- FFmpeg更新時は各profileを実ブラウザーでsmoke test
+- Tagged Releaseでは対応ソース・build info・SHA-256を同時配布
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.0.0 のpin
+## v1.1.0 profiles
 
-`versions.env` にすべて集約しています。
+| profile | 用途 | decoder / encoder | x264 | 主な出力 |
+|---|---|---:|---:|---|
+| `video-compressor` | 動画圧縮 | あり | あり | H.264 + AAC MP4 |
+| `lossless-video-cutter` | 無劣化カット | **なし** | **なし** | 元codecのstream copy |
+
+`lossless-video-cutter` はdecode / encode / filterをせず、圧縮済みpacketをそのままremuxします。開始位置は動画codecの性質上、直前のキーフレームへ調整される場合があります。入力File/BlobはWORKERFSでWorkerから必要な範囲だけ読み込むため、大きな入力を丸ごとMEMFSへ複製しません。出力は現在MEMFS上に作るため、切り出し結果そのもののサイズはブラウザーの利用可能メモリに依存します。
+
+## pin
+
+`versions.env` にまとめています。
 
 - FFmpeg 9.0.1 / exact commit
 - Emscripten 6.0.6 / exact source commit
-- x264 stable / exact commit
-
-更新候補は `check-updates.bat` で確認できます。FFmpeg / Emscripten / x264を一度に全部変えず、1つずつ更新してsmoke testを通してください。
+- x264 stable / exact commit（x264を使うprofileだけが最終WASMへリンク）
 
 ## ビルド
 
-Docker Desktopを起動してから：
+Video Compressor:
 
 ```text
-build.bat
+build.bat video-compressor
 ```
 
-生成物：
+Lossless Video Cutter:
 
 ```text
-dist/video-compressor/
+build-lossless-video-cutter.bat
+```
+
+または：
+
+```text
+build.bat lossless-video-cutter
+```
+
+生成物はprofileごとに分かれます。
+
+```text
+dist/<profile>/
 ├─ ffmpeg.js
 ├─ ffmpeg.wasm
 ├─ ffmpeg.js.gz
@@ -55,83 +75,82 @@ dist/video-compressor/
 └─ smoke-test.html
 ```
 
-`build.bat` はWASMを生成しただけでは成功扱いにしません。生成後、Microsoft Edge / Chromeなどをheadless起動し、`tests/fixtures/smoke-input.mp4` を実際にH.264 + AAC MP4へ変換します。出力に `ftyp` / `moov` / `mdat` があり、H.264 (`avc1`) + AAC (`mp4a`) のMP4になっているところまで確認できた場合だけ成功します。
+`build.bat` はWASM生成後にChrome / Edgeをheadless起動し、profile専用のsmoke testを実行します。
 
 ```text
 [OK] Smoke test passed.
 ```
 
-まで出れば、ビルドだけでなくブラウザー上の実変換まで成功しています。
+まで出れば、コンパイルだけでなくブラウザー上の実処理まで成功しています。
 
-## 単一HTML
-
-```text
-pack-single-html.bat
-```
-
-生成：
+### Lossless Video Cutter のrunner API
 
 ```text
-dist/single-html-video-compressor.html
+--input /workerfs/input.mp4
+--output /output.mp4
+--start 13.4
+--end 102.8
+--no-audio   # optional
 ```
 
-JS/WASMはgzipのままHTMLに埋め込み、初回変換時に展開します。SharedArrayBufferや特殊なHTTPヘッダーは不要で、ダブルクリックの `file://` 起動にも対応します。`demo.bat` はこの単一HTMLを生成して開きます。
+Browser runtimeでは：
+
+```js
+const inputPath = "/workerfs/input.mp4";
+const args = BrowserFFmpeg.losslessVideoCutterArgs({
+  input: inputPath,
+  output: "/output.mp4",
+  start: 13.4,
+  end: 102.8
+});
+
+await runner.run({
+  files: [{ name: inputPath, data: file, workerfs: true }],
+  outputs: ["/output.mp4"],
+  args
+});
+```
+
+出力拡張子でcontainerを選びます。profileにはMP4/MOV、Matroska/WebMのdemux/muxを含めています。codec自体は再エンコードしないため、選んだcontainerが元codecを受け入れられる必要があります。
 
 ## アプリへ組み込む場合
 
-公開アプリがブラウザー実行時にGitHubへWASMを取りに行く構成は推奨しません。**アプリの更新・ビルド時にこのBuilderの特定Releaseを取得し、自分の配布物へ固定して組み込む**のを基本方針にしています。
-
-```text
-FFmpeg WASM Builder の version tag
-        ↓ build + smoke test
-GitHub Release
-        ↓ appの更新時に取得
-htmlapps-video-compressor
-        ↓ 単一HTMLへ埋め込み
-公開後はGitHubへ依存しない
-```
+ブラウザー実行時にGitHub Releaseへアクセスするのではなく、**アプリの更新・ビルド時に特定Builder Releaseを取得し、そのアプリへ固定して埋め込む**方式を推奨します。
 
 詳細は [docs/USING_IN_APPS.md](docs/USING_IN_APPS.md) を参照してください。
 
 ## Public Release
 
-`main` をpushしただけではReleaseは作りません。`main` のBuild FFmpeg WASMが成功したことを確認してから、`BUILDER_VERSION` と同じタグをpushします。
+v1.1.0ではRelease workflowが両profileをbuild + smoke testしてから次を公開します。
 
 ```text
-git tag -a v1.0.0 -m "FFmpeg WASM Builder v1.0.0"
-git push origin v1.0.0
-```
-
-タグworkflowは再ビルドとsmoke testを通した後、次を自動作成します。
-
-```text
-ffmpeg-wasm-video-compressor-v1.0.0.zip
-ffmpeg-wasm-sources-v1.0.0.tar.gz
-BUILDINFO.txt
+ffmpeg-wasm-video-compressor-v1.1.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.1.0.zip
+ffmpeg-wasm-sources-v1.1.0.tar.gz
+BUILDINFO-video-compressor.txt
+BUILDINFO-lossless-video-cutter.txt
 SHA256SUMS.txt
 ```
 
-詳しい手順は [docs/RELEASING.md](docs/RELEASING.md) を参照してください。
+詳しくは [docs/RELEASING.md](docs/RELEASING.md) を参照してください。
 
-## FFmpeg更新時
+## FFmpeg更新
 
 ```text
 check-updates.bat
 ```
 
-候補を確認して `versions.env` の1項目だけ変更し、`build.bat` を実行します。configure・Cコンパイル・WASMリンク・ブラウザー実変換のどこかが壊れれば、その時点で失敗します。
+候補を確認し、`versions.env` を1 dependencyずつ更新します。mainのGitHub Actionsでは現在の全release profileを実ブラウザーで確認するため、「ビルドできたが処理できない」更新を検出できます。
 
-## 次のアプリを追加する
+## 次のツールを追加する
 
-[docs/ADDING_PROFILE.md](docs/ADDING_PROFILE.md) にprofile追加手順をまとめています。
+[docs/ADDING_PROFILE.md](docs/ADDING_PROFILE.md) を参照してください。profile metadata、FFmpeg flags、runner、profile smoke testを追加する構成です。
 
 ## ライセンス
 
 **ルートのMIT LicenseはBuilder自身のソースに対するものです。生成された `ffmpeg.wasm` をMITとして配布するものではありません。**
 
-`video-compressor` profileはlibx264をリンクするためFFmpegを `--enable-gpl` でビルドします。生成されるFFmpeg/x264 Wasm coreはGPL-2.0-or-laterの条件に従って配布する必要があります。タグReleaseでは、exact source・ビルドレシピ・upstream license filesを同じReleaseへ添付します。
+`video-compressor` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
 
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - [docs/LICENSES.md](docs/LICENSES.md)
-
-ライセンス説明は実装・配布のための技術的整理であり、法的助言ではありません。

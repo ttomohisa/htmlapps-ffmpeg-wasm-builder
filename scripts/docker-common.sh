@@ -69,6 +69,27 @@ load_profile_flags() {
   )
 }
 
+load_profile_config() {
+  local path="/workspace/profiles/${PROFILE}/profile.env"
+  [[ -f "$path" ]] || fail "Profile config not found: $path"
+  # shellcheck disable=SC1090
+  source "$path"
+  : "${PROFILE_DISPLAY_NAME:?}"
+  : "${PROFILE_USE_X264:?}"
+  : "${PROFILE_USE_WORKERFS:?}"
+  : "${PROFILE_BINARY_LICENSE:?}"
+  : "${PROFILE_OUTPUT_DESCRIPTION:?}"
+  : "${PROFILE_CAPABILITIES_JSON:?}"
+  [[ "$PROFILE_USE_X264" == "0" || "$PROFILE_USE_X264" == "1" ]] \
+    || fail "PROFILE_USE_X264 must be 0 or 1"
+  [[ "$PROFILE_USE_WORKERFS" == "0" || "$PROFILE_USE_WORKERFS" == "1" ]] \
+    || fail "PROFILE_USE_WORKERFS must be 0 or 1"
+  declare -p PROFILE_REQUIRED_CONFIG >/dev/null 2>&1 \
+    || fail "PROFILE_REQUIRED_CONFIG array is missing: $path"
+  declare -p PROFILE_LINK_LIBS >/dev/null 2>&1 \
+    || fail "PROFILE_LINK_LIBS array is missing: $path"
+}
+
 print_toolchain() {
   local phase="$1"
   local emcc_line

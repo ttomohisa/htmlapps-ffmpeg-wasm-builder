@@ -60,9 +60,15 @@ foreach ($name in $required) {
 }
 
 $profileFile = Join-Path $Root ("profiles\" + $Profile + "\ffmpeg.flags")
+$profileConfig = Join-Path $Root ("profiles\" + $Profile + "\profile.env")
 $runnerFile = Join-Path $Root ("runners\" + $Profile + ".c")
 if (-not (Test-Path $profileFile)) { throw "Build profile is missing: $profileFile" }
+if (-not (Test-Path $profileConfig)) { throw "Build profile metadata is missing: $profileConfig" }
 if (-not (Test-Path $runnerFile)) { throw "Runner is missing: $runnerFile" }
+$profileConfigText = [IO.File]::ReadAllText($profileConfig)
+$useX264Match = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_X264=(0|1)\s*$')
+if (-not $useX264Match.Success) { throw "profile.env must contain PROFILE_USE_X264=0 or 1: $profileConfig" }
+$ExportTarget = if ($useX264Match.Groups[1].Value -eq "1") { "export-with-x264" } else { "export-no-x264" }
 
 if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -70,7 +76,7 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $DockerArgs = @(
   "buildx", "build",
   "--file", $Dockerfile,
-  "--target", "export",
+  "--target", $ExportTarget,
   "--build-arg", "BUILDER_VERSION=$($values['BUILDER_VERSION'])",
   "--build-arg", "EMSDK_VERSION=$($values['EMSDK_VERSION'])",
   "--build-arg", "EMSCRIPTEN_COMMIT=$($values['EMSCRIPTEN_COMMIT'])",
@@ -88,6 +94,7 @@ $DockerArgs = @(
 
 Write-Host "[FFmpeg WASM] Profile: $Profile" -ForegroundColor Cyan
 Write-Host "[FFmpeg WASM] Architecture: public-libav runner / single-thread / no SharedArrayBuffer" -ForegroundColor Cyan
+Write-Host "[FFmpeg WASM] Docker target: $ExportTarget" -ForegroundColor DarkGray
 Write-Host "[FFmpeg WASM] First build downloads a large Emscripten image; later builds reuse Docker cache." -ForegroundColor DarkGray
 Write-Host "[FFmpeg WASM] Builder: selected Buildx builder (no forced builder/context)" -ForegroundColor DarkGray
 

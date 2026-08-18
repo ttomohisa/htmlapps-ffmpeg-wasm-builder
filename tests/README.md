@@ -1,5 +1,10 @@
-# Smoke-test fixture
+# Smoke tests
 
-`fixtures/smoke-input.mp4` is a tiny synthetic 1-second H.264 + AAC MP4 used only for automated runtime validation. It exercises the main video-compressor decode/filter/encode/mux path.
+`tests/fixtures/smoke-input.mp4` is a tiny H.264 + AAC MP4 shared by the current profiles.
 
-It was generated from synthetic FFmpeg sources (test pattern + sine wave), so it does not contain third-party media content.
+The generic `tests/smoke-test.template.html` embeds the generated JS/Wasm and injects `tests/smoke-tests/<profile>.js`.
+
+- `video-compressor.js` performs a real transcode and validates MP4/H.264/AAC output.
+- `lossless-video-cutter.js` performs a real stream-copy cut, validates MP4/H.264/AAC preservation, verifies output shrank, and checks the runner's keyframe-aligned start report.
+
+A build is not considered successful until the selected profile passes in a real headless browser.

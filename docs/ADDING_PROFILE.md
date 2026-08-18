@@ -1,26 +1,62 @@
 # Adding another FFmpeg-powered app
 
-A profile owns the FFmpeg components, a small public-libav runner, and an optional single-HTML shell.
+A profile consists of FFmpeg component flags, build/link metadata, one public-libav runner, and one real browser smoke test.
 
-For `audio-converter`:
+For `media-inspector`:
 
 ```text
-profiles/audio-converter/
+profiles/media-inspector/
+├─ profile.env
 ├─ ffmpeg.flags
-└─ single-html/
-   └─ template.html
+└─ README.md
 
-runners/audio-converter.c
+runners/media-inspector.c
+tests/smoke-tests/media-inspector.js
 ```
 
-Start by copying the video-compressor profile and runner. Then remove codecs, demuxers, muxers, parsers and filters that the new app does not need. Because profiles use `--disable-everything`, every required component must be explicitly enabled or selected as a dependency.
+## 1. Start with the smallest component set
 
-The runner should stay on public FFmpeg headers/APIs. Do not copy `fftools` internals. Keep pthreads disabled unless the architecture is intentionally redesigned.
+Use `--disable-everything`. Enable only the demuxers, muxers, decoders, encoders, parsers, protocols, filters, and bitstream filters the operation needs.
 
-Build the profile with:
+For remux/inspection tools, do not enable a decoder or encoder merely because the input codec has that name. `avformat` can often inspect/copy compressed packets using codec parameters without decoding them.
+
+## 2. Add `profile.env`
+
+Required fields:
+
+```bash
+PROFILE_DISPLAY_NAME="Media Inspector"
+PROFILE_USE_X264=0
+PROFILE_USE_WORKERFS=0
+PROFILE_BINARY_LICENSE="GPL-2.0-or-later"
+PROFILE_OUTPUT_DESCRIPTION="metadata JSON"
+PROFILE_REQUIRED_CONFIG=(CONFIG_MOV_DEMUXER CONFIG_MATROSKA_DEMUXER CONFIG_FILE_PROTOCOL)
+PROFILE_LINK_LIBS=(libavformat/libavformat.a libavcodec/libavcodec.a libavutil/libavutil.a)
+PROFILE_CAPABILITIES_JSON='{"operation":"inspect","arbitraryFfmpegArgs":false}'
+```
+
+Keep `PROFILE_LINK_LIBS` minimal. If `PROFILE_USE_X264=0`, the final linker must not include `libx264.a`. Set `PROFILE_USE_WORKERFS=1` only when the browser profile should mount large File/Blob inputs read-only through Emscripten WORKERFS.
+
+## 3. Write a public-libav runner
+
+Use installed FFmpeg public headers/APIs only. Do not copy or depend on `fftools` internals. Keep pthreads disabled unless the entire runtime architecture is intentionally redesigned.
+
+## 4. Add a real smoke test
+
+`tests/smoke-tests/<profile>.js` is inserted into the generic browser smoke-test page. It must execute the real profile operation and validate meaningful output. Compile-only success is not sufficient.
+
+## 5. Build
 
 ```text
-build.bat audio-converter
+build.bat media-inspector
 ```
 
-For every new profile, also add a small representative media fixture and adjust the smoke-test path so the CI verifies a real successful operation for that profile. A compile-only test is not sufficient for version-upgrade confidence.
+The build is successful only after the browser smoke test prints:
+
+```text
+[OK] Smoke test passed.
+```
+
+## Current examples
+
+`video-compressor` demonstrates a decode/filter/encode profile with x264. `lossless-video-cutter` demonstrates a much smaller packet-copy/remux profile with no decoder, encoder, filter, or x264 in the final Wasm.

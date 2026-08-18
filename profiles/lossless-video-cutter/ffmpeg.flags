@@ -1,0 +1,16 @@
+# Lossless stream-copy cutter. No decoder, encoder, filter, swscale, swresample,
+# or external codec library is linked into the final WASM.
+# This profile intentionally keeps FFmpeg under LGPL-2.1-or-later; no GPL-only
+# component such as x264 is enabled or linked.
+--enable-small
+--disable-everything
+--disable-avfilter
+--disable-swscale
+--disable-swresample
+--enable-demuxer=mov
+--enable-demuxer=matroska
+--enable-muxer=mp4
+--enable-muxer=mov
+--enable-muxer=matroska
+--enable-muxer=webm
+--enable-protocol=file

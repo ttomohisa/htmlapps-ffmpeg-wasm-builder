@@ -2,12 +2,6 @@ name: Build FFmpeg WASM
 
 on:
   workflow_dispatch:
-    inputs:
-      profile:
-        description: Build profile
-        required: true
-        default: video-compressor
-        type: string
   push:
     branches: [main]
     paths:
@@ -38,6 +32,12 @@ permissions:
 
 jobs:
   build-and-smoke-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - video-compressor
+          - lossless-video-cutter
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -61,16 +61,16 @@ jobs:
           FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           chmod +x ./build.sh ./scripts/*.sh
-          ./build.sh "${{ github.event.inputs.profile || 'video-compressor' }}"
+          ./build.sh "${{ matrix.profile }}"
 
       - name: Show manifest
         shell: bash
-        run: cat "dist/${{ github.event.inputs.profile || 'video-compressor' }}/manifest.json"
+        run: cat "dist/${{ matrix.profile }}/manifest.json"
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ffmpeg-wasm-${{ github.event.inputs.profile || 'video-compressor' }}-${{ github.sha }}
-          path: dist/${{ github.event.inputs.profile || 'video-compressor' }}/
+          name: ffmpeg-wasm-${{ matrix.profile }}-${{ github.sha }}
+          path: dist/${{ matrix.profile }}/
           if-no-files-found: error
           retention-days: 30

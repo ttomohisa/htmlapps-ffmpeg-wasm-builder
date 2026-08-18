@@ -12,7 +12,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     steps:
       - name: Checkout tagged source
         uses: actions/checkout@v7
@@ -37,17 +37,18 @@ jobs:
           source ./versions.env
           test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"
 
-      - name: Build and smoke test
+      - name: Build and smoke-test release profiles
         shell: bash
         env:
           FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           chmod +x ./build.sh ./scripts/*.sh
           ./build.sh video-compressor
+          ./build.sh lossless-video-cutter
 
       - name: Prepare binary and corresponding-source bundles
         shell: bash
-        run: ./scripts/prepare-release.sh video-compressor "${GITHUB_REF_NAME}"
+        run: ./scripts/prepare-release.sh "${GITHUB_REF_NAME}"
 
       - name: Show release checksums
         shell: bash
@@ -60,11 +61,13 @@ jobs:
         run: |
           source ./versions.env
           gh release create "${GITHUB_REF_NAME}" \
-            "release/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip" \
-            "release/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz" \
-            release/BUILDINFO.txt \
+            release/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
+            release/BUILDINFO-video-compressor.txt \
+            release/BUILDINFO-lossless-video-cutter.txt \
             release/SHA256SUMS.txt \
             --verify-tag \
             --title "FFmpeg WASM Builder ${GITHUB_REF_NAME}" \
             --generate-notes \
-            --notes "The generated FFmpeg/x264 WebAssembly core is GPL-2.0-or-later. The matching corresponding-source archive and build information are attached to this release."
+            --notes "Profile-specific FFmpeg WebAssembly cores are attached with exact build information, checksums, license notices, and one matching corresponding-source archive."

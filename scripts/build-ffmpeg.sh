@@ -3,6 +3,7 @@ set -euo pipefail
 source /workspace/scripts/docker-common.sh
 require_build_env
 load_profile_flags
+load_profile_config
 print_toolchain "wasm"
 
 JOBS="${JOBS:-$(nproc)}"
@@ -17,7 +18,7 @@ export CXXFLAGS="$CFLAGS"
 export LDFLAGS="-L$INSTALL_DIR/lib"
 
 pushd "$SRC_DIR/ffmpeg" >/dev/null
-log "Configuring FFmpeg libraries for the single-thread browser runner"
+log "Configuring FFmpeg libraries for profile: $PROFILE_DISPLAY_NAME"
 emconfigure ./configure \
   --target-os=none \
   --arch=x86_32 \
@@ -43,10 +44,7 @@ emconfigure ./configure \
   --extra-ldflags="$LDFLAGS" \
   "${PROFILE_FLAGS[@]}"
 
-for feature in \
-  CONFIG_LIBX264 CONFIG_LIBX264_ENCODER CONFIG_AAC_ENCODER \
-  CONFIG_H264_DECODER CONFIG_HEVC_DECODER CONFIG_MOV_DEMUXER \
-  CONFIG_MP4_MUXER CONFIG_FILE_PROTOCOL CONFIG_SCALE_FILTER CONFIG_ARESAMPLE_FILTER; do
+for feature in "${PROFILE_REQUIRED_CONFIG[@]}"; do
   assert_ffmpeg_config "$feature"
 done
 
@@ -59,19 +57,29 @@ fi
 if grep -q '^CONFIG_FFMPEG=yes$' ffbuild/config.mak; then
   fail "The upstream ffmpeg CLI must stay disabled; this builder links the public-libav runner only"
 fi
+if [[ "$PROFILE_USE_X264" == "0" ]] && grep -q '^CONFIG_LIBX264=yes$' ffbuild/config.mak; then
+  fail "Profile $PROFILE must not enable libx264"
+fi
 
 log "Building FFmpeg static libraries"
 emmake make -j"$JOBS"
 
-for lib in \
-  libavfilter/libavfilter.a \
-  libavformat/libavformat.a \
-  libavcodec/libavcodec.a \
-  libswresample/libswresample.a \
-  libswscale/libswscale.a \
-  libavutil/libavutil.a; do
+for lib in "${PROFILE_LINK_LIBS[@]}"; do
   [[ -s "$lib" ]] || fail "Expected FFmpeg library is missing: $lib"
 done
+
+link_inputs=("${PROFILE_LINK_LIBS[@]}")
+if [[ "$PROFILE_USE_X264" == "1" ]]; then
+  [[ -s "$INSTALL_DIR/lib/libx264.a" ]] || fail "Profile requires x264 but libx264.a is missing"
+  link_inputs+=("$INSTALL_DIR/lib/libx264.a")
+fi
+
+runtime_methods="FS,callMain"
+extra_runtime_libs=()
+if [[ "$PROFILE_USE_WORKERFS" == "1" ]]; then
+  runtime_methods+=",WORKERFS"
+  extra_runtime_libs+=("-lworkerfs.js")
+fi
 
 log "Linking the profile runner"
 emcc "$RUNNER_SOURCE" \
@@ -89,16 +97,11 @@ emcc "$RUNNER_SOURCE" \
   -sSTACK_SIZE=5242880 \
   -sENVIRONMENT=worker \
   -sINCOMING_MODULE_JS_API=wasmBinary,instantiateWasm,locateFile,print,printErr \
-  -sEXPORTED_RUNTIME_METHODS=FS,callMain \
+  "-sEXPORTED_RUNTIME_METHODS=${runtime_methods}" \
+  "${extra_runtime_libs[@]}" \
   -sERROR_ON_UNDEFINED_SYMBOLS=1 \
   -Wl,--start-group \
-    libavfilter/libavfilter.a \
-    libavformat/libavformat.a \
-    libavcodec/libavcodec.a \
-    libswresample/libswresample.a \
-    libswscale/libswscale.a \
-    libavutil/libavutil.a \
-    "$INSTALL_DIR/lib/libx264.a" \
+  "${link_inputs[@]}" \
   -Wl,--end-group \
   -o "$OUT_DIR/ffmpeg.js"
 popd >/dev/null
@@ -113,16 +116,19 @@ for gz in "$OUT_DIR"/*.gz; do gzip -t "$gz"; done
 
 cat > "$OUT_DIR/manifest.json" <<EOF_JSON
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "builderVersion": "$BUILDER_VERSION",
   "profile": "$PROFILE",
+  "displayName": "$PROFILE_DISPLAY_NAME",
+  "binaryLicense": "$PROFILE_BINARY_LICENSE",
   "versions": {
     "emscripten": "$EMSDK_VERSION",
     "emscriptenCommit": "$EMSCRIPTEN_COMMIT",
     "ffmpegRef": "$FFMPEG_REF",
     "ffmpegCommit": "$FFMPEG_COMMIT",
     "x264Ref": "$X264_REF",
-    "x264Commit": "$X264_COMMIT"
+    "x264Commit": "$X264_COMMIT",
+    "x264Linked": $([[ "$PROFILE_USE_X264" == "1" ]] && echo true || echo false)
   },
   "runtime": {
     "frontend": "public-libav-runner",
@@ -131,18 +137,10 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
     "factory": "createFFmpegCore",
     "requiresSharedArrayBuffer": false,
     "requiresCrossOriginIsolation": false,
-    "fileProtocolSingleHtml": true
+    "fileProtocolSingleHtml": true,
+    "workerFsInput": $([[ "$PROFILE_USE_WORKERFS" == "1" ]] && echo true || echo false)
   },
-  "capabilities": {
-    "output": "H.264 + AAC MP4",
-    "resize": true,
-    "fps": true,
-    "crf": true,
-    "videoBitrate": true,
-    "audioBitrate": true,
-    "dropAudio": true,
-    "arbitraryFfmpegArgs": false
-  },
+  "capabilities": $PROFILE_CAPABILITIES_JSON,
   "files": {
     "ffmpeg.js": { "bytes": $(bytes_of "$OUT_DIR/ffmpeg.js"), "sha256": "$(sha256_of "$OUT_DIR/ffmpeg.js")" },
     "ffmpeg.wasm": { "bytes": $(bytes_of "$OUT_DIR/ffmpeg.wasm"), "sha256": "$(sha256_of "$OUT_DIR/ffmpeg.wasm")" },

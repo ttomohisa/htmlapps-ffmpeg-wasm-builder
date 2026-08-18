@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lossless Video Cutter - Builder demo</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 18px;line-height:1.6}label{display:block;margin:14px 0 4px}input,button{font:inherit;padding:8px}button{margin-top:18px}.note{font-size:.9rem;color:#555}pre{white-space:pre-wrap;background:#f5f5f5;padding:12px;max-height:240px;overflow:auto}
+</style>
+</head>
+<body>
+<h1>Lossless Video Cutter</h1>
+<p class="note">Builder動作確認用の最小デモです。再エンコードしないため、開始位置は直前のキーフレームへ調整される場合があります。入力はWORKERFSから必要な範囲だけ読み込みます。</p>
+<label>動画 <input id="file" type="file" accept="video/*"></label>
+<label>開始（秒） <input id="start" type="number" min="0" step="0.001" value="0"></label>
+<label>終了（秒、0なら最後まで） <input id="end" type="number" min="0" step="0.001" value="0"></label>
+<label><input id="noAudio" type="checkbox"> 音声を削除</label>
+<button id="run">無劣化で切り出す</button>
+<p id="status"></p>
+<pre id="log"></pre>
+<script id="ffmpeg-js-gzip" type="application/octet-stream">__FFMPEG_JS_GZIP_BASE64__</script>
+<script id="ffmpeg-wasm-gzip" type="application/octet-stream">__FFMPEG_WASM_GZIP_BASE64__</script>
+<script>__FFMPEG_RUNTIME__</script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const decodeBase64 = (id) => {
+    const raw = atob($(id).textContent.replace(/\s+/g, ""));
+    const out = new Uint8Array(raw.length);
+    for (let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+    return out;
+  };
+  const gunzip = async (id, text=false) => {
+    const stream = new Blob([decodeBase64(id)]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const res = new Response(stream);
+    return text ? res.text() : res.arrayBuffer();
+  };
+  const supportedExt = (name) => {
+    const match = name.toLowerCase().match(/\.(mp4|mov|mkv|webm)$/);
+    return match ? "." + match[1] : ".mp4";
+  };
+  $("run").addEventListener("click", async () => {
+    const file = $("file").files[0];
+    if (!file) return void ($("status").textContent = "動画を選択してください。");
+    const start = Number($("start").value || 0);
+    const end = Number($("end").value || 0);
+    if (end > 0 && end <= start) return void ($("status").textContent = "終了は開始より後にしてください。");
+    $("run").disabled = true; $("log").textContent = ""; $("status").textContent = "準備中…";
+    let runner;
+    try {
+      const [coreJsText, wasmBytes] = await Promise.all([gunzip("ffmpeg-js-gzip", true), gunzip("ffmpeg-wasm-gzip")]);
+      runner = await BrowserFFmpeg.loadEmbedded({coreJsText, wasmBytes});
+      const ext = supportedExt(file.name);
+      const inputName = "/workerfs/input" + ext;
+      const outputName = "/output" + ext;
+      const result = await runner.run({
+        files:[{name:inputName,data:file,workerfs:true}], outputs:[outputName],
+        args:BrowserFFmpeg.losslessVideoCutterArgs({input:inputName,output:outputName,start,end:end || undefined,noAudio:$("noAudio").checked}),
+        onProgress:(p)=>$("status").textContent = `処理中… ${Math.round(p*100)}%`,
+        onLog:({message})=>$("log").textContent += message + "\n"
+      });
+      const blob = new Blob([result.files[0].data], {type:file.type || "application/octet-stream"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download=file.name.replace(/(\.[^.]+)?$/, "-cut"+ext); a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 30000);
+      $("status").textContent = "完了";
+    } catch (e) {
+      $("status").textContent = "エラー: " + (e?.message || e);
+    } finally {
+      runner?.dispose(); $("run").disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

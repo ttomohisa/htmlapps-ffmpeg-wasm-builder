@@ -1,28 +1,9 @@
-# Licensing and public distribution
+# Licensing and release packaging
 
-## Repository source
+The root `LICENSE` applies to the Builder's original source. Generated WebAssembly contains third-party code and is not relicensed by that MIT file.
 
-The original build scripts, browser runtime, documentation, and other glue in this repository are released under the root MIT license. `runners/video-compressor.c` also preserves the MIT notice from FFmpeg's `doc/examples/transcode.c` for the portions derived from that example.
+`video-compressor` configures FFmpeg with `--enable-gpl` and links x264, so its generated core is GPL-2.0-or-later. `lossless-video-cutter` enables no GPL-only component and does not link x264, so its generated core is LGPL-2.1-or-later. Each binary bundle carries the license text applicable to that profile.
 
-## Generated FFmpeg Wasm
+Every tagged release keeps binary artifacts, profile-specific build information, upstream notices, and the exact corresponding-source archive in the same GitHub Release. See `THIRD_PARTY_NOTICES.md` for the component summary.
 
-The default profile enables libx264 and passes `--enable-gpl` to FFmpeg. FFmpeg's own licensing documentation states that enabling GPL components changes the resulting FFmpeg build to GPL-2.0-or-later, and lists libx264 as a GPL-compatible external library that requires `--enable-gpl`. Therefore **do not label generated `ffmpeg.wasm` as MIT**.
-
-Emscripten-generated JavaScript/Wasm may contain Emscripten runtime, musl libc, and compiler-rt code. The release bundle therefore includes the pinned Emscripten license plus the musl and compiler-rt license/notices taken from that exact Emscripten source revision.
-
-## What a tagged release contains
-
-The release workflow builds and smoke-tests the profile first. Only then does it create release assets:
-
-```text
-ffmpeg-wasm-video-compressor-v1.0.0.zip
-ffmpeg-wasm-sources-v1.0.0.tar.gz
-BUILDINFO.txt
-SHA256SUMS.txt
-```
-
-The binary ZIP contains the generated JS/Wasm, browser runtime, manifest, build information, notices, and upstream license files. The source archive contains the exact FFmpeg/x264/Emscripten source revisions and a copy of the build recipe used for that release.
-
-The release process deliberately keeps the binary and its corresponding source available from the **same GitHub Release**.
-
-See `THIRD_PARTY_NOTICES.md` and `docs/RELEASING.md`. This document is engineering guidance, not legal advice.
+This documentation is an engineering packaging policy, not legal advice.

@@ -12,6 +12,27 @@
       if (index <= 0) return;
       try { FS.mkdirTree(path.slice(0, index)); } catch (_) {}
     };
+    const splitVirtualPath = (path) => {
+      if (typeof path !== "string" || !path.startsWith("/")) throw new Error("Virtual filesystem paths must be absolute: " + path);
+      const index = path.lastIndexOf("/");
+      if (index <= 0 || index === path.length - 1) throw new Error("WORKERFS inputs must be placed inside a directory, for example /workerfs/input.mp4.");
+      return { parent: path.slice(0, index), base: path.slice(index + 1) };
+    };
+    const mountWorkerFiles = (core, files) => {
+      const mounts = new Map();
+      for (const file of files) {
+        const parts = splitVirtualPath(file.name);
+        let entries = mounts.get(parts.parent);
+        if (!entries) { entries = []; mounts.set(parts.parent, entries); }
+        entries.push({ name: parts.base, data: file.data });
+      }
+      if (mounts.size === 0) return;
+      if (!core.WORKERFS) throw new Error("This FFmpeg WASM profile was not built with WORKERFS support.");
+      for (const [mountPoint, blobs] of mounts) {
+        try { core.FS.mkdirTree(mountPoint); } catch (_) {}
+        core.FS.mount(core.WORKERFS, { blobs }, mountPoint);
+      }
+    };
     self.onmessage = async (event) => {
       const { wasmBytes, args, files, outputs } = event.data;
       const sendLine = (stream, value) => {
@@ -43,10 +64,16 @@
           print: (message) => sendLine("stdout", message),
           printErr: (message) => sendLine("stderr", message)
         });
+        const workerFsFiles = [];
         for (const file of files) {
+          if (file.workerfs) {
+            workerFsFiles.push(file);
+            continue;
+          }
           ensureParent(core.FS, file.name);
           core.FS.writeFile(file.name, new Uint8Array(file.data));
         }
+        mountWorkerFiles(core, workerFsFiles);
         let exitCode = 0;
         try {
           const result = core.callMain(args);
@@ -113,8 +140,18 @@
       const transfer = [];
       for (const file of Array.isArray(options.files) ? options.files : []) {
         if (!file?.name) throw new Error("Every input file needs a virtual filesystem name.");
+        if (file.workerfs === true) {
+          if (!(file.data instanceof Blob)) throw new TypeError("WORKERFS input data must be a Blob or File.");
+          if (!file.name.startsWith("/") || file.name.lastIndexOf("/") <= 0) {
+            throw new Error("WORKERFS input names must include a mount directory, for example /workerfs/input.mp4.");
+          }
+          // Blob/File is structured-cloned to the Worker. WORKERFS then reads only
+          // the requested slices instead of copying the whole media file into MEMFS.
+          files.push({ name: file.name, data: file.data, workerfs: true });
+          continue;
+        }
         const data = await toArrayBuffer(file.data);
-        files.push({ name: file.name, data });
+        files.push({ name: file.name, data, workerfs: false });
         transfer.push(data);
       }
       const wasmForRun = this.wasmBytes.slice(0);
@@ -182,5 +219,14 @@
     return args;
   };
 
-  window.BrowserFFmpeg = Object.freeze({ loadHosted, loadEmbedded, videoCompressorArgs, isSupported });
+  const losslessVideoCutterArgs = (options = {}) => {
+    const args = ["--input", options.input || "/workerfs/input.mp4", "--output", options.output || "/output.mp4"];
+    const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
+    add("--start", options.start ?? 0);
+    if (options.end !== undefined && options.end !== null && options.end !== "") add("--end", options.end);
+    if (options.noAudio) args.push("--no-audio");
+    return args;
+  };
+
+  window.BrowserFFmpeg = Object.freeze({ loadHosted, loadEmbedded, videoCompressorArgs, losslessVideoCutterArgs, isSupported });
 })();

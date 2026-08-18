@@ -1,74 +1,30 @@
-# Using the generated Wasm in apps
+# Using Builder releases in apps
 
-## Recommended distribution model
+Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Builder tag in the consuming repository, download the matching profile ZIP during the app update/build process, verify SHA-256, then embed or vendor the assets into the app.
 
-Use a **fixed FFmpeg WASM Builder GitHub Release at app update/build time**. Do not have normal production browser sessions download their core from GitHub Releases.
-
-```text
-Builder v1.0.0 Release
-        ↓ download while updating the app
-app repository/build step
-        ↓ pin/copy/embed
-app's own hosted assets or single HTML
-        ↓
-end-user browser (no GitHub runtime dependency)
-```
-
-The release asset `ffmpeg-wasm-video-compressor-v1.0.0.zip` contains:
+Examples:
 
 ```text
-ffmpeg.js
-ffmpeg.wasm
-ffmpeg.js.gz
-ffmpeg.wasm.gz
-manifest.json
-browser-ffmpeg.js
-BUILDINFO.txt
-THIRD_PARTY_NOTICES.md
-LICENSES/
+ffmpeg-wasm-video-compressor-v1.1.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.1.0.zip
 ```
 
-The same GitHub Release contains `ffmpeg-wasm-sources-v1.0.0.tar.gz` with exact corresponding source. When redistributing the generated core, keep the license/source notice reachable from the consuming project.
+The profile bundle contains `ffmpeg.js`, `ffmpeg.wasm`, gzip copies, `manifest.json`, `browser-ffmpeg.js`, `BUILDINFO.txt`, and license notices.
 
-## Hosted assets
-
-If the consuming app hosts separate assets, copy the generated files to a versioned same-origin path, for example:
-
-```text
-/assets/ffmpeg/builder-v1.0.0/video-compressor/
-├─ ffmpeg.js
-└─ ffmpeg.wasm
-```
-
-Initialize lazily:
+For Lossless Video Cutter, use:
 
 ```js
-const runner = await BrowserFFmpeg.loadHosted({
-  coreJsUrl: "/assets/ffmpeg/builder-v1.0.0/video-compressor/ffmpeg.js",
-  wasmUrl: "/assets/ffmpeg/builder-v1.0.0/video-compressor/ffmpeg.wasm"
-});
-
-const result = await runner.run({
-  files: [{ name: "/input.bin", data: file }],
-  outputs: ["/output.mp4"],
-  args: BrowserFFmpeg.videoCompressorArgs({
-    maxWidth: 1280,
-    crf: 28,
-    audioBitrateKbps: 128
-  })
-});
+BrowserFFmpeg.losslessVideoCutterArgs({
+  input: "/input.mp4",
+  output: "/output.mp4",
+  start: 13.4,
+  end: 102.8,
+  noAudio: false
+})
 ```
 
-Show the UI first and load the FFmpeg assets only when the user selects a video or starts processing. Version the URLs and use long immutable caching.
+The operation is a stream copy. The actual start may be moved backward to the nearest decodable keyframe. Surface that behavior in the app UI rather than promising frame-accurate cuts without re-encoding.
 
-## Single HTML
+## Lossless Video Cutter and large input files
 
-Run `pack-single-html.bat` in this Builder, or use the same embedding strategy in the consuming app. Generated gzip JS/Wasm can be embedded and expanded only when conversion begins. The runtime is designed to work from `file://` without SharedArrayBuffer or COOP/COEP headers.
-
-## API scope
-
-`BrowserFFmpeg.videoCompressorArgs()` is deliberately small and does not accept arbitrary FFmpeg CLI syntax. Add capabilities to the profile + public-libav runner instead of exposing unrestricted FFmpeg command parsing.
-
-## License/source handoff
-
-A consuming application should keep a clear notice that its embedded/generated FFmpeg/x264 Wasm is GPL-2.0-or-later and point users to the exact Builder release used. The Builder release carries `BUILDINFO.txt`, upstream license files, and corresponding source.
+The cutter profile is built with Emscripten WORKERFS. Keep the browser `File`/`Blob` intact and pass it to the runtime as `{ name: "/workerfs/input.mp4", data: file, workerfs: true }`. Do not call `arrayBuffer()` on a large input first. The current runtime still writes the cut result to MEMFS before returning it.
