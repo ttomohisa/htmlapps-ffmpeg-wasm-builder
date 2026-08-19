@@ -240,7 +240,7 @@ Require-Text $contactProfile "--enable-decoder=hevc" "Video Contact Sheet must d
 Require-Text $contactProfile "--enable-decoder=av1" "Video Contact Sheet must decode AV1."
 Require-Text $contactProfile "--enable-demuxer=mov" "Video Contact Sheet must read MP4/MOV."
 Require-Text $contactProfile "--enable-demuxer=matroska" "Video Contact Sheet must read MKV/WebM."
-Require-Text $contactReadme "Pixel `hvc1`" "Video Contact Sheet docs must document Pixel HEVC support."
+Require-Text $contactReadme 'Pixel `hvc1`' "Video Contact Sheet docs must document Pixel HEVC support."
 
 Require-Text $packer "__FFMPEG_JS_GZIP_BASE64__" "Single-HTML packer is missing the JS payload token."
 Require-Text $packer "__FFMPEG_WASM_GZIP_BASE64__" "Single-HTML packer is missing the Wasm payload token."
@@ -299,10 +299,12 @@ foreach ($requiredPin in @(
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
   'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT'
 )) {
-  if ($versionsText -notmatch "(?m)^$requiredPin=.+$") { throw "versions.env is missing $requiredPin." }
+  $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
+  if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
 }
 foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT')) {
-  $match = [regex]::Match($versionsText, "(?m)^$commitName=([0-9a-f]{40})$")
+  $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
+  $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
 }
 

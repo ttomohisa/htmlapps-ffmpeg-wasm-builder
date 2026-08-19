@@ -10,6 +10,7 @@
 - Added `BrowserFFmpeg.videoContactSheetArgs()` and `BrowserFFmpeg.decodePpmOutput()`.
 - Added embedded single-HTML demo plus real browser smoke test validating a 12-frame 4x3 sheet.
 - Release CI, source checks, licensing docs, and binary/source packaging now include four release profiles.
+- Fixed `check-repository.ps1` parsing in GitHub Actions by keeping Markdown backticks out of interpolated PowerShell strings and hardening version-pin regex construction.
 
 ## 1.2.0
 
