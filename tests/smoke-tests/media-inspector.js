@@ -16,7 +16,7 @@ if (!result.files || result.files.length !== 1) throw new Error("Expected exactl
 const report = BrowserFFmpeg.decodeJsonOutput(result, reportPath);
 
 if (report.schemaVersion !== 1) throw new Error("Unexpected report schema: " + report.schemaVersion);
-if (report.runnerVersion !== "1.4.0") throw new Error("Unexpected runner version: " + report.runnerVersion);
+if (report.runnerVersion !== "1.5.0") throw new Error("Unexpected runner version: " + report.runnerVersion);
 if (!report.format?.name?.includes("mov")) throw new Error("MP4/MOV demuxer was not detected: " + report.format?.name);
 if (report.format.fileSize !== input.byteLength) throw new Error("File size mismatch: " + report.format.fileSize + " vs " + input.byteLength);
 if (!(report.format.duration > 0.9 && report.format.duration < 1.1)) throw new Error("Unexpected duration: " + report.format.duration);

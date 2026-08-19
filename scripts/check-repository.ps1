@@ -141,7 +141,7 @@ if ($runtimeText -match 'typeof\s+SharedArrayBuffer|crossOriginIsolated') { thro
 
 $videoRunnerText = [IO.File]::ReadAllText($videoRunner)
 if ($videoRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video runner must not call pthread APIs." }
-Require-Text $videoRunner '#define RUNNER_VERSION "1.4.0"' "Video runner version must be 1.4.0."
+Require-Text $videoRunner '#define RUNNER_VERSION "1.5.0"' "Video runner version must be 1.5.0."
 Require-Text $videoRunner "avcodec_send_packet" "Video runner decode loop is missing."
 Require-Text $videoRunner 'av_opt_set_array(sink_ctx, "pixel_formats"' "Video runner must use FFmpeg 9+ pixel_formats array option."
 Require-Text $videoRunner 'av_opt_set_array(sink_ctx, "sample_formats"' "Video runner must use FFmpeg 9+ sample_formats array option."
@@ -153,7 +153,7 @@ foreach ($deprecated in @('"pix_fmts"', '"sample_fmts"', '"sample_rates"', '"ch_
 
 $cutterRunnerText = [IO.File]::ReadAllText($cutterRunner)
 if ($cutterRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Cutter runner must not call pthread APIs." }
-Require-Text $cutterRunner '#define RUNNER_VERSION "1.4.0"' "Cutter runner version must be 1.4.0."
+Require-Text $cutterRunner '#define RUNNER_VERSION "1.5.0"' "Cutter runner version must be 1.5.0."
 Require-Text $cutterRunner "av_seek_frame" "Cutter must seek to a keyframe."
 Require-Text $cutterRunner "AV_PKT_FLAG_KEY" "Cutter must anchor output to a keyframe."
 Require-Text $cutterRunner "avcodec_parameters_copy" "Cutter must stream-copy codec parameters."
@@ -166,7 +166,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $inspectorRunnerText = [IO.File]::ReadAllText($inspectorRunner)
 if ($inspectorRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Media Inspector runner must not call pthread APIs." }
-Require-Text $inspectorRunner '#define RUNNER_VERSION "1.4.0"' "Media Inspector runner version must be 1.4.0."
+Require-Text $inspectorRunner '#define RUNNER_VERSION "1.5.0"' "Media Inspector runner version must be 1.5.0."
 Require-Text $inspectorRunner "avformat_open_input" "Media Inspector must open media through libavformat."
 Require-Text $inspectorRunner "avformat_find_stream_info" "Media Inspector must discover stream information."
 Require-Text $inspectorRunner "AV_PKT_DATA_DISPLAYMATRIX" "Media Inspector must report rotation/display matrix data."
@@ -179,7 +179,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $contactRunnerText = [IO.File]::ReadAllText($contactRunner)
 if ($contactRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Contact Sheet runner must not call pthread APIs." }
-Require-Text $contactRunner '#define RUNNER_VERSION "1.4.0"' "Video Contact Sheet runner version must be 1.4.0."
+Require-Text $contactRunner '#define RUNNER_VERSION "1.5.0"' "Video Contact Sheet runner version must be 1.5.0."
 Require-Text $contactRunner "av_seek_frame" "Video Contact Sheet must seek between sample points."
 Require-Text $contactRunner "avcodec_send_packet" "Video Contact Sheet must decode selected frames."
 Require-Text $contactRunner "avcodec_receive_frame" "Video Contact Sheet decode loop is missing."
@@ -260,16 +260,20 @@ Require-Text $contactProfile "--enable-demuxer=mov" "Video Contact Sheet must re
 Require-Text $contactProfile "--enable-demuxer=matroska" "Video Contact Sheet must read MKV/WebM."
 Require-Text $contactReadme 'Pixel `hvc1`' "Video Contact Sheet docs must document Pixel HEVC support."
 
-Require-Text $animationRunner '#define RUNNER_VERSION "1.4.0"' "Animation runner version must be 1.4.0."
+Require-Text $animationRunner '#define RUNNER_VERSION "1.5.0"' "Animation runner version must be 1.5.0."
 Require-Text $animationRunner 'palettegen=max_colors=' "GIF runner must generate a palette in a first pass."
 Require-Text $animationRunner 'paletteuse=dither=' "GIF runner must apply the generated palette."
 Require-Text $animationRunner 'avcodec_find_encoder_by_name("libwebp_anim")' "Animated WebP runner must use FFmpeg libwebp_anim."
 Require-Text $animationRunner 'av_seek_frame' "Animation runner must seek to trim starts."
+Require-Text $animationRunner '"--crop-x"' "Animation runner must implement crop rectangles."
+Require-Text $animationRunner 'crop=%d:%d:%d:%d' "Animation runner filter graph must crop before resize."
 Require-Text $animationRunner 'WORKERFS' "Animation profile docs/source should preserve large-file WORKERFS intent."
 Require-Text $gifProfile '--enable-encoder=gif' "GIF profile must enable only the GIF encoder it needs."
+Require-Text $gifProfile '--enable-filter=crop' "GIF profile must enable crop."
 Require-Text $gifProfile '--enable-filter=palettegen' "GIF profile must enable palettegen."
 Require-Text $gifProfile '--enable-filter=paletteuse' "GIF profile must enable paletteuse."
 Require-Text $gifProfileEnv 'PROFILE_USE_LIBWEBP=0' "GIF profile must not link libwebp."
+Require-Text $webpProfile '--enable-filter=crop' "WebP profile must enable crop."
 Require-Text $webpProfile '--enable-libwebp' "WebP profile must enable libwebp."
 Require-Text $webpProfile '--enable-encoder=libwebp_anim' "WebP profile must enable the animation encoder."
 Require-Text $webpProfileEnv 'PROFILE_USE_LIBWEBP=1' "WebP profile must link libwebp."
@@ -304,9 +308,11 @@ Require-Text $contactSmoke "BrowserFFmpeg.decodePpmOutput" "Video Contact Sheet 
 Require-Text $contactSmoke "workerfs: true" "Video Contact Sheet smoke test must exercise WORKERFS input."
 Require-Text $contactSmoke "meta.samples.length !== 12" "Video Contact Sheet smoke test must verify all 12 sample timestamps."
 Require-Text $gifSmoke "BrowserFFmpeg.videoToGifArgs" "GIF smoke test must run the actual animation runner."
+Require-Text $gifSmoke 'crop:' "GIF smoke test must exercise crop."
 Require-Text $gifSmoke '"GIF89a"' "GIF smoke test must validate the GIF signature."
 Require-Text $gifSmoke '"NETSCAPE2.0"' "GIF smoke test must validate looping animation output."
 Require-Text $webpSmoke "BrowserFFmpeg.videoToWebpArgs" "WebP smoke test must run the actual animation runner."
+Require-Text $webpSmoke 'crop:' "WebP smoke test must exercise crop."
 Require-Text $webpSmoke '"ANIM"' "WebP smoke test must validate the animation chunk."
 Require-Text $webpSmoke '"ANMF"' "WebP smoke test must validate animation frames."
 Require-Text $inspectorSmoke "BrowserFFmpeg.decodeJsonOutput" "Media Inspector smoke test must parse the structured report."
@@ -335,7 +341,7 @@ if ($null -ne $gitattributes) {
 }
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.4\.0$') { throw "Builder version must be 1.4.0." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.5\.0$') { throw "Builder version must be 1.5.0." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -383,7 +389,7 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.4.0" "Release documentation must include the v1.4.0 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.5.0" "Release documentation must include the v1.5.0 tag procedure."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."

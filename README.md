@@ -26,7 +26,7 @@ pinned FFmpeg / Emscripten / optional x264 / libwebp
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.4.0 profiles
+## v1.5.0 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
@@ -45,7 +45,7 @@ pinned FFmpeg / Emscripten / optional x264 / libwebp
 
 `video-to-gif` は短い動画区間をtrim / FPS削減 / autorotate / resizeし、1回目のdecodeで `palettegen`、2回目で `paletteuse` を行う2-pass構成です。GIF encoderはFFmpeg内蔵のみを使い、x264/libwebp/audio stackはリンクしません。
 
-`video-to-webp` は同じ動画前処理を共有し、FFmpegの `libwebp_anim` wrapperからAnimated WebPを生成します。libwebpはこのprofileだけにリンクされ、lossy/lossless、quality、compression levelを選べます。両profileとも入力File/BlobはWORKERFSを使います。
+`video-to-gif` / `video-to-webp` はv1.5.0から、autorotate後の映像に対する正規化crop矩形 (`x/y/width/height`: 0..1) を受け取れます。crop後にresizeするため、アプリ側はプレビュー上の切り抜き枠をそのままrunnerへ渡せます。\n\n`video-to-webp` は同じ動画前処理を共有し、FFmpegの `libwebp_anim` wrapperからAnimated WebPを生成します。libwebpはこのprofileだけにリンクされ、lossy/lossless、quality、compression levelを選べます。両profileとも入力File/BlobはWORKERFSを使います。
 
 ## pin
 
@@ -244,7 +244,8 @@ const result = await runner.run({
   outputs: ["/output.gif"],
   args: BrowserFFmpeg.videoToGifArgs({
     start: 3.2, end: 8.0, maxWidth: 480, fps: 15,
-    colors: 128, dither: "sierra2_4a"
+    colors: 128, dither: "sierra2_4a",
+    crop: { x: 0.125, y: 0, width: 0.75, height: 1 }
   })
 });
 ```
@@ -273,16 +274,16 @@ Browser runtimeでは `BrowserFFmpeg.videoToWebpArgs()` を使います。`lossl
 
 ## Public Release
 
-v1.4.0ではRelease workflowが6 profileをbuild + smoke testしてから次を公開します。
+v1.5.0ではRelease workflowが6 profileをbuild + smoke testしてから次を公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.4.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.4.0.zip
-ffmpeg-wasm-media-inspector-v1.4.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.4.0.zip
-ffmpeg-wasm-video-to-gif-v1.4.0.zip
-ffmpeg-wasm-video-to-webp-v1.4.0.zip
-ffmpeg-wasm-sources-v1.4.0.tar.gz
+ffmpeg-wasm-video-compressor-v1.5.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.5.0.zip
+ffmpeg-wasm-media-inspector-v1.5.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.5.0.zip
+ffmpeg-wasm-video-to-gif-v1.5.0.zip
+ffmpeg-wasm-video-to-webp-v1.5.0.zip
+ffmpeg-wasm-sources-v1.5.0.tar.gz
 BUILDINFO-video-compressor.txt
 BUILDINFO-lossless-video-cutter.txt
 BUILDINFO-media-inspector.txt

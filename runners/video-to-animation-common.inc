@@ -34,7 +34,7 @@
 #error "Exactly one animation output format must be selected"
 #endif
 
-#define RUNNER_VERSION "1.4.0"
+#define RUNNER_VERSION "1.5.0"
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
 #define DEFAULT_FPS 15
 #define MAX_DIMENSION 8192
@@ -46,6 +46,10 @@ typedef struct RunnerOptions {
     double end_seconds;
     int max_width;
     int max_height;
+    double crop_x;
+    double crop_y;
+    double crop_width;
+    double crop_height;
     int fps;
 #if ANIMATION_FORMAT_GIF
     int colors;
@@ -83,6 +87,11 @@ typedef struct Geometry {
     int width;
     int height;
     int rotation;
+    int crop_active;
+    int crop_x;
+    int crop_y;
+    int crop_width;
+    int crop_height;
 } Geometry;
 
 typedef int (*FrameConsumer)(AVFrame *frame, void *opaque);
@@ -92,13 +101,17 @@ static void print_usage(const char *program)
 #if ANIMATION_FORMAT_GIF
     fprintf(stderr,
             "Usage: %s --input FILE --output FILE [--start SEC] [--end SEC] "
-            "[--max-width PX] [--max-height PX] [--fps N] [--colors 16..256] "
+            "[--max-width PX] [--max-height PX] [--fps N] "
+            "[--crop-x 0..1] [--crop-y 0..1] [--crop-width 0..1] [--crop-height 0..1] "
+            "[--colors 16..256] "
             "[--dither sierra2_4a|floyd_steinberg|sierra2|bayer|heckbert]\n",
             program);
 #else
     fprintf(stderr,
             "Usage: %s --input FILE --output FILE [--start SEC] [--end SEC] "
-            "[--max-width PX] [--max-height PX] [--fps N] [--quality 0..100] "
+            "[--max-width PX] [--max-height PX] [--fps N] "
+            "[--crop-x 0..1] [--crop-y 0..1] [--crop-width 0..1] [--crop-height 0..1] "
+            "[--quality 0..100] "
             "[--compression-level 0..6] [--lossless 0|1]\n",
             program);
 #endif
@@ -146,6 +159,8 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
     int i;
     memset(options, 0, sizeof(*options));
     options->end_seconds = -1.0;
+    options->crop_width = 1.0;
+    options->crop_height = 1.0;
     options->fps = DEFAULT_FPS;
 #if ANIMATION_FORMAT_GIF
     options->colors = 128;
@@ -187,6 +202,14 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
             if (parse_int(value, 0, MAX_DIMENSION, &options->max_height) < 0) return AVERROR(EINVAL);
         } else if (!strcmp(arg, "--fps")) {
             if (parse_int(value, 1, 60, &options->fps) < 0) return AVERROR(EINVAL);
+        } else if (!strcmp(arg, "--crop-x")) {
+            if (parse_double(value, 0.0, 1.0, &options->crop_x) < 0) return AVERROR(EINVAL);
+        } else if (!strcmp(arg, "--crop-y")) {
+            if (parse_double(value, 0.0, 1.0, &options->crop_y) < 0) return AVERROR(EINVAL);
+        } else if (!strcmp(arg, "--crop-width")) {
+            if (parse_double(value, 0.01, 1.0, &options->crop_width) < 0) return AVERROR(EINVAL);
+        } else if (!strcmp(arg, "--crop-height")) {
+            if (parse_double(value, 0.01, 1.0, &options->crop_height) < 0) return AVERROR(EINVAL);
 #if ANIMATION_FORMAT_GIF
         } else if (!strcmp(arg, "--colors")) {
             if (parse_int(value, 16, 256, &options->colors) < 0) return AVERROR(EINVAL);
@@ -216,6 +239,11 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
     }
     if (options->end_seconds >= 0.0 && options->end_seconds <= options->start_seconds) {
         fprintf(stderr, "--end must be greater than --start.\n");
+        return AVERROR(EINVAL);
+    }
+    if (options->crop_x + options->crop_width > 1.000001 ||
+        options->crop_y + options->crop_height > 1.000001) {
+        fprintf(stderr, "Crop rectangle must stay within the autorotated source frame.\n");
         return AVERROR(EINVAL);
     }
     return 0;
@@ -262,16 +290,37 @@ static int even_dimension(int value)
 static int compute_geometry(const RunnerOptions *options, const AVStream *stream, Geometry *geometry)
 {
     double sar, display_w, display_h, scale = 1.0;
-    int rotation;
+    int rotation, source_w, source_h, crop_x, crop_y, crop_w, crop_h;
     if (!stream || !stream->codecpar || stream->codecpar->width <= 0 || stream->codecpar->height <= 0)
         return AVERROR(EINVAL);
+
     sar = effective_sar(stream);
-    display_w = stream->codecpar->width * sar;
-    display_h = stream->codecpar->height;
     rotation = normalized_quarter_rotation(stream->codecpar);
-    if (rotation == 90 || rotation == 270) {
-        double temp = display_w; display_w = display_h; display_h = temp;
-    }
+    source_w = (rotation == 90 || rotation == 270) ? stream->codecpar->height : stream->codecpar->width;
+    source_h = (rotation == 90 || rotation == 270) ? stream->codecpar->width : stream->codecpar->height;
+    if (rotation == 90 || rotation == 270) sar = sar > 0.0 ? 1.0 / sar : 1.0;
+
+    if (source_w < 2 || source_h < 2) return AVERROR(EINVAL);
+    crop_x = (int)floor(source_w * options->crop_x);
+    crop_y = (int)floor(source_h * options->crop_y);
+    crop_x = FFMIN(crop_x, source_w - 2) & ~1;
+    crop_y = FFMIN(crop_y, source_h - 2) & ~1;
+    crop_w = even_dimension((int)floor(source_w * options->crop_width));
+    crop_h = even_dimension((int)floor(source_h * options->crop_height));
+    if (crop_x + crop_w > source_w) crop_w = (source_w - crop_x) & ~1;
+    if (crop_y + crop_h > source_h) crop_h = (source_h - crop_y) & ~1;
+    if (crop_w < 2 || crop_h < 2) return AVERROR(EINVAL);
+
+    geometry->crop_active =
+        options->crop_x > 0.000001 || options->crop_y > 0.000001 ||
+        options->crop_width < 0.999999 || options->crop_height < 0.999999;
+    geometry->crop_x = crop_x;
+    geometry->crop_y = crop_y;
+    geometry->crop_width = crop_w;
+    geometry->crop_height = crop_h;
+
+    display_w = crop_w * sar;
+    display_h = crop_h;
     if (options->max_width > 0 && display_w > options->max_width)
         scale = FFMIN(scale, options->max_width / display_w);
     if (options->max_height > 0 && display_h > options->max_height)
@@ -458,9 +507,17 @@ static void common_filter_spec(const RunnerOptions *options, const Geometry *geo
 {
     char rotate[64];
     rotation_prefix(geometry->rotation, rotate, sizeof(rotate));
-    snprintf(buffer, size,
-             "fps=fps=%d,%sscale=%d:%d:flags=lanczos,setsar=1,setpts=PTS-STARTPTS",
-             options->fps, rotate, geometry->width, geometry->height);
+    if (geometry->crop_active) {
+        snprintf(buffer, size,
+                 "fps=fps=%d,%scrop=%d:%d:%d:%d,scale=%d:%d:flags=lanczos,setsar=1,setpts=PTS-STARTPTS",
+                 options->fps, rotate,
+                 geometry->crop_width, geometry->crop_height, geometry->crop_x, geometry->crop_y,
+                 geometry->width, geometry->height);
+    } else {
+        snprintf(buffer, size,
+                 "fps=fps=%d,%sscale=%d:%d:flags=lanczos,setsar=1,setpts=PTS-STARTPTS",
+                 options->fps, rotate, geometry->width, geometry->height);
+    }
 }
 
 static void report_progress(double position, const RunnerOptions *options,

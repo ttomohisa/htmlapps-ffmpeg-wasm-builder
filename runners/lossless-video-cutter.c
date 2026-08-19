@@ -45,7 +45,7 @@
 #include <libavutil/mem.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.4.0"
+#define RUNNER_VERSION "1.5.0"
 
 typedef struct RunnerOptions {
     const char *input_path;

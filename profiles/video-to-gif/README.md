@@ -3,7 +3,7 @@
 Specialized FFmpeg 9 WASM profile for short video clips -> animated GIF.
 
 - common video decode/demux only; no audio pipeline
-- trim, autorotate, fps reduction and scaling
+- trim, autorotate, positioned crop, fps reduction and scaling
 - two-pass `palettegen` -> `paletteuse` runner for GIF quality without retaining the whole clip in one filter graph
 - adjustable color count and dithering
 - infinite-loop GIF output

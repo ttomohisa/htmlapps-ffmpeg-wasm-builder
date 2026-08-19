@@ -5,12 +5,12 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.4.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.4.0.zip
-ffmpeg-wasm-media-inspector-v1.4.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.4.0.zip
-ffmpeg-wasm-video-to-gif-v1.4.0.zip
-ffmpeg-wasm-video-to-webp-v1.4.0.zip
+ffmpeg-wasm-video-compressor-v1.5.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.5.0.zip
+ffmpeg-wasm-media-inspector-v1.5.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.5.0.zip
+ffmpeg-wasm-video-to-gif-v1.5.0.zip
+ffmpeg-wasm-video-to-webp-v1.5.0.zip
 ```
 
 The profile bundle contains `ffmpeg.js`, `ffmpeg.wasm`, gzip copies, `manifest.json`, `browser-ffmpeg.js`, `BUILDINFO.txt`, and license notices.
@@ -95,7 +95,8 @@ const result = await runner.run({
     maxWidth: 480,
     fps: 15,
     colors: 128,
-    dither: "sierra2_4a"
+    dither: "sierra2_4a",
+    crop: { x: 0.125, y: 0, width: 0.75, height: 1 }
   })
 });
 ```
@@ -118,9 +119,14 @@ const result = await runner.run({
     fps: 15,
     quality: 75,
     compressionLevel: 4,
-    lossless: false
+    lossless: false,
+    crop: { x: 0, y: 0.125, width: 1, height: 0.75 }
   })
 });
 ```
 
 The WebP profile alone links libwebp. Apps that ship both GIF and WebP can embed both gzip cores and only inflate/load the one selected by the user.
+
+## Animation crop rectangles
+
+`videoToGifArgs()` and `videoToWebpArgs()` accept `crop: { x, y, width, height }`. Crop coordinates are normalized to `0..1`, refer to the autorotated source frame, must stay inside that frame, and are applied before the final resize.

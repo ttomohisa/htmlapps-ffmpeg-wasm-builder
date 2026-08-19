@@ -9,6 +9,7 @@ const result = await runner.run({
     start: 0,
     end: 0.85,
     maxWidth: 96,
+    crop: { x: 0.125, y: 0, width: 0.75, height: 1 },
     fps: 8,
     quality: 70,
     compressionLevel: 3,

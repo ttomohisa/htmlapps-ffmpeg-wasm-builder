@@ -4,7 +4,7 @@ Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg a
 
 The upstream `ffmpeg` CLI is not linked. Each profile enables only the FFmpeg components it needs and links a small runner against public `libav*` APIs. Pthreads are disabled, so the browser runtime needs neither SharedArrayBuffer nor cross-origin isolation.
 
-## v1.4.0 profiles
+## v1.5.0 profiles
 
 - `video-compressor`: decode/filter/encode to H.264 + AAC MP4; links x264.
 - `lossless-video-cutter`: packet-level stream copy with no decoder, encoder, filter, or x264 linked into the final Wasm. Blob/File input is exposed through Emscripten WORKERFS so the whole source file is not copied into MEMFS first.
@@ -24,7 +24,7 @@ Video Contact Sheet exposes `BrowserFFmpeg.videoContactSheetArgs({ input, output
 
 ## Public releases
 
-A v1.4.0 tag rebuilds and smoke-tests all six profiles and publishes profile-specific binary ZIPs, build information, SHA-256 checksums, and one exact corresponding-source archive.
+A v1.5.0 tag rebuilds and smoke-tests all six profiles and publishes profile-specific binary ZIPs, build information, SHA-256 checksums, and one exact corresponding-source archive.
 
 ## Licensing
 

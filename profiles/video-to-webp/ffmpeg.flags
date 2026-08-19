@@ -33,6 +33,7 @@
 --enable-muxer=webp
 --enable-protocol=file
 --enable-filter=scale
+--enable-filter=crop
 --enable-filter=format
 --enable-filter=fps
 --enable-filter=setsar

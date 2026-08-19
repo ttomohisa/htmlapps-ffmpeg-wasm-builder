@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 - 2026-08-20
+
+- Added normalized positioned crop rectangles to `video-to-gif` and `video-to-webp`.
+- `BrowserFFmpeg.videoToGifArgs()` / `videoToWebpArgs()` now accept `crop: { x, y, width, height }`.
+- Crop is applied after autorotation and before the final Lanczos resize.
+
 ## 1.4.0
 
 - Added separate `video-to-gif` and `video-to-webp` profiles for short video clips -> animated images.

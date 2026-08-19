@@ -274,6 +274,22 @@
     args.push("--max-width", String(number(options.maxWidth ?? 480, "maxWidth", 0, 8192, true)));
     args.push("--max-height", String(number(options.maxHeight ?? 0, "maxHeight", 0, 8192, true)));
     args.push("--fps", String(number(options.fps ?? 15, "fps", 1, 60, true)));
+    const crop = options.crop;
+    if (crop) {
+      const cropX = number(crop.x ?? 0, "crop.x", 0, 1);
+      const cropY = number(crop.y ?? 0, "crop.y", 0, 1);
+      const cropWidth = number(crop.width ?? 1, "crop.width", 0.01, 1);
+      const cropHeight = number(crop.height ?? 1, "crop.height", 0.01, 1);
+      if (cropX + cropWidth > 1.000001 || cropY + cropHeight > 1.000001) {
+        throw new RangeError("crop rectangle must stay within the source frame.");
+      }
+      args.push(
+        "--crop-x", String(cropX),
+        "--crop-y", String(cropY),
+        "--crop-width", String(cropWidth),
+        "--crop-height", String(cropHeight)
+      );
+    }
     return args;
   };
 
