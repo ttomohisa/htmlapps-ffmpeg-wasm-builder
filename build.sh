@@ -10,11 +10,18 @@ source "$ROOT/versions.env"
 [[ -f "$ROOT/runners/$PROFILE.c" ]] || { echo "Missing runner: runners/$PROFILE.c" >&2; exit 1; }
 
 PROFILE_USE_X264="$(grep '^PROFILE_USE_X264=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
-case "$PROFILE_USE_X264" in
-  1) EXPORT_TARGET="export-with-x264" ;;
-  0) EXPORT_TARGET="export-no-x264" ;;
-  *) echo "Invalid PROFILE_USE_X264 in profiles/$PROFILE/profile.env" >&2; exit 1 ;;
-esac
+PROFILE_USE_LIBWEBP="$(grep '^PROFILE_USE_LIBWEBP=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
+[[ "$PROFILE_USE_X264" == "0" || "$PROFILE_USE_X264" == "1" ]] || { echo "Invalid PROFILE_USE_X264 in profiles/$PROFILE/profile.env" >&2; exit 1; }
+[[ "$PROFILE_USE_LIBWEBP" == "0" || "$PROFILE_USE_LIBWEBP" == "1" ]] || { echo "Invalid PROFILE_USE_LIBWEBP in profiles/$PROFILE/profile.env" >&2; exit 1; }
+if [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBWEBP" == "1" ]]; then
+  echo "Profiles cannot currently link x264 and libwebp together." >&2; exit 1
+elif [[ "$PROFILE_USE_X264" == "1" ]]; then
+  EXPORT_TARGET="export-with-x264"
+elif [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
+  EXPORT_TARGET="export-with-libwebp"
+else
+  EXPORT_TARGET="export-no-x264"
+fi
 
 OUT_DIR="$ROOT/dist/$PROFILE"
 rm -rf "$OUT_DIR"
@@ -43,6 +50,10 @@ docker buildx build \
   --build-arg "X264_FALLBACK_REPOSITORY=$X264_FALLBACK_REPOSITORY" \
   --build-arg "X264_REF=$X264_REF" \
   --build-arg "X264_COMMIT=$X264_COMMIT" \
+  --build-arg "LIBWEBP_REPOSITORY=$LIBWEBP_REPOSITORY" \
+  --build-arg "LIBWEBP_FALLBACK_REPOSITORY=$LIBWEBP_FALLBACK_REPOSITORY" \
+  --build-arg "LIBWEBP_REF=$LIBWEBP_REF" \
+  --build-arg "LIBWEBP_COMMIT=$LIBWEBP_COMMIT" \
   --build-arg "PROFILE=$PROFILE" \
   --output "type=local,dest=$OUT_DIR" \
   "$ROOT"

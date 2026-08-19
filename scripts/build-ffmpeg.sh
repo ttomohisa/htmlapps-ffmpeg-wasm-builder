@@ -60,6 +60,9 @@ fi
 if [[ "$PROFILE_USE_X264" == "0" ]] && grep -q '^CONFIG_LIBX264=yes$' ffbuild/config.mak; then
   fail "Profile $PROFILE must not enable libx264"
 fi
+if [[ "$PROFILE_USE_LIBWEBP" == "0" ]] && grep -q '^CONFIG_LIBWEBP=yes$' ffbuild/config.mak; then
+  fail "Profile $PROFILE must not enable libwebp"
+fi
 
 log "Building FFmpeg static libraries"
 emmake make -j"$JOBS"
@@ -72,6 +75,17 @@ link_inputs=("${PROFILE_LINK_LIBS[@]}")
 if [[ "$PROFILE_USE_X264" == "1" ]]; then
   [[ -s "$INSTALL_DIR/lib/libx264.a" ]] || fail "Profile requires x264 but libx264.a is missing"
   link_inputs+=("$INSTALL_DIR/lib/libx264.a")
+fi
+if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
+  for lib in libwebpmux.a libwebp.a libsharpyuv.a; do
+    [[ -s "$INSTALL_DIR/lib/$lib" ]] || fail "Profile requires libwebp but $lib is missing"
+  done
+  # Static dependency order matters: mux -> codec -> sharpyuv.
+  link_inputs+=(
+    "$INSTALL_DIR/lib/libwebpmux.a"
+    "$INSTALL_DIR/lib/libwebp.a"
+    "$INSTALL_DIR/lib/libsharpyuv.a"
+  )
 fi
 
 runtime_methods="FS,callMain"
@@ -116,7 +130,7 @@ for gz in "$OUT_DIR"/*.gz; do gzip -t "$gz"; done
 
 cat > "$OUT_DIR/manifest.json" <<EOF_JSON
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "builderVersion": "$BUILDER_VERSION",
   "profile": "$PROFILE",
   "displayName": "$PROFILE_DISPLAY_NAME",
@@ -128,7 +142,10 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
     "ffmpegCommit": "$FFMPEG_COMMIT",
     "x264Ref": "$X264_REF",
     "x264Commit": "$X264_COMMIT",
-    "x264Linked": $([[ "$PROFILE_USE_X264" == "1" ]] && echo true || echo false)
+    "x264Linked": $([[ "$PROFILE_USE_X264" == "1" ]] && echo true || echo false),
+    "libwebpRef": "$LIBWEBP_REF",
+    "libwebpCommit": "$LIBWEBP_COMMIT",
+    "libwebpLinked": $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo true || echo false)
   },
   "runtime": {
     "frontend": "public-libav-runner",

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="${1:-v$(grep '^BUILDER_VERSION=' "$ROOT/versions.env" | cut -d= -f2-)}"
-RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet)
+RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)
 
 # shellcheck disable=SC1091
 source "$ROOT/versions.env"
@@ -59,9 +59,11 @@ fetch_exact() {
 FFMPEG_SRC="$WORK_DIR/ffmpeg-${FFMPEG_REF}"
 X264_SRC="$WORK_DIR/x264-${X264_COMMIT:0:12}"
 EMSCRIPTEN_SRC="$WORK_DIR/emscripten-${EMSCRIPTEN_REF}"
+LIBWEBP_SRC="$WORK_DIR/libwebp-${LIBWEBP_REF}"
 fetch_exact "FFmpeg" "$FFMPEG_REPOSITORY" "" "$FFMPEG_COMMIT" "$FFMPEG_SRC"
 fetch_exact "x264" "$X264_REPOSITORY" "$X264_FALLBACK_REPOSITORY" "$X264_COMMIT" "$X264_SRC"
 fetch_exact "Emscripten" "$EMSCRIPTEN_REPOSITORY" "" "$EMSCRIPTEN_COMMIT" "$EMSCRIPTEN_SRC"
+fetch_exact "libwebp" "$LIBWEBP_REPOSITORY" "$LIBWEBP_FALLBACK_REPOSITORY" "$LIBWEBP_COMMIT" "$LIBWEBP_SRC"
 
 [[ -s "$FFMPEG_SRC/LICENSE.md" ]] || fail "FFmpeg LICENSE.md missing from source checkout"
 [[ -s "$FFMPEG_SRC/COPYING.GPLv2" ]] || fail "FFmpeg COPYING.GPLv2 missing from source checkout"
@@ -70,11 +72,12 @@ fetch_exact "Emscripten" "$EMSCRIPTEN_REPOSITORY" "" "$EMSCRIPTEN_COMMIT" "$EMSC
 [[ -s "$EMSCRIPTEN_SRC/LICENSE" ]] || fail "Emscripten LICENSE missing from source checkout"
 [[ -s "$EMSCRIPTEN_SRC/system/lib/libc/musl/COPYRIGHT" ]] || fail "Emscripten musl COPYRIGHT missing from source checkout"
 [[ -s "$EMSCRIPTEN_SRC/system/lib/compiler-rt/LICENSE.TXT" ]] || fail "Emscripten compiler-rt LICENSE.TXT missing from source checkout"
+[[ -s "$LIBWEBP_SRC/COPYING" ]] || fail "libwebp COPYING missing from source checkout"
 
 write_buildinfo() {
   local profile="$1"
   local output="$2"
-  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
+  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_LIBWEBP PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
   local -a PROFILE_REQUIRED_CONFIG PROFILE_LINK_LIBS
   # shellcheck disable=SC1090
   source "$ROOT/profiles/$profile/profile.env"
@@ -89,6 +92,7 @@ write_buildinfo() {
     echo "Generated core license: $PROFILE_BINARY_LICENSE"
     echo "Output: $PROFILE_OUTPUT_DESCRIPTION"
     echo "x264 linked into this profile: $([[ "$PROFILE_USE_X264" == "1" ]] && echo yes || echo no)"
+    echo "libwebp linked into this profile: $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo yes || echo no)"
     echo "WORKERFS input enabled: $([[ "$PROFILE_USE_WORKERFS" == "1" ]] && echo yes || echo no)"
     echo
     echo "Emscripten Docker toolchain: emscripten/emsdk:$EMSDK_VERSION"
@@ -104,6 +108,11 @@ write_buildinfo() {
     echo "x264 commit: $X264_COMMIT"
     echo "x264 repository: $X264_REPOSITORY"
     echo "x264 fallback repository: $X264_FALLBACK_REPOSITORY"
+    echo
+    echo "libwebp ref: $LIBWEBP_REF"
+    echo "libwebp commit: $LIBWEBP_COMMIT"
+    echo "libwebp repository: $LIBWEBP_REPOSITORY"
+    echo "libwebp fallback repository: $LIBWEBP_FALLBACK_REPOSITORY"
     echo
     echo "FFmpeg base configure arguments:"
     cat <<'ARGS'
@@ -142,6 +151,24 @@ ARGS
 --chroma-format=420
 ARGS
     fi
+    if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
+      echo
+      echo "libwebp configure arguments:"
+      cat <<'ARGS'
+--disable-shared
+--enable-static
+--disable-threading
+--disable-libwebpdecoder
+--disable-libwebpdemux
+--disable-libwebpextras
+--enable-libwebpmux
+--disable-gl
+--disable-png
+--disable-jpeg
+--disable-tiff
+--disable-gif
+ARGS
+    fi
     echo
     echo "The exact build scripts are included in the corresponding-source archive."
   } > "$output"
@@ -151,7 +178,7 @@ make_binary_zip() {
   local profile="$1"
   local buildinfo="$2"
   local DIST="$ROOT/dist/$profile"
-  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
+  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_LIBWEBP PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
   local -a PROFILE_REQUIRED_CONFIG PROFILE_LINK_LIBS
   local binary_dir="$WORK_DIR/binary-$profile"
   local binary_zip="$RELEASE_DIR/ffmpeg-wasm-${profile}-v${BUILDER_VERSION}.zip"
@@ -176,6 +203,10 @@ make_binary_zip() {
   fi
   if [[ "$PROFILE_USE_X264" == "1" ]]; then
     cp "$X264_SRC/COPYING" "$binary_dir/LICENSES/x264-COPYING"
+  fi
+  if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
+    cp "$LIBWEBP_SRC/COPYING" "$binary_dir/LICENSES/libwebp-COPYING"
+    [[ ! -s "$LIBWEBP_SRC/PATENTS" ]] || cp "$LIBWEBP_SRC/PATENTS" "$binary_dir/LICENSES/libwebp-PATENTS"
   fi
   cp "$EMSCRIPTEN_SRC/LICENSE" "$binary_dir/LICENSES/Emscripten-LICENSE"
   cp "$EMSCRIPTEN_SRC/system/lib/libc/musl/COPYRIGHT" "$binary_dir/LICENSES/Emscripten-musl-COPYRIGHT"
@@ -207,6 +238,7 @@ mkdir -p "$SOURCE_ROOT"
 mv "$FFMPEG_SRC" "$SOURCE_ROOT/ffmpeg-${FFMPEG_REF}"
 mv "$X264_SRC" "$SOURCE_ROOT/x264-${X264_COMMIT:0:12}"
 mv "$EMSCRIPTEN_SRC" "$SOURCE_ROOT/emscripten-${EMSCRIPTEN_REF}"
+mv "$LIBWEBP_SRC" "$SOURCE_ROOT/libwebp-${LIBWEBP_REF}"
 cp "$RELEASE_DIR"/BUILDINFO-*.txt "$SOURCE_ROOT/"
 
 BUILDER_COPY="$SOURCE_ROOT/builder-v${BUILDER_VERSION}"
@@ -227,6 +259,7 @@ This archive contains:
 - exact FFmpeg source at $FFMPEG_COMMIT
 - exact x264 source at $X264_COMMIT (used by profiles that link x264)
 - exact Emscripten source at $EMSCRIPTEN_COMMIT
+- exact libwebp source at $LIBWEBP_COMMIT (used by animated-WebP profile)
 - the FFmpeg WASM Builder recipe at version $BUILDER_VERSION
 - profile-specific BUILDINFO files
 
@@ -235,6 +268,8 @@ Published binary profiles:
 - lossless-video-cutter
 - media-inspector
 - video-contact-sheet
+- video-to-gif
+- video-to-webp
 EOF_README
 
 SOURCE_TGZ="$RELEASE_DIR/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
@@ -247,11 +282,15 @@ tar -C "$WORK_DIR" -czf "$SOURCE_TGZ" "source-bundle"
     ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
     ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
     ffmpeg-wasm-video-contact-sheet-v${BUILDER_VERSION}.zip \
+    ffmpeg-wasm-video-to-gif-v${BUILDER_VERSION}.zip \
+    ffmpeg-wasm-video-to-webp-v${BUILDER_VERSION}.zip \
     ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
     BUILDINFO-video-compressor.txt \
     BUILDINFO-lossless-video-cutter.txt \
     BUILDINFO-media-inspector.txt \
-    BUILDINFO-video-contact-sheet.txt > SHA256SUMS.txt
+    BUILDINFO-video-contact-sheet.txt \
+    BUILDINFO-video-to-gif.txt \
+    BUILDINFO-video-to-webp.txt > SHA256SUMS.txt
 )
 
 log "Release assets prepared"

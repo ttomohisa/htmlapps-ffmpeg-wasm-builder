@@ -15,6 +15,17 @@ require_x264_env() {
   : "${SRC_DIR:?}"
 }
 
+require_libwebp_env() {
+  : "${EMSDK_VERSION:?}"
+  : "${EMSCRIPTEN_COMMIT:?}"
+  : "${LIBWEBP_REPOSITORY:?}"
+  : "${LIBWEBP_FALLBACK_REPOSITORY:?}"
+  : "${LIBWEBP_REF:?}"
+  : "${LIBWEBP_COMMIT:?}"
+  : "${INSTALL_DIR:?}"
+  : "${SRC_DIR:?}"
+}
+
 require_ffmpeg_env() {
   : "${EMSDK_VERSION:?}"
   : "${EMSCRIPTEN_COMMIT:?}"
@@ -26,6 +37,7 @@ require_ffmpeg_env() {
 
 require_build_env() {
   require_x264_env
+  require_libwebp_env
   require_ffmpeg_env
   : "${BUILDER_VERSION:?}"
   : "${PROFILE:?}"
@@ -76,12 +88,17 @@ load_profile_config() {
   source "$path"
   : "${PROFILE_DISPLAY_NAME:?}"
   : "${PROFILE_USE_X264:?}"
+  : "${PROFILE_USE_LIBWEBP:?}"
   : "${PROFILE_USE_WORKERFS:?}"
   : "${PROFILE_BINARY_LICENSE:?}"
   : "${PROFILE_OUTPUT_DESCRIPTION:?}"
   : "${PROFILE_CAPABILITIES_JSON:?}"
   [[ "$PROFILE_USE_X264" == "0" || "$PROFILE_USE_X264" == "1" ]] \
     || fail "PROFILE_USE_X264 must be 0 or 1"
+  [[ "$PROFILE_USE_LIBWEBP" == "0" || "$PROFILE_USE_LIBWEBP" == "1" ]] \
+    || fail "PROFILE_USE_LIBWEBP must be 0 or 1"
+  [[ "$PROFILE_USE_X264" != "1" || "$PROFILE_USE_LIBWEBP" != "1" ]] \
+    || fail "A profile cannot currently link x264 and libwebp at the same time"
   [[ "$PROFILE_USE_WORKERFS" == "0" || "$PROFILE_USE_WORKERFS" == "1" ]] \
     || fail "PROFILE_USE_WORKERFS must be 0 or 1"
   declare -p PROFILE_REQUIRED_CONFIG >/dev/null 2>&1 \
@@ -102,6 +119,7 @@ print_toolchain() {
   printf 'Emscripten:     %s (%s)\n' "${EMSDK_VERSION:-n/a}" "${EMSCRIPTEN_COMMIT:-n/a}"
   printf 'FFmpeg ref:     %s (%s)\n' "${FFMPEG_REF:-n/a}" "${FFMPEG_COMMIT:-n/a}"
   printf 'x264 ref:       %s (%s)\n' "${X264_REF:-n/a}" "${X264_COMMIT:-n/a}"
+  printf 'libwebp ref:    %s (%s)\n' "${LIBWEBP_REF:-n/a}" "${LIBWEBP_COMMIT:-n/a}"
   printf 'Profile:        %s\n' "${PROFILE:-n/a}"
 }
 

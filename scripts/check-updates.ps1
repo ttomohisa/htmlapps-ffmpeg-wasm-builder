@@ -19,6 +19,7 @@ Write-Host "  Builder:     $($values['BUILDER_VERSION'])"
 Write-Host "  FFmpeg:      $($values['FFMPEG_REF']) ($($values['FFMPEG_COMMIT']))"
 Write-Host "  Emscripten:  $($values['EMSDK_VERSION']) ($($values['EMSCRIPTEN_COMMIT']))"
 Write-Host "  x264:        $($values['X264_COMMIT'])"
+Write-Host "  libwebp:     $($values['LIBWEBP_REF']) ($($values['LIBWEBP_COMMIT']))"
 Write-Host ""
 
 Write-Host "Checking FFmpeg..." -ForegroundColor Cyan
@@ -49,6 +50,18 @@ if ($emsRef.object.type -eq "tag") {
   $emscriptenCommit = $emsTag.object.sha
 }
 
+Write-Host "Checking libwebp..." -ForegroundColor Cyan
+$webpRelease = Invoke-RestMethod -Headers @{ "User-Agent" = "htmlapps-ffmpeg-wasm-builder" } `
+  "https://api.github.com/repos/webmproject/libwebp/releases/latest"
+$latestLibwebp = $webpRelease.tag_name
+$webpRef = Invoke-RestMethod -Headers @{ "User-Agent" = "htmlapps-ffmpeg-wasm-builder" } `
+  "https://api.github.com/repos/webmproject/libwebp/git/ref/tags/$latestLibwebp"
+$libwebpCommit = $webpRef.object.sha
+if ($webpRef.object.type -eq "tag") {
+  $webpTag = Invoke-RestMethod -Headers @{ "User-Agent" = "htmlapps-ffmpeg-wasm-builder" } $webpRef.object.url
+  $libwebpCommit = $webpTag.object.sha
+}
+
 Write-Host "Checking x264 stable..." -ForegroundColor Cyan
 $latestX264 = ""
 if (Get-Command git -ErrorAction SilentlyContinue) {
@@ -65,6 +78,8 @@ Write-Host "  FFmpeg:      n$latestFfmpeg"
 Write-Host "  commit:      $ffmpegCommit"
 Write-Host "  Emscripten:  $latestEmsdk"
 Write-Host "  commit:      $emscriptenCommit"
+Write-Host "  libwebp:     $latestLibwebp"
+Write-Host "  commit:      $libwebpCommit"
 if ($latestX264) {
   Write-Host "  x264:        $latestX264"
 } else {
@@ -78,6 +93,8 @@ Write-Host "EMSCRIPTEN_REF=$latestEmsdk"
 Write-Host "EMSCRIPTEN_COMMIT=$emscriptenCommit"
 Write-Host "FFMPEG_REF=n$latestFfmpeg"
 Write-Host "FFMPEG_COMMIT=$ffmpegCommit"
+Write-Host "LIBWEBP_REF=$latestLibwebp"
+Write-Host "LIBWEBP_COMMIT=$libwebpCommit"
 if ($latestX264) {
   Write-Host "X264_COMMIT=$latestX264"
 }

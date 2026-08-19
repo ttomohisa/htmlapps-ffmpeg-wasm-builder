@@ -26,7 +26,7 @@ let min = 255, max = 0;
 for (let i = 0; i < ppm.pixels.length; i += 97) { min = Math.min(min, ppm.pixels[i]); max = Math.max(max, ppm.pixels[i]); }
 if (max <= min) throw new Error("Contact sheet appears to contain no image variation");
 if (meta.schemaVersion !== 1) throw new Error("Unexpected metadata schema: " + meta.schemaVersion);
-if (meta.runnerVersion !== "1.3.0") throw new Error("Unexpected runner version: " + meta.runnerVersion);
+if (meta.runnerVersion !== "1.4.0") throw new Error("Unexpected runner version: " + meta.runnerVersion);
 if (meta.count !== 12 || meta.columns !== 4 || meta.rows !== 3) throw new Error("Unexpected grid metadata");
 if (meta.cellWidth !== 160 || meta.cellHeight !== 90) throw new Error("Unexpected cell dimensions");
 if (meta.sheetWidth !== 640 || meta.sheetHeight !== 270) throw new Error("Unexpected sheet dimensions");

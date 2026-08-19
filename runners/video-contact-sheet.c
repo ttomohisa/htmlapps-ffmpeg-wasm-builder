@@ -33,7 +33,7 @@
 #include <libswscale/swscale.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.3.0"
+#define RUNNER_VERSION "1.4.0"
 #define DEFAULT_COUNT 12
 #define DEFAULT_THUMB_SIZE 320
 #define MIN_THUMB_SIZE 96

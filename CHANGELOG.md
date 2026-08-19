@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0
+
+- Added separate `video-to-gif` and `video-to-webp` profiles for short video clips -> animated images.
+- GIF profile uses a two-pass `palettegen` -> `paletteuse` runner with configurable colors/dithering, trim, FPS reduction, autorotation, scaling, and infinite looping.
+- WebP profile links pinned libwebp 1.6.0 only for that profile and uses FFmpeg `libwebp_anim` with quality/lossless/compression controls.
+- Added a dedicated `libwebp-builder` Docker stage and dependency-aware `export-with-libwebp` path so libwebp never increases unrelated Wasm cores.
+- Both animation profiles use WORKERFS input and omit the complete audio stack and FFmpeg CLI.
+- Added `BrowserFFmpeg.videoToGifArgs()` / `videoToWebpArgs()`, embedded Builder demos, browser smoke tests, CI matrix jobs, release assets, and matching source/license packaging.
+- Manifest schema is now 6 and records exact libwebp pin/link status alongside x264.
+- Bumped Builder and runner API version to 1.4.0.
+
 ## 1.3.0
 
 - Added the `video-contact-sheet` profile for 12 / 24 / 48 evenly distributed video thumbnails.

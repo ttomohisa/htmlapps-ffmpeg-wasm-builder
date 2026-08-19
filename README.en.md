@@ -4,12 +4,14 @@ Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg a
 
 The upstream `ffmpeg` CLI is not linked. Each profile enables only the FFmpeg components it needs and links a small runner against public `libav*` APIs. Pthreads are disabled, so the browser runtime needs neither SharedArrayBuffer nor cross-origin isolation.
 
-## v1.3.0 profiles
+## v1.4.0 profiles
 
 - `video-compressor`: decode/filter/encode to H.264 + AAC MP4; links x264.
 - `lossless-video-cutter`: packet-level stream copy with no decoder, encoder, filter, or x264 linked into the final Wasm. Blob/File input is exposed through Emscripten WORKERFS so the whole source file is not copied into MEMFS first.
 - `media-inspector`: structured JSON inspection of container, codec, FPS, bitrate, metadata, chapters, subtitles, rotation, audio layout, and HDR signals without decoding frames. WORKERFS keeps large input files out of MEMFS.
-- `video-contact-sheet`: seek-based 12/24/48-frame sampling, video decode, rotation-aware RGB scaling, and one PPM contact sheet plus optional JSON timestamps. It enables common H.264/HEVC/VP8/VP9/AV1/MPEG-4/MJPEG/ProRes decoding without x264 or an image encoder.
+- `video-contact-sheet`: seek-based 12/24/48-frame sampling, video decode, rotation-aware RGB scaling, and one PPM contact sheet plus optional JSON timestamps.
+- `video-to-gif`: trim/autorotate/fps/scale plus a two-pass FFmpeg `palettegen` + `paletteuse` GIF encoder path.
+- `video-to-webp`: the same video preprocessing with FFmpeg `libwebp_anim`; pinned libwebp is linked only for this profile.
 
 Build with `build.bat <profile>` or `./build.sh <profile>`. Every release profile has a real headless-browser smoke test. The cutter smoke test performs an actual MP4 cut and validates that video/audio streams remain present; the inspector validates the structured H.264/AAC report; the contact-sheet smoke test seeks/decodes 12 samples and validates the generated RGB PPM + JSON metadata.
 
@@ -22,8 +24,8 @@ Video Contact Sheet exposes `BrowserFFmpeg.videoContactSheetArgs({ input, output
 
 ## Public releases
 
-A v1.3.0 tag rebuilds and smoke-tests all four profiles and publishes profile-specific binary ZIPs, build information, SHA-256 checksums, and one exact corresponding-source archive.
+A v1.4.0 tag rebuilds and smoke-tests all six profiles and publishes profile-specific binary ZIPs, build information, SHA-256 checksums, and one exact corresponding-source archive.
 
 ## Licensing
 
-The root MIT license covers this repository's original builder/runtime source. It does **not** relicense generated `ffmpeg.wasm`. `video-compressor` is GPL-2.0-or-later because it enables GPL FFmpeg components and links x264. `lossless-video-cutter`, `media-inspector`, and `video-contact-sheet` enable no GPL-only component and are LGPL-2.1-or-later. See `THIRD_PARTY_NOTICES.md` and `docs/LICENSES.md`.
+The root MIT license covers this repository's original builder/runtime source. It does **not** relicense generated `ffmpeg.wasm`. `video-compressor` is GPL-2.0-or-later because it enables GPL FFmpeg components and links x264. `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` enable no GPL-only FFmpeg component and are LGPL-2.1-or-later. The WebP bundle also carries libwebp notices. See `THIRD_PARTY_NOTICES.md` and `docs/LICENSES.md`.

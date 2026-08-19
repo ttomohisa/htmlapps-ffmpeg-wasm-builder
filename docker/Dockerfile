@@ -31,6 +31,19 @@ ENV X264_REPOSITORY=${X264_REPOSITORY} \
 COPY scripts/docker-common.sh scripts/build-x264.sh /workspace/scripts/
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-x264.sh
 
+# Built only by the animated-WebP profile. Keep libwebp out of every other core.
+FROM toolchain-base AS libwebp-builder
+ARG LIBWEBP_REPOSITORY
+ARG LIBWEBP_FALLBACK_REPOSITORY
+ARG LIBWEBP_REF
+ARG LIBWEBP_COMMIT
+ENV LIBWEBP_REPOSITORY=${LIBWEBP_REPOSITORY} \
+    LIBWEBP_FALLBACK_REPOSITORY=${LIBWEBP_FALLBACK_REPOSITORY} \
+    LIBWEBP_REF=${LIBWEBP_REF} \
+    LIBWEBP_COMMIT=${LIBWEBP_COMMIT}
+COPY scripts/docker-common.sh scripts/build-libwebp.sh /workspace/scripts/
+RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-libwebp.sh
+
 # Exact FFmpeg checkout shared by all profiles.
 FROM toolchain-base AS ffmpeg-source
 ARG FFMPEG_REPOSITORY
@@ -44,7 +57,7 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/fetch-ffmpeg.sh
 
 # Common profile build inputs. This stage deliberately does not copy x264.
 FROM toolchain-base AS wasm-common
-ARG BUILDER_VERSION=1.3.0
+ARG BUILDER_VERSION=1.4.0
 ARG FFMPEG_REPOSITORY
 ARG FFMPEG_REF
 ARG FFMPEG_COMMIT
@@ -52,6 +65,10 @@ ARG X264_REPOSITORY
 ARG X264_FALLBACK_REPOSITORY
 ARG X264_REF
 ARG X264_COMMIT
+ARG LIBWEBP_REPOSITORY
+ARG LIBWEBP_FALLBACK_REPOSITORY
+ARG LIBWEBP_REF
+ARG LIBWEBP_COMMIT
 ARG PROFILE=video-compressor
 ENV BUILDER_VERSION=${BUILDER_VERSION} \
     FFMPEG_REPOSITORY=${FFMPEG_REPOSITORY} \
@@ -61,6 +78,10 @@ ENV BUILDER_VERSION=${BUILDER_VERSION} \
     X264_FALLBACK_REPOSITORY=${X264_FALLBACK_REPOSITORY} \
     X264_REF=${X264_REF} \
     X264_COMMIT=${X264_COMMIT} \
+    LIBWEBP_REPOSITORY=${LIBWEBP_REPOSITORY} \
+    LIBWEBP_FALLBACK_REPOSITORY=${LIBWEBP_FALLBACK_REPOSITORY} \
+    LIBWEBP_REF=${LIBWEBP_REF} \
+    LIBWEBP_COMMIT=${LIBWEBP_COMMIT} \
     PROFILE=${PROFILE}
 COPY --from=ffmpeg-source /src/ffmpeg /src/ffmpeg
 COPY profiles /workspace/profiles
@@ -72,6 +93,10 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-ffmpeg.sh
 
 FROM wasm-common AS wasm-builder-with-x264
 COPY --from=x264-builder /opt/ffmpeg-wasm /opt/ffmpeg-wasm
+RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-ffmpeg.sh
+
+FROM wasm-common AS wasm-builder-with-libwebp
+COPY --from=libwebp-builder /opt/ffmpeg-wasm /opt/ffmpeg-wasm
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-ffmpeg.sh
 
 # Runtime/smoke-test edits should not force FFmpeg to rebuild.
@@ -93,8 +118,20 @@ COPY tests /workspace/tests
 COPY scripts/docker-common.sh scripts/pack-smoke-test.sh /workspace/scripts/
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
 
+FROM toolchain-base AS package-with-libwebp
+ARG PROFILE=video-to-webp
+ENV PROFILE=${PROFILE} OUT_DIR=/out
+COPY --from=wasm-builder-with-libwebp /out/ /out/
+COPY runtime /workspace/runtime
+COPY tests /workspace/tests
+COPY scripts/docker-common.sh scripts/pack-smoke-test.sh /workspace/scripts/
+RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
+
 FROM scratch AS export-no-x264
 COPY --from=package-no-x264 /out/ /
 
 FROM scratch AS export-with-x264
 COPY --from=package-with-x264 /out/ /
+
+FROM scratch AS export-with-libwebp
+COPY --from=package-with-libwebp /out/ /

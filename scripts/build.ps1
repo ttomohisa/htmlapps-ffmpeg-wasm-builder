@@ -51,7 +51,8 @@ Get-Content -Encoding UTF8 $VersionsPath | ForEach-Object {
 $required = @(
   "BUILDER_VERSION", "EMSDK_VERSION", "EMSCRIPTEN_REPOSITORY", "EMSCRIPTEN_REF", "EMSCRIPTEN_COMMIT",
   "FFMPEG_REPOSITORY", "FFMPEG_REF", "FFMPEG_COMMIT",
-  "X264_REPOSITORY", "X264_FALLBACK_REPOSITORY", "X264_REF", "X264_COMMIT"
+  "X264_REPOSITORY", "X264_FALLBACK_REPOSITORY", "X264_REF", "X264_COMMIT",
+  "LIBWEBP_REPOSITORY", "LIBWEBP_FALLBACK_REPOSITORY", "LIBWEBP_REF", "LIBWEBP_COMMIT"
 )
 foreach ($name in $required) {
   if (-not $values.ContainsKey($name) -or [string]::IsNullOrWhiteSpace($values[$name])) {
@@ -67,8 +68,13 @@ if (-not (Test-Path $profileConfig)) { throw "Build profile metadata is missing:
 if (-not (Test-Path $runnerFile)) { throw "Runner is missing: $runnerFile" }
 $profileConfigText = [IO.File]::ReadAllText($profileConfig)
 $useX264Match = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_X264=(0|1)\s*$')
+$useLibwebpMatch = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_LIBWEBP=(0|1)\s*$')
 if (-not $useX264Match.Success) { throw "profile.env must contain PROFILE_USE_X264=0 or 1: $profileConfig" }
-$ExportTarget = if ($useX264Match.Groups[1].Value -eq "1") { "export-with-x264" } else { "export-no-x264" }
+if (-not $useLibwebpMatch.Success) { throw "profile.env must contain PROFILE_USE_LIBWEBP=0 or 1: $profileConfig" }
+$UseX264 = $useX264Match.Groups[1].Value -eq "1"
+$UseLibwebp = $useLibwebpMatch.Groups[1].Value -eq "1"
+if ($UseX264 -and $UseLibwebp) { throw "Profiles cannot currently link x264 and libwebp together." }
+$ExportTarget = if ($UseX264) { "export-with-x264" } elseif ($UseLibwebp) { "export-with-libwebp" } else { "export-no-x264" }
 
 if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -87,6 +93,10 @@ $DockerArgs = @(
   "--build-arg", "X264_FALLBACK_REPOSITORY=$($values['X264_FALLBACK_REPOSITORY'])",
   "--build-arg", "X264_REF=$($values['X264_REF'])",
   "--build-arg", "X264_COMMIT=$($values['X264_COMMIT'])",
+  "--build-arg", "LIBWEBP_REPOSITORY=$($values['LIBWEBP_REPOSITORY'])",
+  "--build-arg", "LIBWEBP_FALLBACK_REPOSITORY=$($values['LIBWEBP_FALLBACK_REPOSITORY'])",
+  "--build-arg", "LIBWEBP_REF=$($values['LIBWEBP_REF'])",
+  "--build-arg", "LIBWEBP_COMMIT=$($values['LIBWEBP_COMMIT'])",
   "--build-arg", "PROFILE=$Profile",
   "--output", "type=local,dest=$OutDir",
   $Root

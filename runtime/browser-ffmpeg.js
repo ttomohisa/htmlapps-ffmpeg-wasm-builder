@@ -255,6 +255,50 @@
     return args;
   };
 
+  const animationBaseArgs = (options = {}, defaultOutput) => {
+    const number = (value, label, min, max, integer = false) => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < min || parsed > max || (integer && !Number.isInteger(parsed))) {
+        throw new RangeError(`${label} must be ${integer ? "an integer " : ""}from ${min} to ${max}.`);
+      }
+      return parsed;
+    };
+    const args = ["--input", options.input || "/workerfs/input.mp4", "--output", options.output || defaultOutput];
+    const start = number(options.start ?? 0, "start", 0, 86400);
+    args.push("--start", String(start));
+    if (options.end !== undefined && options.end !== null && options.end !== "") {
+      const end = number(options.end, "end", 0, 86400);
+      if (end <= start) throw new RangeError("end must be greater than start.");
+      args.push("--end", String(end));
+    }
+    args.push("--max-width", String(number(options.maxWidth ?? 480, "maxWidth", 0, 8192, true)));
+    args.push("--max-height", String(number(options.maxHeight ?? 0, "maxHeight", 0, 8192, true)));
+    args.push("--fps", String(number(options.fps ?? 15, "fps", 1, 60, true)));
+    return args;
+  };
+
+  const videoToGifArgs = (options = {}) => {
+    const args = animationBaseArgs(options, "/output.gif");
+    const colors = Number(options.colors ?? 128);
+    if (!Number.isInteger(colors) || colors < 16 || colors > 256) throw new RangeError("GIF colors must be an integer from 16 to 256.");
+    const dither = String(options.dither || "sierra2_4a");
+    if (!["sierra2_4a", "floyd_steinberg", "sierra2", "bayer", "heckbert"].includes(dither)) {
+      throw new RangeError("Unsupported GIF dither mode.");
+    }
+    args.push("--colors", String(colors), "--dither", dither);
+    return args;
+  };
+
+  const videoToWebpArgs = (options = {}) => {
+    const args = animationBaseArgs(options, "/output.webp");
+    const quality = Number(options.quality ?? 75);
+    const compressionLevel = Number(options.compressionLevel ?? 4);
+    if (!Number.isInteger(quality) || quality < 0 || quality > 100) throw new RangeError("WebP quality must be an integer from 0 to 100.");
+    if (!Number.isInteger(compressionLevel) || compressionLevel < 0 || compressionLevel > 6) throw new RangeError("WebP compressionLevel must be an integer from 0 to 6.");
+    args.push("--quality", String(quality), "--compression-level", String(compressionLevel), "--lossless", options.lossless ? "1" : "0");
+    return args;
+  };
+
   const decodePpmOutput = (result, name = "/contact-sheet.ppm") => {
     const file = result?.files?.find((item) => item.name === name);
     if (!file) throw new Error("PPM output was not returned: " + name);
@@ -306,6 +350,8 @@
     losslessVideoCutterArgs,
     mediaInspectorArgs,
     videoContactSheetArgs,
+    videoToGifArgs,
+    videoToWebpArgs,
     decodePpmOutput,
     decodeJsonOutput,
     isSupported

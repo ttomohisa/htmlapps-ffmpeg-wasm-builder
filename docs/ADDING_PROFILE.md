@@ -27,6 +27,7 @@ Required fields:
 ```bash
 PROFILE_DISPLAY_NAME="Media Inspector"
 PROFILE_USE_X264=0
+PROFILE_USE_LIBWEBP=0
 PROFILE_USE_WORKERFS=0
 PROFILE_BINARY_LICENSE="GPL-2.0-or-later"
 PROFILE_OUTPUT_DESCRIPTION="metadata JSON"
@@ -35,7 +36,7 @@ PROFILE_LINK_LIBS=(libavformat/libavformat.a libavcodec/libavcodec.a libavutil/l
 PROFILE_CAPABILITIES_JSON='{"operation":"inspect","arbitraryFfmpegArgs":false}'
 ```
 
-Keep `PROFILE_LINK_LIBS` minimal. If `PROFILE_USE_X264=0`, the final linker must not include `libx264.a`. Set `PROFILE_USE_WORKERFS=1` only when the browser profile should mount large File/Blob inputs read-only through Emscripten WORKERFS.
+Keep `PROFILE_LINK_LIBS` minimal. If `PROFILE_USE_X264=0`, the final linker must not include `libx264.a`. Likewise, keep `PROFILE_USE_LIBWEBP=0` unless the profile needs FFmpeg's libwebp wrappers; libwebp then uses its own Docker/export target. Set `PROFILE_USE_WORKERFS=1` only when the browser profile should mount large File/Blob inputs read-only through Emscripten WORKERFS.
 
 ## 3. Write a public-libav runner
 

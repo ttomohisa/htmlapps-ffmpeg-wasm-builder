@@ -5,10 +5,12 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.3.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.3.0.zip
-ffmpeg-wasm-media-inspector-v1.3.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.3.0.zip
+ffmpeg-wasm-video-compressor-v1.4.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.4.0.zip
+ffmpeg-wasm-media-inspector-v1.4.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.4.0.zip
+ffmpeg-wasm-video-to-gif-v1.4.0.zip
+ffmpeg-wasm-video-to-webp-v1.4.0.zip
 ```
 
 The profile bundle contains `ffmpeg.js`, `ffmpeg.wasm`, gzip copies, `manifest.json`, `browser-ffmpeg.js`, `BUILDINFO.txt`, and license notices.
@@ -74,3 +76,51 @@ const meta = BrowserFFmpeg.decodeJsonOutput(result, jsonPath);
 ```
 
 The PPM contains RGB24 pixels only. Draw it into Canvas, add timestamp labels if desired, then export PNG/JPEG with browser-native APIs. The Wasm core performs the seek/decode step itself, including HEVC/H.265 sources such as Pixel `hvc1` recordings.
+
+
+## Video to Animated GIF
+
+Keep the source `File`/`Blob` on WORKERFS and return only the generated GIF through MEMFS:
+
+```js
+const input = "/workerfs/input.mp4";
+const output = "/output.gif";
+const result = await runner.run({
+  files: [{ name: input, data: file, workerfs: true }],
+  outputs: [output],
+  args: BrowserFFmpeg.videoToGifArgs({
+    input, output,
+    start: 2.5,
+    end: 7.5,
+    maxWidth: 480,
+    fps: 15,
+    colors: 128,
+    dither: "sierra2_4a"
+  })
+});
+```
+
+The runner performs two decode passes over only the selected time range: the first builds the palette, the second applies it and writes the animation.
+
+## Video to Animated WebP
+
+```js
+const input = "/workerfs/input.mp4";
+const output = "/output.webp";
+const result = await runner.run({
+  files: [{ name: input, data: file, workerfs: true }],
+  outputs: [output],
+  args: BrowserFFmpeg.videoToWebpArgs({
+    input, output,
+    start: 2.5,
+    end: 7.5,
+    maxWidth: 480,
+    fps: 15,
+    quality: 75,
+    compressionLevel: 4,
+    lossless: false
+  })
+});
+```
+
+The WebP profile alone links libwebp. Apps that ship both GIF and WebP can embed both gzip cores and only inflate/load the one selected by the user.

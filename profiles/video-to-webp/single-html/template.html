@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video to WebP - Builder demo</title>
+<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 18px;line-height:1.6}label{display:block;margin:12px 0 4px}input,button{font:inherit;padding:8px}button{margin-top:18px}.note{font-size:.9rem;color:#555}img{display:block;max-width:100%;margin-top:18px}pre{white-space:pre-wrap;background:#f5f5f5;padding:12px;max-height:180px;overflow:auto}</style>
+</head><body>
+<h1>Video to Animated WebP</h1>
+<p class="note">Builder動作確認用。WORKERFS入力 → trim / fps / autorotate / scale → FFmpeg libwebp_anim → Animated WebP。</p>
+<label>動画 <input id="file" type="file" accept="video/*"></label>
+<label>開始（秒） <input id="start" type="number" min="0" step="0.01" value="0"></label>
+<label>終了（秒、0なら最後まで） <input id="end" type="number" min="0" step="0.01" value="3"></label>
+<label>最大幅 <input id="width" type="number" min="0" max="8192" value="480"></label>
+<label>FPS <input id="fps" type="number" min="1" max="60" value="15"></label>
+<label>Quality <input id="quality" type="number" min="0" max="100" value="75"></label>
+<label>Compression level <input id="compression" type="number" min="0" max="6" value="4"></label>
+<label><input id="lossless" type="checkbox"> Lossless</label>
+<button id="run">WebPを作成</button><p id="status"></p><img id="preview" alt=""><p><a id="save" hidden>保存</a></p><pre id="log"></pre>
+<script id="ffmpeg-js-gzip" type="application/octet-stream">__FFMPEG_JS_GZIP_BASE64__</script><script id="ffmpeg-wasm-gzip" type="application/octet-stream">__FFMPEG_WASM_GZIP_BASE64__</script><script>__FFMPEG_RUNTIME__</script>
+<script>(()=>{"use strict";const $=id=>document.getElementById(id);let outputUrl="";const b64=id=>{const r=atob($(id).textContent.replace(/\s+/g,"")),o=new Uint8Array(r.length);for(let i=0;i<r.length;i++)o[i]=r.charCodeAt(i);return o};const gunzip=async(id,text=false)=>{const s=new Blob([b64(id)]).stream().pipeThrough(new DecompressionStream("gzip")),r=new Response(s);return text?r.text():r.arrayBuffer()};$("run").onclick=async()=>{const file=$("file").files[0];if(!file)return void($("status").textContent="動画を選択してください。");$("run").disabled=true;$("log").textContent="";let runner;try{const [coreJsText,wasmBytes]=await Promise.all([gunzip("ffmpeg-js-gzip",true),gunzip("ffmpeg-wasm-gzip")]);runner=await BrowserFFmpeg.loadEmbedded({coreJsText,wasmBytes});const end=Number($("end").value||0),result=await runner.run({files:[{name:"/workerfs/input.mp4",data:file,workerfs:true}],outputs:["/output.webp"],args:BrowserFFmpeg.videoToWebpArgs({input:"/workerfs/input.mp4",output:"/output.webp",start:Number($("start").value||0),end:end||undefined,maxWidth:Number($("width").value),fps:Number($("fps").value),quality:Number($("quality").value),compressionLevel:Number($("compression").value),lossless:$("lossless").checked}),onProgress:p=>$("status").textContent=`処理中… ${Math.round(p*100)}%`,onLog:({message})=>$("log").textContent+=message+"\n"});if(outputUrl)URL.revokeObjectURL(outputUrl);outputUrl=URL.createObjectURL(new Blob([result.files[0].data],{type:"image/webp"}));$("preview").src=outputUrl;$("save").href=outputUrl;$("save").download="animation.webp";$("save").hidden=false;$("status").textContent=`完了 (${(result.files[0].data.length/1024).toFixed(1)} KB)`}catch(e){$("status").textContent="エラー: "+(e?.message||e)}finally{runner?.dispose();$("run").disabled=false}}})();</script>
+</body></html>

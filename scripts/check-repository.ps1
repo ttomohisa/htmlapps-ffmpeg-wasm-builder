@@ -56,6 +56,17 @@ $contactProfile = Require-File "profiles/video-contact-sheet/ffmpeg.flags"
 $contactProfileEnv = Require-File "profiles/video-contact-sheet/profile.env"
 $contactReadme = Require-File "profiles/video-contact-sheet/README.md"
 $contactTemplate = Require-File "profiles/video-contact-sheet/single-html/template.html"
+$gifRunner = Require-File "runners/video-to-gif.c"
+$webpRunner = Require-File "runners/video-to-webp.c"
+$animationRunner = Require-File "runners/video-to-animation-common.inc"
+$gifProfile = Require-File "profiles/video-to-gif/ffmpeg.flags"
+$gifProfileEnv = Require-File "profiles/video-to-gif/profile.env"
+$gifReadme = Require-File "profiles/video-to-gif/README.md"
+$gifTemplate = Require-File "profiles/video-to-gif/single-html/template.html"
+$webpProfile = Require-File "profiles/video-to-webp/ffmpeg.flags"
+$webpProfileEnv = Require-File "profiles/video-to-webp/profile.env"
+$webpReadme = Require-File "profiles/video-to-webp/README.md"
+$webpTemplate = Require-File "profiles/video-to-webp/single-html/template.html"
 $template = Require-File "profiles/video-compressor/single-html/template.html"
 $packer = Require-File "scripts/pack-single-html.ps1"
 $smokePacker = Require-File "scripts/pack-smoke-test.sh"
@@ -64,6 +75,9 @@ $videoSmoke = Require-File "tests/smoke-tests/video-compressor.js"
 $cutterSmoke = Require-File "tests/smoke-tests/lossless-video-cutter.js"
 $inspectorSmoke = Require-File "tests/smoke-tests/media-inspector.js"
 $contactSmoke = Require-File "tests/smoke-tests/video-contact-sheet.js"
+$gifSmoke = Require-File "tests/smoke-tests/video-to-gif.js"
+$webpSmoke = Require-File "tests/smoke-tests/video-to-webp.js"
+$libwebpBuild = Require-File "scripts/build-libwebp.sh"
 $smokeFixture = Require-File "tests/fixtures/smoke-input.mp4"
 $smokeWindows = Require-File "scripts/smoke-test.ps1"
 $smokeUnix = Require-File "scripts/smoke-test.sh"
@@ -95,6 +109,7 @@ Require-Text $dockerCommon "load_profile_config" "Profile metadata loader is mis
 Require-Text $buildScript '"${PROFILE_REQUIRED_CONFIG[@]}"' "Build must assert profile-specific FFmpeg config."
 Require-Text $buildScript '"${PROFILE_LINK_LIBS[@]}"' "Build must link profile-specific FFmpeg libraries."
 Require-Text $buildScript 'PROFILE_USE_X264' "Build must make x264 profile-specific."
+Require-Text $buildScript 'PROFILE_USE_LIBWEBP' "Build must make libwebp profile-specific."
 Require-Text $buildScript 'PROFILE_USE_WORKERFS' "Build must make WORKERFS profile-specific."
 Require-Text $buildScript '-lworkerfs.js' "WORKERFS profiles must explicitly link Emscripten WORKERFS."
 Require-Text $buildScript 'WORKERFS' "WORKERFS must be exported to the browser runtime when enabled."
@@ -102,8 +117,9 @@ Require-Text $buildScript "--disable-pthreads" "WASM build must disable pthreads
 Require-Text $buildScript "--disable-programs" "WASM build must not link the upstream ffmpeg CLI."
 Require-Text $buildScript "-sEXPORT_NAME=createFFmpegCore" "WASM factory name must stay stable."
 Require-Text $buildScript "INCOMING_MODULE_JS_API=wasmBinary,instantiateWasm,locateFile,print,printErr" "WASM build must preserve custom loader hooks."
-Require-Text $buildScript '"schemaVersion": 5' "Manifest schema must include profile-aware metadata."
+Require-Text $buildScript '"schemaVersion": 6' "Manifest schema must include dependency-aware metadata."
 Require-Text $buildScript '"x264Linked":' "Manifest must state whether x264 is linked."
+Require-Text $buildScript '"libwebpLinked":' "Manifest must state whether libwebp is linked."
 $buildText = [IO.File]::ReadAllText($buildScript)
 if ($buildText -match '(^|\s)-pthread(\s|$)') { throw "WASM build must not link with -pthread." }
 
@@ -112,6 +128,8 @@ Require-Text $runtime "new Blob([coreJsText" "Browser runtime must combine gener
 Require-Text $runtime "losslessVideoCutterArgs" "Browser runtime must expose Lossless Video Cutter args."
 Require-Text $runtime "mediaInspectorArgs" "Browser runtime must expose Media Inspector args."
 Require-Text $runtime "videoContactSheetArgs" "Browser runtime must expose Video Contact Sheet args."
+Require-Text $runtime "videoToGifArgs" "Browser runtime must expose animated GIF args."
+Require-Text $runtime "videoToWebpArgs" "Browser runtime must expose animated WebP args."
 Require-Text $runtime "decodePpmOutput" "Browser runtime must parse Video Contact Sheet PPM output."
 Require-Text $runtime "decodeJsonOutput" "Browser runtime must decode structured JSON outputs."
 Require-Text $runtime "mountWorkerFiles" "Browser runtime must support Blob/File-backed WORKERFS mounts."
@@ -123,7 +141,7 @@ if ($runtimeText -match 'typeof\s+SharedArrayBuffer|crossOriginIsolated') { thro
 
 $videoRunnerText = [IO.File]::ReadAllText($videoRunner)
 if ($videoRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video runner must not call pthread APIs." }
-Require-Text $videoRunner '#define RUNNER_VERSION "1.3.0"' "Video runner version must be 1.3.0."
+Require-Text $videoRunner '#define RUNNER_VERSION "1.4.0"' "Video runner version must be 1.4.0."
 Require-Text $videoRunner "avcodec_send_packet" "Video runner decode loop is missing."
 Require-Text $videoRunner 'av_opt_set_array(sink_ctx, "pixel_formats"' "Video runner must use FFmpeg 9+ pixel_formats array option."
 Require-Text $videoRunner 'av_opt_set_array(sink_ctx, "sample_formats"' "Video runner must use FFmpeg 9+ sample_formats array option."
@@ -135,7 +153,7 @@ foreach ($deprecated in @('"pix_fmts"', '"sample_fmts"', '"sample_rates"', '"ch_
 
 $cutterRunnerText = [IO.File]::ReadAllText($cutterRunner)
 if ($cutterRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Cutter runner must not call pthread APIs." }
-Require-Text $cutterRunner '#define RUNNER_VERSION "1.3.0"' "Cutter runner version must be 1.3.0."
+Require-Text $cutterRunner '#define RUNNER_VERSION "1.4.0"' "Cutter runner version must be 1.4.0."
 Require-Text $cutterRunner "av_seek_frame" "Cutter must seek to a keyframe."
 Require-Text $cutterRunner "AV_PKT_FLAG_KEY" "Cutter must anchor output to a keyframe."
 Require-Text $cutterRunner "avcodec_parameters_copy" "Cutter must stream-copy codec parameters."
@@ -148,7 +166,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $inspectorRunnerText = [IO.File]::ReadAllText($inspectorRunner)
 if ($inspectorRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Media Inspector runner must not call pthread APIs." }
-Require-Text $inspectorRunner '#define RUNNER_VERSION "1.3.0"' "Media Inspector runner version must be 1.3.0."
+Require-Text $inspectorRunner '#define RUNNER_VERSION "1.4.0"' "Media Inspector runner version must be 1.4.0."
 Require-Text $inspectorRunner "avformat_open_input" "Media Inspector must open media through libavformat."
 Require-Text $inspectorRunner "avformat_find_stream_info" "Media Inspector must discover stream information."
 Require-Text $inspectorRunner "AV_PKT_DATA_DISPLAYMATRIX" "Media Inspector must report rotation/display matrix data."
@@ -161,7 +179,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $contactRunnerText = [IO.File]::ReadAllText($contactRunner)
 if ($contactRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Contact Sheet runner must not call pthread APIs." }
-Require-Text $contactRunner '#define RUNNER_VERSION "1.3.0"' "Video Contact Sheet runner version must be 1.3.0."
+Require-Text $contactRunner '#define RUNNER_VERSION "1.4.0"' "Video Contact Sheet runner version must be 1.4.0."
 Require-Text $contactRunner "av_seek_frame" "Video Contact Sheet must seek between sample points."
 Require-Text $contactRunner "avcodec_send_packet" "Video Contact Sheet must decode selected frames."
 Require-Text $contactRunner "avcodec_receive_frame" "Video Contact Sheet decode loop is missing."
@@ -242,6 +260,24 @@ Require-Text $contactProfile "--enable-demuxer=mov" "Video Contact Sheet must re
 Require-Text $contactProfile "--enable-demuxer=matroska" "Video Contact Sheet must read MKV/WebM."
 Require-Text $contactReadme 'Pixel `hvc1`' "Video Contact Sheet docs must document Pixel HEVC support."
 
+Require-Text $animationRunner '#define RUNNER_VERSION "1.4.0"' "Animation runner version must be 1.4.0."
+Require-Text $animationRunner 'palettegen=max_colors=' "GIF runner must generate a palette in a first pass."
+Require-Text $animationRunner 'paletteuse=dither=' "GIF runner must apply the generated palette."
+Require-Text $animationRunner 'avcodec_find_encoder_by_name("libwebp_anim")' "Animated WebP runner must use FFmpeg libwebp_anim."
+Require-Text $animationRunner 'av_seek_frame' "Animation runner must seek to trim starts."
+Require-Text $animationRunner 'WORKERFS' "Animation profile docs/source should preserve large-file WORKERFS intent."
+Require-Text $gifProfile '--enable-encoder=gif' "GIF profile must enable only the GIF encoder it needs."
+Require-Text $gifProfile '--enable-filter=palettegen' "GIF profile must enable palettegen."
+Require-Text $gifProfile '--enable-filter=paletteuse' "GIF profile must enable paletteuse."
+Require-Text $gifProfileEnv 'PROFILE_USE_LIBWEBP=0' "GIF profile must not link libwebp."
+Require-Text $webpProfile '--enable-libwebp' "WebP profile must enable libwebp."
+Require-Text $webpProfile '--enable-encoder=libwebp_anim' "WebP profile must enable the animation encoder."
+Require-Text $webpProfileEnv 'PROFILE_USE_LIBWEBP=1' "WebP profile must link libwebp."
+Require-Text $libwebpBuild '--disable-threading' "libwebp build must remain single-threaded."
+Require-Text $libwebpBuild '--enable-libwebpmux' "libwebp animation build needs mux support."
+Require-Text $gifTemplate 'BrowserFFmpeg.videoToGifArgs' "GIF single-HTML demo must exercise the GIF runtime helper."
+Require-Text $webpTemplate 'BrowserFFmpeg.videoToWebpArgs' "WebP single-HTML demo must exercise the WebP runtime helper."
+
 Require-Text $packer "__FFMPEG_JS_GZIP_BASE64__" "Single-HTML packer is missing the JS payload token."
 Require-Text $packer "__FFMPEG_WASM_GZIP_BASE64__" "Single-HTML packer is missing the Wasm payload token."
 Require-Text $template "BrowserFFmpeg.loadEmbedded" "Video single-HTML template must use the embedded runtime."
@@ -267,6 +303,12 @@ Require-Text $contactSmoke "BrowserFFmpeg.videoContactSheetArgs" "Video Contact 
 Require-Text $contactSmoke "BrowserFFmpeg.decodePpmOutput" "Video Contact Sheet smoke test must validate the PPM output."
 Require-Text $contactSmoke "workerfs: true" "Video Contact Sheet smoke test must exercise WORKERFS input."
 Require-Text $contactSmoke "meta.samples.length !== 12" "Video Contact Sheet smoke test must verify all 12 sample timestamps."
+Require-Text $gifSmoke "BrowserFFmpeg.videoToGifArgs" "GIF smoke test must run the actual animation runner."
+Require-Text $gifSmoke '"GIF89a"' "GIF smoke test must validate the GIF signature."
+Require-Text $gifSmoke '"NETSCAPE2.0"' "GIF smoke test must validate looping animation output."
+Require-Text $webpSmoke "BrowserFFmpeg.videoToWebpArgs" "WebP smoke test must run the actual animation runner."
+Require-Text $webpSmoke '"ANIM"' "WebP smoke test must validate the animation chunk."
+Require-Text $webpSmoke '"ANMF"' "WebP smoke test must validate animation frames."
 Require-Text $inspectorSmoke "BrowserFFmpeg.decodeJsonOutput" "Media Inspector smoke test must parse the structured report."
 Require-Text $inspectorSmoke 'video.codec?.name !== "h264"' "Media Inspector smoke test must validate video codec reporting."
 Require-Text $inspectorSmoke 'audio.audio?.sampleRate !== 48000' "Media Inspector smoke test must validate audio reporting."
@@ -293,16 +335,17 @@ if ($null -ne $gitattributes) {
 }
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.3\.0$') { throw "Builder version must be 1.3.0." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.4\.0$') { throw "Builder version must be 1.4.0." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
-  'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT'
+  'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT',
+  'LIBWEBP_REPOSITORY', 'LIBWEBP_FALLBACK_REPOSITORY', 'LIBWEBP_REF', 'LIBWEBP_COMMIT'
 )) {
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
 }
-foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT')) {
+foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', 'LIBWEBP_COMMIT')) {
   $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
   $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
@@ -312,10 +355,13 @@ $dockerText = [IO.File]::ReadAllText($dockerfile)
 if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
 Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expose a no-x264 export target."
 Require-Text $dockerfile "FROM scratch AS export-with-x264" "Dockerfile must expose an x264 export target."
-Require-Text $unixBuild '0) EXPORT_TARGET="export-no-x264"' "Unix build must skip x264 for profiles that do not use it."
-Require-Text $unixBuild '1) EXPORT_TARGET="export-with-x264"' "Unix build must select x264 only when required."
+Require-Text $dockerfile "FROM scratch AS export-with-libwebp" "Dockerfile must expose a libwebp export target."
+Require-Text $unixBuild 'EXPORT_TARGET="export-no-x264"' "Unix build must skip optional codec libraries when unused."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-x264"' "Unix build must select x264 only when required."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-libwebp"' "Unix build must select libwebp only when required."
 Require-Text $windowsBuild '"export-no-x264"' "Windows build must support the no-x264 Docker target."
 Require-Text $windowsBuild '"export-with-x264"' "Windows build must support the x264 Docker target."
+Require-Text $windowsBuild '"export-with-libwebp"' "Windows build must support the libwebp Docker target."
 
 Require-Text $thirdParty 'generated `ffmpeg.wasm`' "Third-party notice must distinguish generated Wasm from the MIT builder source."
 Require-Text $thirdParty "lossless-video-cutter" "Third-party notice must explain cutter x264 usage."
@@ -332,13 +378,19 @@ Require-Text $readme "media-inspector" "Japanese README must document the Media 
 Require-Text $readme "BrowserFFmpeg.mediaInspectorArgs" "Japanese README must document the Media Inspector browser helper."
 Require-Text $readme "video-contact-sheet" "Japanese README must document the Video Contact Sheet profile."
 Require-Text $readme "BrowserFFmpeg.videoContactSheetArgs" "Japanese README must document the Video Contact Sheet browser helper."
+Require-Text $readme "video-to-gif" "Japanese README must document the GIF profile."
+Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must document the GIF browser helper."
+Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
+Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.3.0" "Release documentation must include the v1.3.0 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.4.0" "Release documentation must include the v1.4.0 tag procedure."
 
-Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
 Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
 Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
+Require-Text $releaseScript 'fetch_exact "libwebp"' "Release packer must fetch exact libwebp source."
+Require-Text $releaseScript 'PROFILE_USE_LIBWEBP' "Release bundle must make libwebp notices profile-specific."
 Require-Text $releaseScript 'PROFILE_USE_X264' "Release bundle must make x264 notices profile-specific."
 Require-Text $releaseScript 'PROFILE_BINARY_LICENSE' "Release bundle must choose the FFmpeg license text per profile."
 Require-Text $releaseScript 'COPYING.LGPLv2.1' "Release bundle must support LGPL profile licensing."
@@ -349,15 +401,21 @@ Require-Text $buildWorkflow "lossless-video-cutter" "Main CI must build and smok
 Require-Text $buildWorkflow "video-compressor" "Main CI must keep testing video compressor."
 Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test Media Inspector."
 Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
+Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
+Require-Text $buildWorkflow "video-to-webp" "Main CI must build and smoke-test WebP output."
 Require-Text $releaseWorkflow 'tags:' "Release workflow must be tag-driven."
 Require-Text $releaseWorkflow 'test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"' "Release workflow must verify tag/version equality."
 Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workflow must smoke-test cutter before publishing."
 Require-Text $releaseWorkflow "./build.sh video-compressor" "Release workflow must smoke-test video compressor before publishing."
 Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow must smoke-test Media Inspector before publishing."
 Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
+Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
+Require-Text $releaseWorkflow "./build.sh video-to-webp" "Release workflow must smoke-test WebP before publishing."
 Require-Text $releaseWorkflow "ffmpeg-wasm-lossless-video-cutter" "Release workflow must publish the cutter binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-media-inspector" "Release workflow must publish the Media Inspector binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-contact-sheet" "Release workflow must publish the Video Contact Sheet binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-gif" "Release workflow must publish the GIF binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-webp" "Release workflow must publish the WebP binary bundle."
 Require-Text $releaseWorkflow "--verify-tag" "Release creation must refuse an unpushed/missing tag."
 Require-Text $releaseWorkflow "contents: write" "Release workflow needs explicit contents:write permission."
 
@@ -365,7 +423,7 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
-  foreach ($smokeBody in @($videoSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke)) {
+  foreach ($smokeBody in @($videoSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke)) {
     $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
     [IO.File]::WriteAllText($temp, $wrapped)
