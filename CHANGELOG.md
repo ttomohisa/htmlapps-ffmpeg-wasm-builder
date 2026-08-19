@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0
+
+- Added the `media-inspector` profile: a read-only FFmpeg/libavformat runner that emits structured JSON without decoding or encoding media.
+- Reports container/file size/duration/total bitrate, stream codec/tag/profile/level, video resolution/FPS/pixel format/color/HDR/rotation, audio sample rate/channel layout/bitrate, metadata, chapters, and subtitles.
+- Added common MP4/MOV, MKV/WebM, AVI, MPEG-TS/PS, FLV, ASF, Ogg, MP3, WAV, FLAC, AAC, AC-3/E-AC-3 and raw H.264/HEVC/AV1/IVF demux support plus lightweight stream parsers.
+- Media Inspector uses WORKERFS so browser `File`/`Blob` inputs are not copied wholesale into MEMFS.
+- Keep the Media Inspector Wasm LGPL-2.1-or-later: no GPL-only FFmpeg components, x264, decoder, encoder, muxer, filter, swscale, or swresample are linked.
+- Added `BrowserFFmpeg.mediaInspectorArgs()` and `BrowserFFmpeg.decodeJsonOutput()` helpers plus an embedded single-HTML demo.
+- Added a real browser smoke test that inspects the existing H.264/AAC MP4 fixture and verifies structured report fields.
+- Fixed two-channel AAC inspection when FFmpeg exposes only an unspecified channel count: report a friendly `stereo` default while preserving the raw layout and marking the value as inferred.
+- Browser compatibility / “Media Doctor” policy stays outside Wasm; apps can combine deterministic report facts with `canPlayType()` / MediaCapabilities.
+- GitHub Actions and release packaging now build, smoke-test, and publish all three release profiles.
+- Fixed the Windows smoke-test harness to accept profile-specific PASS details such as `streams=2_bytes=...` instead of only the legacy `bytes=...` form.
+- Browser stderr diagnostics now use best-effort shared reads so a temporary Chrome file lock cannot mask the real smoke-test result.
+
 ## 1.1.0
 
 - Added the `lossless-video-cutter` profile for packet-level cuts without decoding or re-encoding.

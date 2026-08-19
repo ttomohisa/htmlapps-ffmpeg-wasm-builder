@@ -1,0 +1,38 @@
+# Structured media inspection only. No decoder, encoder, filter, swscale,
+# swresample, muxer, or external codec library is linked into the final WASM.
+# Parsers are enabled for common compressed codecs so avformat_find_stream_info()
+# can expose profile/level/timing details without decoding frames.
+--enable-small
+--disable-everything
+--disable-avfilter
+--disable-swscale
+--disable-swresample
+--enable-demuxer=mov
+--enable-demuxer=matroska
+--enable-demuxer=avi
+--enable-demuxer=mpegts
+--enable-demuxer=mpeg
+--enable-demuxer=flv
+--enable-demuxer=asf
+--enable-demuxer=ogg
+--enable-demuxer=mp3
+--enable-demuxer=wav
+--enable-demuxer=flac
+--enable-demuxer=aac
+--enable-demuxer=ac3
+--enable-demuxer=eac3
+--enable-demuxer=h264
+--enable-demuxer=hevc
+--enable-demuxer=av1
+--enable-demuxer=ivf
+--enable-parser=h264
+--enable-parser=hevc
+--enable-parser=av1
+--enable-parser=vp8
+--enable-parser=vp9
+--enable-parser=aac
+--enable-parser=aac_latm
+--enable-parser=ac3
+--enable-parser=mpegaudio
+--enable-parser=opus
+--enable-protocol=file

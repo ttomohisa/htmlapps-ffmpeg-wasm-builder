@@ -45,6 +45,7 @@ jobs:
           chmod +x ./build.sh ./scripts/*.sh
           ./build.sh video-compressor
           ./build.sh lossless-video-cutter
+          ./build.sh media-inspector
 
       - name: Prepare binary and corresponding-source bundles
         shell: bash
@@ -63,9 +64,11 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             release/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
             release/BUILDINFO-video-compressor.txt \
             release/BUILDINFO-lossless-video-cutter.txt \
+            release/BUILDINFO-media-inspector.txt \
             release/SHA256SUMS.txt \
             --verify-tag \
             --title "FFmpeg WASM Builder ${GITHUB_REF_NAME}" \

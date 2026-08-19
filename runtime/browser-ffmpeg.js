@@ -228,5 +228,24 @@
     return args;
   };
 
-  window.BrowserFFmpeg = Object.freeze({ loadHosted, loadEmbedded, videoCompressorArgs, losslessVideoCutterArgs, isSupported });
+  const mediaInspectorArgs = (options = {}) => [
+    "--input", options.input || "/workerfs/input.bin",
+    "--output", options.output || "/report.json"
+  ];
+
+  const decodeJsonOutput = (result, name = "/report.json") => {
+    const file = result?.files?.find((item) => item.name === name);
+    if (!file) throw new Error("JSON output was not returned: " + name);
+    return JSON.parse(new TextDecoder().decode(file.data));
+  };
+
+  window.BrowserFFmpeg = Object.freeze({
+    loadHosted,
+    loadEmbedded,
+    videoCompressorArgs,
+    losslessVideoCutterArgs,
+    mediaInspectorArgs,
+    decodeJsonOutput,
+    isSupported
+  });
 })();

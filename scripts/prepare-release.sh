@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="${1:-v$(grep '^BUILDER_VERSION=' "$ROOT/versions.env" | cut -d= -f2-)}"
-RELEASE_PROFILES=(video-compressor lossless-video-cutter)
+RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector)
 
 # shellcheck disable=SC1091
 source "$ROOT/versions.env"
@@ -233,6 +233,7 @@ This archive contains:
 Published binary profiles:
 - video-compressor
 - lossless-video-cutter
+- media-inspector
 EOF_README
 
 SOURCE_TGZ="$RELEASE_DIR/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
@@ -243,9 +244,11 @@ tar -C "$WORK_DIR" -czf "$SOURCE_TGZ" "source-bundle"
   sha256sum \
     ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip \
     ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
+    ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
     ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
     BUILDINFO-video-compressor.txt \
-    BUILDINFO-lossless-video-cutter.txt > SHA256SUMS.txt
+    BUILDINFO-lossless-video-cutter.txt \
+    BUILDINFO-media-inspector.txt > SHA256SUMS.txt
 )
 
 log "Release assets prepared"

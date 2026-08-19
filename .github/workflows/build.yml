@@ -38,6 +38,7 @@ jobs:
         profile:
           - video-compressor
           - lossless-video-cutter
+          - media-inspector
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:

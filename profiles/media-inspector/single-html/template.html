@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Media Inspector - Builder demo</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 18px;line-height:1.6}input,button{font:inherit;padding:8px}button{margin-top:18px}.note{font-size:.9rem;color:#555}pre{white-space:pre-wrap;background:#f5f5f5;padding:12px;max-height:520px;overflow:auto}
+</style>
+</head>
+<body>
+<h1>Media Inspector</h1>
+<p class="note">Builder動作確認用の最小デモです。動画・音声をデコードせず、FFmpeg/libavformatでcontainer・codec・metadata等を読み取ります。入力はWORKERFSから必要な範囲だけ読み込みます。</p>
+<label>メディア <input id="file" type="file" accept="video/*,audio/*,.mkv,.webm,.mov,.mp4,.m4a,.avi,.ts,.m2ts,.flv,.wmv,.wma,.ogg,.opus,.mp3,.wav,.flac,.aac,.ac3,.eac3"></label>
+<br><button id="run">解析する</button>
+<p id="status"></p>
+<pre id="report"></pre>
+<pre id="log"></pre>
+<script id="ffmpeg-js-gzip" type="application/octet-stream">__FFMPEG_JS_GZIP_BASE64__</script>
+<script id="ffmpeg-wasm-gzip" type="application/octet-stream">__FFMPEG_WASM_GZIP_BASE64__</script>
+<script>__FFMPEG_RUNTIME__</script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const decodeBase64 = (id) => {
+    const raw = atob($(id).textContent.replace(/\s+/g, ""));
+    const out = new Uint8Array(raw.length);
+    for (let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+    return out;
+  };
+  const gunzip = async (id, text=false) => {
+    const stream = new Blob([decodeBase64(id)]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const res = new Response(stream);
+    return text ? res.text() : res.arrayBuffer();
+  };
+  $("run").addEventListener("click", async () => {
+    const file = $("file").files[0];
+    if (!file) return void ($("status").textContent = "メディアを選択してください。");
+    $("run").disabled = true;
+    $("report").textContent = "";
+    $("log").textContent = "";
+    $("status").textContent = "解析中…";
+    let runner;
+    try {
+      const [coreJsText, wasmBytes] = await Promise.all([
+        gunzip("ffmpeg-js-gzip", true),
+        gunzip("ffmpeg-wasm-gzip")
+      ]);
+      runner = await BrowserFFmpeg.loadEmbedded({coreJsText, wasmBytes});
+      const inputName = "/workerfs/input.bin";
+      const reportName = "/report.json";
+      const result = await runner.run({
+        files:[{name:inputName,data:file,workerfs:true}],
+        outputs:[reportName],
+        args:BrowserFFmpeg.mediaInspectorArgs({input:inputName,output:reportName}),
+        onLog:({message})=>$("log").textContent += message + "\n"
+      });
+      const report = BrowserFFmpeg.decodeJsonOutput(result, reportName);
+      $("report").textContent = JSON.stringify(report, null, 2);
+      $("status").textContent = "解析完了";
+    } catch (e) {
+      $("status").textContent = "エラー: " + (e?.message || e);
+    } finally {
+      runner?.dispose();
+      $("run").disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

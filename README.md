@@ -26,14 +26,17 @@ pinned FFmpeg / Emscripten / optional x264
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.1.0 profiles
+## v1.2.0 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
 | `video-compressor` | 動画圧縮 | あり | あり | H.264 + AAC MP4 |
 | `lossless-video-cutter` | 無劣化カット | **なし** | **なし** | 元codecのstream copy |
+| `media-inspector` | codec / fps / bitrate / metadata解析 | **なし** | **なし** | structured JSON report |
 
 `lossless-video-cutter` はdecode / encode / filterをせず、圧縮済みpacketをそのままremuxします。開始位置は動画codecの性質上、直前のキーフレームへ調整される場合があります。入力File/BlobはWORKERFSでWorkerから必要な範囲だけ読み込むため、大きな入力を丸ごとMEMFSへ複製しません。出力は現在MEMFS上に作るため、切り出し結果そのもののサイズはブラウザーの利用可能メモリに依存します。
+
+`media-inspector` はフレームをdecodeせず、container / stream headerとmetadataを解析してJSONを返します。MP4/MOV/M4A、MKV/WebM、AVI、MPEG-TS/PS、FLV、ASF、Ogg、MP3、WAV、FLAC、AAC、AC-3/E-AC-3などを対象に、codec、解像度、FPS、pixel format、profile/level、bitrate、HDR、音声、字幕、chapter、rotationを取得します。入力はWORKERFSを使うため、大きなFile/Blobを丸ごとMEMFSへ複製しません。
 
 ## pin
 
@@ -61,6 +64,18 @@ build-lossless-video-cutter.bat
 
 ```text
 build.bat lossless-video-cutter
+```
+
+Media Inspector:
+
+```text
+build-media-inspector.bat
+```
+
+または：
+
+```text
+build.bat media-inspector
 ```
 
 生成物はprofileごとに分かれます。
@@ -113,6 +128,34 @@ await runner.run({
 
 出力拡張子でcontainerを選びます。profileにはMP4/MOV、Matroska/WebMのdemux/muxを含めています。codec自体は再エンコードしないため、選んだcontainerが元codecを受け入れられる必要があります。
 
+
+### Media Inspector のrunner API
+
+```text
+--input /workerfs/input.mp4
+--output /report.json
+```
+
+Browser runtimeでは：
+
+```js
+const inputPath = "/workerfs/input.mp4";
+const reportPath = "/report.json";
+const result = await runner.run({
+  files: [{ name: inputPath, data: file, workerfs: true }],
+  outputs: [reportPath],
+  args: BrowserFFmpeg.mediaInspectorArgs({
+    input: inputPath,
+    output: reportPath
+  })
+});
+const report = BrowserFFmpeg.decodeJsonOutput(result, reportPath);
+```
+
+JSONにはcontainer、duration、総bitrate、各streamのcodec / tag / profile / level、videoの解像度 / FPS / pixel format / HDR / rotation、audioのsample rate / channel layout / bitrate、metadata、chapter、subtitle情報を含めます。
+
+「この動画がなぜブラウザーで再生できないか」の判定は、WASMへブラウザー固有ルールを埋め込まず、アプリ側でこのJSONと `HTMLMediaElement.canPlayType()` / `MediaCapabilities` を組み合わせる方針です。これにより **Media Doctor** 的な診断へ発展させやすくしています。
+
 ## アプリへ組み込む場合
 
 ブラウザー実行時にGitHub Releaseへアクセスするのではなく、**アプリの更新・ビルド時に特定Builder Releaseを取得し、そのアプリへ固定して埋め込む**方式を推奨します。
@@ -121,14 +164,16 @@ await runner.run({
 
 ## Public Release
 
-v1.1.0ではRelease workflowが両profileをbuild + smoke testしてから次を公開します。
+v1.2.0ではRelease workflowが3 profileをbuild + smoke testしてから次を公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.1.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.1.0.zip
-ffmpeg-wasm-sources-v1.1.0.tar.gz
+ffmpeg-wasm-video-compressor-v1.2.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.2.0.zip
+ffmpeg-wasm-media-inspector-v1.2.0.zip
+ffmpeg-wasm-sources-v1.2.0.tar.gz
 BUILDINFO-video-compressor.txt
 BUILDINFO-lossless-video-cutter.txt
+BUILDINFO-media-inspector.txt
 SHA256SUMS.txt
 ```
 
@@ -150,7 +195,7 @@ check-updates.bat
 
 **ルートのMIT LicenseはBuilder自身のソースに対するものです。生成された `ffmpeg.wasm` をMITとして配布するものではありません。**
 
-`video-compressor` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
+`video-compressor` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter` と `media-inspector` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
 
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - [docs/LICENSES.md](docs/LICENSES.md)

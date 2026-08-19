@@ -59,6 +59,22 @@ $StderrPath = Join-Path $TempDir "stderr.txt"
 New-Item -ItemType Directory -Force -Path $BrowserProfile | Out-Null
 $process = $null
 
+function Read-TextBestEffort {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { return "" }
+  try {
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+      $reader = New-Object IO.StreamReader($stream)
+      try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally {
+      $stream.Dispose()
+    }
+  } catch {
+    return "[Could not read browser stderr yet: $($_.Exception.Message)]"
+  }
+}
+
 try {
   $Uri = (New-Object System.Uri((Resolve-Path $HtmlPath).Path)).AbsoluteUri
   $BrowserArgs = @(
@@ -89,7 +105,7 @@ try {
     Start-Sleep -Milliseconds 100
   }
   if (-not (Test-Path $portFile)) {
-    $stderr = if (Test-Path $StderrPath) { [IO.File]::ReadAllText($StderrPath) } else { "" }
+    $stderr = Read-TextBestEffort $StderrPath
     throw "Headless browser did not expose a DevTools port.`n$stderr"
   }
 
@@ -107,8 +123,9 @@ try {
         if ($target.type -ne "page") { continue }
         $targetUrl = [string]$target.url
         $lastUrl = $targetUrl
-        if ($targetUrl -match '#SMOKE_TEST_PASS_bytes=([0-9]+)') {
-          Write-Host ("[OK] Smoke test passed. Output MP4: {0} bytes" -f $Matches[1]) -ForegroundColor Green
+        if ($targetUrl -match '#SMOKE_TEST_PASS_(.*)$') {
+          $details = [Uri]::UnescapeDataString($Matches[1])
+          Write-Host ("[OK] Smoke test passed. {0}" -f $details) -ForegroundColor Green
           return
         }
         if ($targetUrl -match '#SMOKE_TEST_FAIL_(.*)$') {
@@ -122,7 +139,7 @@ try {
     Start-Sleep -Milliseconds 250
   }
 
-  $stderr = if (Test-Path $StderrPath) { [IO.File]::ReadAllText($StderrPath) } else { "" }
+  $stderr = Read-TextBestEffort $StderrPath
   $tail = if ($stderr.Length -gt 4000) { $stderr.Substring($stderr.Length - 4000) } else { $stderr }
   throw "Smoke test timed out after $TimeoutSeconds seconds. Last page URL: $lastUrl`nBrowser stderr:`n$tail"
 } finally {

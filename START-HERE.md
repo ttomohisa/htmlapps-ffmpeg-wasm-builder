@@ -20,7 +20,13 @@ build.bat video-compressor
 build-lossless-video-cutter.bat
 ```
 
-どちらも最後にheadless Chrome / Edgeで実処理のsmoke testが自動実行されます。
+Media Inspector：
+
+```text
+build-media-inspector.bat
+```
+
+3 profileとも最後にheadless Chrome / Edgeで実処理のsmoke testが自動実行されます。
 
 ```text
 [OK] Smoke test passed.
@@ -40,7 +46,7 @@ dist\<profile>\
   smoke-test.html
 ```
 
-Lossless Video Cutterの場合は `dist\lossless-video-cutter\` を使います。大きな入力File/BlobはWORKERFS経由で読み込む構成です。
+Lossless Video Cutterの場合は `dist\lossless-video-cutter\`、Media Inspectorの場合は `dist\media-inspector\` を使います。両profileとも大きな入力File/BlobはWORKERFS経由で読み込む構成です。Media Inspectorは `/report.json` を返すread-only runnerで、動画をdecode/re-encodeしません。
 
 ## 4. FFmpeg更新
 
