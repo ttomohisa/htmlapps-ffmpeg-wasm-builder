@@ -1,0 +1,34 @@
+# Video Contact Sheet: seek + decode + libswscale RGB conversion only.
+# No encoder, muxer, libavfilter, swresample, x264, or pthread support is linked.
+--enable-small
+--disable-everything
+--disable-avfilter
+--disable-swresample
+--enable-swscale
+--enable-decoder=h264
+--enable-decoder=hevc
+--enable-decoder=vp8
+--enable-decoder=vp9
+--enable-decoder=av1
+--enable-decoder=mpeg4
+--enable-decoder=mpeg1video
+--enable-decoder=mpeg2video
+--enable-decoder=mjpeg
+--enable-decoder=prores
+--enable-decoder=theora
+--enable-demuxer=mov
+--enable-demuxer=matroska
+--enable-demuxer=avi
+--enable-demuxer=mpegts
+--enable-demuxer=mpeg
+--enable-demuxer=flv
+--enable-demuxer=asf
+--enable-demuxer=ogg
+--enable-parser=h264
+--enable-parser=hevc
+--enable-parser=av1
+--enable-parser=vp8
+--enable-parser=vp9
+--enable-parser=mpeg4video
+--enable-parser=mpegvideo
+--enable-protocol=file

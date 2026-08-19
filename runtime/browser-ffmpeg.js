@@ -233,6 +233,66 @@
     "--output", options.output || "/report.json"
   ];
 
+  const videoContactSheetArgs = (options = {}) => {
+    const count = Number(options.count ?? 12);
+    const thumbSize = Number(options.thumbSize ?? 320);
+    if (![12, 24, 48].includes(count)) throw new RangeError("Video Contact Sheet count must be 12, 24, or 48.");
+    if (!Number.isInteger(thumbSize) || thumbSize < 96 || thumbSize > 640) throw new RangeError("Video Contact Sheet thumbSize must be an integer from 96 to 640.");
+    const args = [
+      "--input", options.input || "/workerfs/input.mp4",
+      "--output", options.output || "/contact-sheet.ppm",
+      "--count", String(count),
+      "--thumb-size", String(thumbSize)
+    ];
+    if (options.columns !== undefined && options.columns !== null && options.columns !== "") {
+      const columns = Number(options.columns);
+      if (!Number.isInteger(columns) || columns < 1 || columns > Math.min(16, count)) throw new RangeError("Video Contact Sheet columns are out of range.");
+      args.push("--columns", String(columns));
+    }
+    if (options.metadataOutput) {
+      args.push("--metadata-output", String(options.metadataOutput));
+    }
+    return args;
+  };
+
+  const decodePpmOutput = (result, name = "/contact-sheet.ppm") => {
+    const file = result?.files?.find((item) => item.name === name);
+    if (!file) throw new Error("PPM output was not returned: " + name);
+    const bytes = file.data;
+    let offset = 0;
+    const isSpace = (value) => value === 9 || value === 10 || value === 13 || value === 32;
+    const skip = () => {
+      while (offset < bytes.length) {
+        while (offset < bytes.length && isSpace(bytes[offset])) offset++;
+        if (bytes[offset] !== 35) break;
+        while (offset < bytes.length && bytes[offset] !== 10 && bytes[offset] !== 13) offset++;
+      }
+    };
+    const token = () => {
+      skip();
+      const start = offset;
+      while (offset < bytes.length && !isSpace(bytes[offset]) && bytes[offset] !== 35) offset++;
+      if (start === offset) throw new Error("Invalid PPM header.");
+      return new TextDecoder("ascii").decode(bytes.subarray(start, offset));
+    };
+
+    const magic = token();
+    const width = Number(token());
+    const height = Number(token());
+    const maxValue = Number(token());
+    if (magic !== "P6" || !Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0 || maxValue !== 255) {
+      throw new Error("Unsupported PPM output header.");
+    }
+    if (offset >= bytes.length || !isSpace(bytes[offset])) throw new Error("Invalid PPM pixel-data boundary.");
+    offset++;
+    if (bytes[offset - 1] === 13 && bytes[offset] === 10) offset++;
+    const expected = width * height * 3;
+    if (!Number.isSafeInteger(expected) || bytes.length - offset !== expected) {
+      throw new Error(`PPM pixel data size mismatch: expected ${expected}, got ${bytes.length - offset}.`);
+    }
+    return { width, height, pixels: bytes.subarray(offset) };
+  };
+
   const decodeJsonOutput = (result, name = "/report.json") => {
     const file = result?.files?.find((item) => item.name === name);
     if (!file) throw new Error("JSON output was not returned: " + name);
@@ -245,6 +305,8 @@
     videoCompressorArgs,
     losslessVideoCutterArgs,
     mediaInspectorArgs,
+    videoContactSheetArgs,
+    decodePpmOutput,
     decodeJsonOutput,
     isSupported
   });

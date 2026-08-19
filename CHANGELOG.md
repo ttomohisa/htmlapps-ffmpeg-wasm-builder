@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0
+
+- Added the `video-contact-sheet` profile for 12 / 24 / 48 evenly distributed video thumbnails.
+- Uses seek-to-keyframe + decode-forward sampling so long recordings do not need to be decoded from beginning to end.
+- Added H.264, HEVC/H.265 (including Pixel `hvc1` Main/Main10), VP8, VP9, AV1, MPEG-4, MPEG-1/2, MJPEG, ProRes, and Theora decoding across common containers.
+- Added rotation-aware RGB24 thumbnail conversion with libswscale and WORKERFS large-file input.
+- The runner assembles one P6 PPM contact sheet and optional JSON sample metadata; browser Canvas handles PNG/JPEG export, avoiding image encoders in Wasm.
+- Added `BrowserFFmpeg.videoContactSheetArgs()` and `BrowserFFmpeg.decodePpmOutput()`.
+- Added embedded single-HTML demo plus real browser smoke test validating a 12-frame 4x3 sheet.
+- Release CI, source checks, licensing docs, and binary/source packaging now include four release profiles.
+
 ## 1.2.0
 
 - Added the `media-inspector` profile: a read-only FFmpeg/libavformat runner that emits structured JSON without decoding or encoding media.

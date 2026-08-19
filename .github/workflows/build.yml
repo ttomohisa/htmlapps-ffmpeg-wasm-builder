@@ -39,6 +39,7 @@ jobs:
           - video-compressor
           - lossless-video-cutter
           - media-inspector
+          - video-contact-sheet
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:

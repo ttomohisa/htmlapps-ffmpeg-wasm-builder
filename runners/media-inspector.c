@@ -31,7 +31,7 @@
 #include <libavutil/rational.h>
 #include <libavutil/samplefmt.h>
 
-#define RUNNER_VERSION "1.2.0"
+#define RUNNER_VERSION "1.3.0"
 #define REPORT_SCHEMA_VERSION 1
 
 typedef struct RunnerOptions {

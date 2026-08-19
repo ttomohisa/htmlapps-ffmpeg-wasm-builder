@@ -5,9 +5,10 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.2.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.2.0.zip
-ffmpeg-wasm-media-inspector-v1.2.0.zip
+ffmpeg-wasm-video-compressor-v1.3.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.3.0.zip
+ffmpeg-wasm-media-inspector-v1.3.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.3.0.zip
 ```
 
 The profile bundle contains `ffmpeg.js`, `ffmpeg.wasm`, gzip copies, `manifest.json`, `browser-ffmpeg.js`, `BUILDINFO.txt`, and license notices.
@@ -47,3 +48,29 @@ const report = BrowserFFmpeg.decodeJsonOutput(result, output);
 ```
 
 The Wasm report contains deterministic media facts. Browser playback advice should be derived in the app layer with APIs such as `HTMLMediaElement.canPlayType()` and MediaCapabilities instead of hard-coding browser support policy into the Wasm core.
+
+
+## Video Contact Sheet
+
+Use WORKERFS for the source video and request the PPM plus optional JSON metadata:
+
+```js
+const input = "/workerfs/input.mp4";
+const ppmPath = "/contact-sheet.ppm";
+const jsonPath = "/contact-sheet.json";
+const result = await runner.run({
+  files: [{ name: input, data: file, workerfs: true }],
+  outputs: [ppmPath, jsonPath],
+  args: BrowserFFmpeg.videoContactSheetArgs({
+    input,
+    output: ppmPath,
+    metadataOutput: jsonPath,
+    count: 24,
+    thumbSize: 320
+  })
+});
+const ppm = BrowserFFmpeg.decodePpmOutput(result, ppmPath);
+const meta = BrowserFFmpeg.decodeJsonOutput(result, jsonPath);
+```
+
+The PPM contains RGB24 pixels only. Draw it into Canvas, add timestamp labels if desired, then export PNG/JPEG with browser-native APIs. The Wasm core performs the seek/decode step itself, including HEVC/H.265 sources such as Pixel `hvc1` recordings.

@@ -46,6 +46,7 @@ jobs:
           ./build.sh video-compressor
           ./build.sh lossless-video-cutter
           ./build.sh media-inspector
+          ./build.sh video-contact-sheet
 
       - name: Prepare binary and corresponding-source bundles
         shell: bash
@@ -65,10 +66,12 @@ jobs:
             release/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-video-contact-sheet-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
             release/BUILDINFO-video-compressor.txt \
             release/BUILDINFO-lossless-video-cutter.txt \
             release/BUILDINFO-media-inspector.txt \
+            release/BUILDINFO-video-contact-sheet.txt \
             release/SHA256SUMS.txt \
             --verify-tag \
             --title "FFmpeg WASM Builder ${GITHUB_REF_NAME}" \

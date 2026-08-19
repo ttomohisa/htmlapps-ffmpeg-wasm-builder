@@ -16,7 +16,7 @@ Static repository checks verify that:
 - public release workflow verifies tag = `BUILDER_VERSION` and uses a pre-existing tag
 - release preparation includes binary licenses, exact corresponding source, build information, and SHA-256 checksums
 
-The decisive compatibility check is the real browser smoke test. Each profile executes its actual operation in headless Chromium. `video-compressor` transcodes the tiny H.264/AAC MP4 and validates the output container/codecs; `lossless-video-cutter` performs a real stream-copy cut; `media-inspector` reads the same fixture through WORKERFS and validates the structured JSON report (container, H.264 video, AAC stereo audio, resolution, frame rate, duration, and bitrate).
+The decisive compatibility check is the real browser smoke test. Each profile executes its actual operation in headless Chromium. `video-compressor` transcodes the tiny H.264/AAC MP4 and validates the output container/codecs; `lossless-video-cutter` performs a real stream-copy cut; `media-inspector` reads the same fixture through WORKERFS and validates the structured JSON report (container, H.264 video, AAC stereo audio, resolution, frame rate, duration, and bitrate); `video-contact-sheet` seeks/decodes 12 frames and validates the P6 RGB dimensions, image variation, grid metadata, codec, and sample timestamps.
 
 A public release is stricter still: release preparation fetches and verifies the exact source commits again before packaging.
 

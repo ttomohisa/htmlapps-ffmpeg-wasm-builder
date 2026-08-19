@@ -26,7 +26,13 @@ Media Inspector：
 build-media-inspector.bat
 ```
 
-3 profileとも最後にheadless Chrome / Edgeで実処理のsmoke testが自動実行されます。
+Video Contact Sheetを作る場合：
+
+```text
+build-video-contact-sheet.bat
+```
+
+4 profileとも最後にheadless Chrome / Edgeで実処理のsmoke testが自動実行されます。
 
 ```text
 [OK] Smoke test passed.
@@ -46,7 +52,7 @@ dist\<profile>\
   smoke-test.html
 ```
 
-Lossless Video Cutterの場合は `dist\lossless-video-cutter\`、Media Inspectorの場合は `dist\media-inspector\` を使います。両profileとも大きな入力File/BlobはWORKERFS経由で読み込む構成です。Media Inspectorは `/report.json` を返すread-only runnerで、動画をdecode/re-encodeしません。
+Lossless Video Cutterの場合は `dist\lossless-video-cutter\`、Media Inspectorの場合は `dist\media-inspector\`、Video Contact Sheetの場合は `dist\video-contact-sheet\` を使います。3 profileとも大きな入力File/BlobはWORKERFS経由で読み込む構成です。Media Inspectorはread-only JSON、Video Contact Sheetはseek/decodeしたRGB PPM + JSONを返します。
 
 ## 4. FFmpeg更新
 

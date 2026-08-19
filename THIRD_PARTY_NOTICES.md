@@ -6,13 +6,13 @@ The repository does not vendor FFmpeg, x264, or Emscripten source trees. Builds 
 
 ## FFmpeg
 
-`video-compressor` passes `--enable-gpl` and links x264, so that generated core is distributed under GPL-2.0-or-later. `lossless-video-cutter` and `media-inspector` enable no GPL-only FFmpeg component and do not link x264, so their generated cores remain under FFmpeg's LGPL-2.1-or-later terms. The exact FFmpeg source revision and applicable license text are included with public releases.
+`video-compressor` passes `--enable-gpl` and links x264, so that generated core is distributed under GPL-2.0-or-later. `lossless-video-cutter`, `media-inspector`, and `video-contact-sheet` enable no GPL-only FFmpeg component and do not link x264, so their generated cores remain under FFmpeg's LGPL-2.1-or-later terms. The exact FFmpeg source revision and applicable license text are included with public releases.
 
-`runners/video-compressor.c` preserves the MIT notice for FFmpeg's `doc/examples/transcode.c`-derived structure. `runners/lossless-video-cutter.c` uses the public remuxing pattern and public libav APIs; it does not decode or encode media. `runners/media-inspector.c` uses public libavformat/libavcodec/libavutil inspection APIs and emits a structured JSON report without decoding frames. Both browser input paths use Emscripten WORKERFS so File/Blob data can be read from a Worker without first copying the entire input into MEMFS.
+`runners/video-compressor.c` preserves the MIT notice for FFmpeg's `doc/examples/transcode.c`-derived structure. `runners/lossless-video-cutter.c` uses the public remuxing pattern and public libav APIs; it does not decode or encode media. `runners/media-inspector.c` uses public libavformat/libavcodec/libavutil inspection APIs and emits a structured JSON report without decoding frames. `runners/video-contact-sheet.c` uses public libavformat/libavcodec/libswscale APIs to seek/decode selected frames and write an RGB PPM without linking an image encoder. These browser input paths use Emscripten WORKERFS so File/Blob data can be read from a Worker without first copying the entire input into MEMFS.
 
 ## x264
 
-x264 is pinned in `versions.env` because the `video-compressor` profile links it. The `lossless-video-cutter` and `media-inspector` profiles set `PROFILE_USE_X264=0`; x264 is not linked into those generated Wasm cores.
+x264 is pinned in `versions.env` because the `video-compressor` profile links it. The `lossless-video-cutter`, `media-inspector`, and `video-contact-sheet` profiles set `PROFILE_USE_X264=0`; x264 is not linked into those generated Wasm cores.
 
 The open-source x264 build used by the video-compressor profile is GPL-2.0-or-later.
 
