@@ -51,15 +51,69 @@ if ($emsRef.object.type -eq "tag") {
 }
 
 Write-Host "Checking libwebp..." -ForegroundColor Cyan
-$webpRelease = Invoke-RestMethod -Headers @{ "User-Agent" = "htmlapps-ffmpeg-wasm-builder" } `
-  "https://api.github.com/repos/webmproject/libwebp/releases/latest"
-$latestLibwebp = $webpRelease.tag_name
-$webpRef = Invoke-RestMethod -Headers @{ "User-Agent" = "htmlapps-ffmpeg-wasm-builder" } `
-  "https://api.github.com/repos/webmproject/libwebp/git/ref/tags/$latestLibwebp"
-$libwebpCommit = $webpRef.object.sha
-if ($webpRef.object.type -eq "tag") {
-  $webpTag = Invoke-RestMethod -Headers @{ "User-Agent" = "htmlapps-ffmpeg-wasm-builder" } $webpRef.object.url
-  $libwebpCommit = $webpTag.object.sha
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+  throw "Git is required to determine the latest libwebp tag."
+}
+
+$webpLines = @(
+  & git ls-remote --tags $values['LIBWEBP_REPOSITORY'] "refs/tags/v*" 2>$null
+)
+if ($webpLines.Count -eq 0 -and $values['LIBWEBP_FALLBACK_REPOSITORY']) {
+  $webpLines = @(
+    & git ls-remote --tags $values['LIBWEBP_FALLBACK_REPOSITORY'] "refs/tags/v*" 2>$null
+  )
+}
+if ($webpLines.Count -eq 0) {
+  throw "Could not determine libwebp tags from the configured repositories."
+}
+
+$webpTags = @{}
+foreach ($line in $webpLines) {
+  $parts = $line -split '\s+', 2
+  if ($parts.Count -ne 2) { continue }
+
+  $sha = $parts[0]
+  $refName = $parts[1]
+  if ($refName -notmatch '^refs/tags/(v(\d+\.\d+(?:\.\d+)?))(\^\{\})?$') {
+    continue
+  }
+
+  $tagName = $Matches[1]
+  $version = [version]$Matches[2]
+  $isDereferenced = [bool]$Matches[3]
+
+  if (-not $webpTags.ContainsKey($tagName)) {
+    $webpTags[$tagName] = [pscustomobject]@{
+      Tag = $tagName
+      Version = $version
+      ObjectSha = ""
+      CommitSha = ""
+    }
+  }
+
+  if ($isDereferenced) {
+    $webpTags[$tagName].CommitSha = $sha
+  } else {
+    $webpTags[$tagName].ObjectSha = $sha
+  }
+}
+
+$latestWebp = @(
+  $webpTags.Values |
+    Sort-Object Version -Descending |
+    Select-Object -First 1
+)
+if ($latestWebp.Count -eq 0) {
+  throw "Could not find a stable libwebp tag matching vX.Y.Z."
+}
+
+$latestLibwebp = $latestWebp[0].Tag
+$libwebpCommit = $latestWebp[0].CommitSha
+if (-not $libwebpCommit) {
+  $libwebpCommit = $latestWebp[0].ObjectSha
+}
+if (-not $libwebpCommit) {
+  throw "Could not resolve commit for libwebp $latestLibwebp."
 }
 
 Write-Host "Checking x264 stable..." -ForegroundColor Cyan
