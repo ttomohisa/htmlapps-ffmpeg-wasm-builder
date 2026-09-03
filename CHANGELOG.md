@@ -2,6 +2,7 @@
 
 ## 1.6.0 - 2026-09-03
 
+- Fixed release packaging under `set -u` by defaulting profile-specific libvpx/Opus flags to disabled when older profiles do not define them.
 - Fixed the FFmpeg configure component name for VP9: `--enable-encoder=libvpx_vp9`; the runtime codec name remains `libvpx-vp9`.
 - Added a repository check so the configure/runtime naming distinction cannot regress.
 - Added VP9/WebM output to `video-compressor` with a pinned encoder-only libvpx 1.16.0 build.

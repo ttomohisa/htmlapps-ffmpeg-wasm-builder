@@ -432,6 +432,8 @@ Require-Text $releaseScript 'fetch_exact "Opus"' "Release packer must fetch exac
 Require-Text $releaseScript 'fetch_exact "libwebp"' "Release packer must fetch exact libwebp source."
 Require-Text $releaseScript 'PROFILE_USE_LIBVPX' "Release bundle must make libvpx notices profile-specific."
 Require-Text $releaseScript 'PROFILE_USE_LIBOPUS' "Release bundle must make Opus notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_LIBVPX=0' "Release bundle must default missing libvpx profile flags to disabled."
+Require-Text $releaseScript 'PROFILE_USE_LIBOPUS=0' "Release bundle must default missing Opus profile flags to disabled."
 Require-Text $releaseScript 'PROFILE_USE_LIBWEBP' "Release bundle must make libwebp notices profile-specific."
 Require-Text $releaseScript 'PROFILE_USE_X264' "Release bundle must make x264 notices profile-specific."
 Require-Text $releaseScript 'PROFILE_BINARY_LICENSE' "Release bundle must choose the FFmpeg license text per profile."
