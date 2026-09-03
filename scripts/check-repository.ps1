@@ -78,7 +78,10 @@ $contactSmoke = Require-File "tests/smoke-tests/video-contact-sheet.js"
 $gifSmoke = Require-File "tests/smoke-tests/video-to-gif.js"
 $webpSmoke = Require-File "tests/smoke-tests/video-to-webp.js"
 $libwebpBuild = Require-File "scripts/build-libwebp.sh"
+$libvpxBuild = Require-File "scripts/build-libvpx.sh"
+$libopusBuild = Require-File "scripts/build-libopus.sh"
 $smokeFixture = Require-File "tests/fixtures/smoke-input.mp4"
+$rotatedSmokeFixture = Require-File "tests/fixtures/smoke-rotated.mp4"
 $smokeWindows = Require-File "scripts/smoke-test.ps1"
 $smokeUnix = Require-File "scripts/smoke-test.sh"
 $releaseScript = Require-File "scripts/prepare-release.sh"
@@ -109,6 +112,13 @@ Require-Text $dockerCommon "load_profile_config" "Profile metadata loader is mis
 Require-Text $buildScript '"${PROFILE_REQUIRED_CONFIG[@]}"' "Build must assert profile-specific FFmpeg config."
 Require-Text $buildScript '"${PROFILE_LINK_LIBS[@]}"' "Build must link profile-specific FFmpeg libraries."
 Require-Text $buildScript 'PROFILE_USE_X264' "Build must make x264 profile-specific."
+Require-Text $buildScript 'PROFILE_USE_LIBVPX' "Build must make libvpx profile-specific."
+Require-Text $buildScript 'PROFILE_USE_LIBOPUS' "Build must make Opus profile-specific."
+Require-Text $libvpxBuild "--enable-vp9-encoder" "libvpx build must keep the VP9 encoder."
+Require-Text $libvpxBuild "--disable-vp9-decoder" "libvpx build must stay encoder-only."
+Require-Text $libvpxBuild "--enable-small" "libvpx build must favor compact output."
+Require-Text $libopusBuild "OPUS_DRED=OFF" "Opus build must keep DRED out of the compact profile."
+Require-Text $libopusBuild "OPUS_OSCE=OFF" "Opus build must keep OSCE out of the compact profile."
 Require-Text $buildScript 'PROFILE_USE_LIBWEBP' "Build must make libwebp profile-specific."
 Require-Text $buildScript 'PROFILE_USE_WORKERFS' "Build must make WORKERFS profile-specific."
 Require-Text $buildScript '-lworkerfs.js' "WORKERFS profiles must explicitly link Emscripten WORKERFS."
@@ -117,8 +127,10 @@ Require-Text $buildScript "--disable-pthreads" "WASM build must disable pthreads
 Require-Text $buildScript "--disable-programs" "WASM build must not link the upstream ffmpeg CLI."
 Require-Text $buildScript "-sEXPORT_NAME=createFFmpegCore" "WASM factory name must stay stable."
 Require-Text $buildScript "INCOMING_MODULE_JS_API=wasmBinary,instantiateWasm,locateFile,print,printErr" "WASM build must preserve custom loader hooks."
-Require-Text $buildScript '"schemaVersion": 6' "Manifest schema must include dependency-aware metadata."
+Require-Text $buildScript '"schemaVersion": 7' "Manifest schema must include dependency-aware metadata."
 Require-Text $buildScript '"x264Linked":' "Manifest must state whether x264 is linked."
+Require-Text $buildScript '"libvpxLinked":' "Manifest must state whether libvpx is linked."
+Require-Text $buildScript '"libopusLinked":' "Manifest must state whether Opus is linked."
 Require-Text $buildScript '"libwebpLinked":' "Manifest must state whether libwebp is linked."
 $buildText = [IO.File]::ReadAllText($buildScript)
 if ($buildText -match '(^|\s)-pthread(\s|$)') { throw "WASM build must not link with -pthread." }
@@ -141,7 +153,20 @@ if ($runtimeText -match 'typeof\s+SharedArrayBuffer|crossOriginIsolated') { thro
 
 $videoRunnerText = [IO.File]::ReadAllText($videoRunner)
 if ($videoRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video runner must not call pthread APIs." }
-Require-Text $videoRunner '#define RUNNER_VERSION "1.5.0"' "Video runner version must be 1.5.0."
+Require-Text $videoRunner '#define RUNNER_VERSION "1.6.0"' "Video runner version must be 1.6.0."
+Require-Text $videoProfile "--enable-encoder=libvpx_vp9" "FFmpeg configure must use the libvpx_vp9 component name."
+$videoProfileFlagsText = [IO.File]::ReadAllText($videoProfile)
+if ($videoProfileFlagsText.Contains("--enable-encoder=libvpx-vp9")) { throw "FFmpeg configure must not use the runtime codec name libvpx-vp9." }
+Require-Text $videoRunner "libvpx-vp9" "Video runner must support VP9 output."
+Require-Text $videoRunner "libopus" "Video runner must support Opus audio."
+Require-Text $videoRunner "--inspect-output" "Video runner must expose measured source inspection."
+Require-Text $videoRunner "AV_PKT_DATA_DISPLAYMATRIX" "Video runner must read rotation metadata."
+Require-Text $videoRunner "get_display_rotation_degrees" "Video runner must report display rotation with ffprobe semantics."
+Require-Text $videoRunner "get_autorotate_degrees" "Video runner must keep FFmpeg autorotate angle normalization separate from reported rotation."
+Require-Text $videoRunner "append_autorotate_filter" "Video runner must apply display rotation to output pixels."
+Require-Text $videoSmoke "displayWidth !== 96" "Video smoke test must verify display-matrix dimensions."
+Require-Text $videoSmoke "H.264 autorotation did not produce portrait pixels" "Video smoke test must verify H.264 autorotation."
+Require-Text $videoSmoke "VP9 autorotation did not produce portrait pixels" "Video smoke test must verify VP9 autorotation."
 Require-Text $videoRunner "avcodec_send_packet" "Video runner decode loop is missing."
 Require-Text $videoRunner 'av_opt_set_array(sink_ctx, "pixel_formats"' "Video runner must use FFmpeg 9+ pixel_formats array option."
 Require-Text $videoRunner 'av_opt_set_array(sink_ctx, "sample_formats"' "Video runner must use FFmpeg 9+ sample_formats array option."
@@ -153,7 +178,7 @@ foreach ($deprecated in @('"pix_fmts"', '"sample_fmts"', '"sample_rates"', '"ch_
 
 $cutterRunnerText = [IO.File]::ReadAllText($cutterRunner)
 if ($cutterRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Cutter runner must not call pthread APIs." }
-Require-Text $cutterRunner '#define RUNNER_VERSION "1.5.0"' "Cutter runner version must be 1.5.0."
+Require-Text $cutterRunner '#define RUNNER_VERSION "1.5.0"' "Cutter runner version must remain 1.5.0 when unchanged."
 Require-Text $cutterRunner "av_seek_frame" "Cutter must seek to a keyframe."
 Require-Text $cutterRunner "AV_PKT_FLAG_KEY" "Cutter must anchor output to a keyframe."
 Require-Text $cutterRunner "avcodec_parameters_copy" "Cutter must stream-copy codec parameters."
@@ -166,7 +191,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $inspectorRunnerText = [IO.File]::ReadAllText($inspectorRunner)
 if ($inspectorRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Media Inspector runner must not call pthread APIs." }
-Require-Text $inspectorRunner '#define RUNNER_VERSION "1.5.0"' "Media Inspector runner version must be 1.5.0."
+Require-Text $inspectorRunner '#define RUNNER_VERSION "1.5.0"' "Media Inspector runner version must remain 1.5.0 when unchanged."
 Require-Text $inspectorRunner "avformat_open_input" "Media Inspector must open media through libavformat."
 Require-Text $inspectorRunner "avformat_find_stream_info" "Media Inspector must discover stream information."
 Require-Text $inspectorRunner "AV_PKT_DATA_DISPLAYMATRIX" "Media Inspector must report rotation/display matrix data."
@@ -179,7 +204,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $contactRunnerText = [IO.File]::ReadAllText($contactRunner)
 if ($contactRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Contact Sheet runner must not call pthread APIs." }
-Require-Text $contactRunner '#define RUNNER_VERSION "1.5.0"' "Video Contact Sheet runner version must be 1.5.0."
+Require-Text $contactRunner '#define RUNNER_VERSION "1.5.0"' "Video Contact Sheet runner version must remain 1.5.0 when unchanged."
 Require-Text $contactRunner "av_seek_frame" "Video Contact Sheet must seek between sample points."
 Require-Text $contactRunner "avcodec_send_packet" "Video Contact Sheet must decode selected frames."
 Require-Text $contactRunner "avcodec_receive_frame" "Video Contact Sheet decode loop is missing."
@@ -191,7 +216,9 @@ foreach ($forbiddenApi in @("avcodec_send_frame", "avcodec_receive_packet", "av_
 }
 
 Require-Text $videoProfileEnv "PROFILE_USE_X264=1" "Video profile must link x264."
-Require-Text $videoProfileEnv "PROFILE_USE_WORKERFS=0" "Video profile should not carry WORKERFS overhead."
+Require-Text $videoProfileEnv "PROFILE_USE_LIBVPX=1" "Video profile must link libvpx for VP9."
+Require-Text $videoProfileEnv "PROFILE_USE_LIBOPUS=1" "Video profile must link Opus for WebM audio."
+Require-Text $videoProfileEnv "PROFILE_USE_WORKERFS=1" "Video profile must use WORKERFS to avoid copying full media files into MEMFS."
 Require-Text $cutterProfileEnv "PROFILE_USE_X264=0" "Lossless cutter must not link x264."
 Require-Text $cutterProfileEnv "PROFILE_USE_WORKERFS=1" "Lossless cutter must expose large File/Blob input through WORKERFS."
 Require-Text $cutterProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Lossless cutter should remain LGPL without GPL-only components."
@@ -260,7 +287,7 @@ Require-Text $contactProfile "--enable-demuxer=mov" "Video Contact Sheet must re
 Require-Text $contactProfile "--enable-demuxer=matroska" "Video Contact Sheet must read MKV/WebM."
 Require-Text $contactReadme 'Pixel `hvc1`' "Video Contact Sheet docs must document Pixel HEVC support."
 
-Require-Text $animationRunner '#define RUNNER_VERSION "1.5.0"' "Animation runner version must be 1.5.0."
+Require-Text $animationRunner '#define RUNNER_VERSION "1.5.0"' "Animation runner version must remain 1.5.0 when unchanged."
 Require-Text $animationRunner 'palettegen=max_colors=' "GIF runner must generate a palette in a first pass."
 Require-Text $animationRunner 'paletteuse=dither=' "GIF runner must apply the generated palette."
 Require-Text $animationRunner 'avcodec_find_encoder_by_name("libwebp_anim")' "Animated WebP runner must use FFmpeg libwebp_anim."
@@ -341,17 +368,19 @@ if ($null -ne $gitattributes) {
 }
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.5\.0$') { throw "Builder version must be 1.5.0." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.6\.0$') { throw "Builder version must be 1.6.0." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
   'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT',
-  'LIBWEBP_REPOSITORY', 'LIBWEBP_FALLBACK_REPOSITORY', 'LIBWEBP_REF', 'LIBWEBP_COMMIT'
+  'LIBWEBP_REPOSITORY', 'LIBWEBP_FALLBACK_REPOSITORY', 'LIBWEBP_REF', 'LIBWEBP_COMMIT',
+  'LIBVPX_REPOSITORY', 'LIBVPX_FALLBACK_REPOSITORY', 'LIBVPX_REF', 'LIBVPX_COMMIT',
+  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT'
 )) {
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
 }
-foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', 'LIBWEBP_COMMIT')) {
+foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', 'LIBWEBP_COMMIT', 'LIBVPX_COMMIT', 'LIBOPUS_COMMIT')) {
   $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
   $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
@@ -360,12 +389,15 @@ foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', '
 $dockerText = [IO.File]::ReadAllText($dockerfile)
 if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
 Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expose a no-x264 export target."
+Require-Text $dockerfile "FROM scratch AS export-with-video-codecs" "Dockerfile must expose a combined video-codec export target."
 Require-Text $dockerfile "FROM scratch AS export-with-x264" "Dockerfile must expose an x264 export target."
 Require-Text $dockerfile "FROM scratch AS export-with-libwebp" "Dockerfile must expose a libwebp export target."
 Require-Text $unixBuild 'EXPORT_TARGET="export-no-x264"' "Unix build must skip optional codec libraries when unused."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-video-codecs"' "Unix build must select the combined video codec target."
 Require-Text $unixBuild 'EXPORT_TARGET="export-with-x264"' "Unix build must select x264 only when required."
 Require-Text $unixBuild 'EXPORT_TARGET="export-with-libwebp"' "Unix build must select libwebp only when required."
 Require-Text $windowsBuild '"export-no-x264"' "Windows build must support the no-x264 Docker target."
+Require-Text $windowsBuild '"export-with-video-codecs"' "Windows build must support the combined video codec target."
 Require-Text $windowsBuild '"export-with-x264"' "Windows build must support the x264 Docker target."
 Require-Text $windowsBuild '"export-with-libwebp"' "Windows build must support the libwebp Docker target."
 
@@ -389,13 +421,17 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.5.0" "Release documentation must include the v1.5.0 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.6.0" "Release documentation must include the v1.6.0 tag procedure."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
 Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
 Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
+Require-Text $releaseScript 'fetch_exact "libvpx"' "Release packer must fetch exact libvpx source."
+Require-Text $releaseScript 'fetch_exact "Opus"' "Release packer must fetch exact Opus source."
 Require-Text $releaseScript 'fetch_exact "libwebp"' "Release packer must fetch exact libwebp source."
+Require-Text $releaseScript 'PROFILE_USE_LIBVPX' "Release bundle must make libvpx notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_LIBOPUS' "Release bundle must make Opus notices profile-specific."
 Require-Text $releaseScript 'PROFILE_USE_LIBWEBP' "Release bundle must make libwebp notices profile-specific."
 Require-Text $releaseScript 'PROFILE_USE_X264' "Release bundle must make x264 notices profile-specific."
 Require-Text $releaseScript 'PROFILE_BINARY_LICENSE' "Release bundle must choose the FFmpeg license text per profile."

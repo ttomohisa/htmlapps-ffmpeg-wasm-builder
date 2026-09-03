@@ -63,6 +63,12 @@ fi
 if [[ "$PROFILE_USE_LIBWEBP" == "0" ]] && grep -q '^CONFIG_LIBWEBP=yes$' ffbuild/config.mak; then
   fail "Profile $PROFILE must not enable libwebp"
 fi
+if [[ "$PROFILE_USE_LIBVPX" == "0" ]] && grep -q '^CONFIG_LIBVPX=yes$' ffbuild/config.mak; then
+  fail "Profile $PROFILE must not enable libvpx"
+fi
+if [[ "$PROFILE_USE_LIBOPUS" == "0" ]] && grep -q '^CONFIG_LIBOPUS=yes$' ffbuild/config.mak; then
+  fail "Profile $PROFILE must not enable libopus"
+fi
 
 log "Building FFmpeg static libraries"
 emmake make -j"$JOBS"
@@ -75,6 +81,14 @@ link_inputs=("${PROFILE_LINK_LIBS[@]}")
 if [[ "$PROFILE_USE_X264" == "1" ]]; then
   [[ -s "$INSTALL_DIR/lib/libx264.a" ]] || fail "Profile requires x264 but libx264.a is missing"
   link_inputs+=("$INSTALL_DIR/lib/libx264.a")
+fi
+if [[ "$PROFILE_USE_LIBVPX" == "1" ]]; then
+  [[ -s "$INSTALL_DIR/lib/libvpx.a" ]] || fail "Profile requires libvpx but libvpx.a is missing"
+  link_inputs+=("$INSTALL_DIR/lib/libvpx.a")
+fi
+if [[ "$PROFILE_USE_LIBOPUS" == "1" ]]; then
+  [[ -s "$INSTALL_DIR/lib/libopus.a" ]] || fail "Profile requires Opus but libopus.a is missing"
+  link_inputs+=("$INSTALL_DIR/lib/libopus.a")
 fi
 if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
   for lib in libwebpmux.a libwebp.a libsharpyuv.a; do
@@ -130,7 +144,7 @@ for gz in "$OUT_DIR"/*.gz; do gzip -t "$gz"; done
 
 cat > "$OUT_DIR/manifest.json" <<EOF_JSON
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "builderVersion": "$BUILDER_VERSION",
   "profile": "$PROFILE",
   "displayName": "$PROFILE_DISPLAY_NAME",
@@ -145,7 +159,13 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
     "x264Linked": $([[ "$PROFILE_USE_X264" == "1" ]] && echo true || echo false),
     "libwebpRef": "$LIBWEBP_REF",
     "libwebpCommit": "$LIBWEBP_COMMIT",
-    "libwebpLinked": $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo true || echo false)
+    "libwebpLinked": $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo true || echo false),
+    "libvpxRef": "$LIBVPX_REF",
+    "libvpxCommit": "$LIBVPX_COMMIT",
+    "libvpxLinked": $([[ "$PROFILE_USE_LIBVPX" == "1" ]] && echo true || echo false),
+    "libopusRef": "$LIBOPUS_REF",
+    "libopusCommit": "$LIBOPUS_COMMIT",
+    "libopusLinked": $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo true || echo false)
   },
   "runtime": {
     "frontend": "public-libav-runner",

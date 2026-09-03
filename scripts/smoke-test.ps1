@@ -93,7 +93,8 @@ try {
 
   Write-Host "[FFmpeg WASM] Smoke test: actual browser transcode" -ForegroundColor Cyan
   Write-Host "[FFmpeg WASM] Browser: $Browser" -ForegroundColor DarkGray
-  Write-Host "[FFmpeg WASM] Input:   tests/fixtures/smoke-input.mp4" -ForegroundColor DarkGray
+  $fixtureName = if ($Profile -eq "video-compressor") { "tests/fixtures/smoke-rotated.mp4" } else { "tests/fixtures/smoke-input.mp4" }
+  Write-Host "[FFmpeg WASM] Input:   $fixtureName" -ForegroundColor DarkGray
 
   $process = Start-Process -FilePath $Browser -ArgumentList $BrowserArgs -PassThru `
     -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath

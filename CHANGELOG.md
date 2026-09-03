@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.0 - 2026-09-03
+
+- Fixed the FFmpeg configure component name for VP9: `--enable-encoder=libvpx_vp9`; the runtime codec name remains `libvpx-vp9`.
+- Added a repository check so the configure/runtime naming distinction cannot regress.
+- Added VP9/WebM output to `video-compressor` with a pinned encoder-only libvpx 1.16.0 build.
+- VP9 speed modes now use 0 / 8 / 16 / 25 frames of look-ahead so slower modes trade more memory and time for better compression efficiency while the default stays moderate.
+- Added Opus audio for WebM with pinned Opus 1.5.2 and kept H.264/AAC MP4 as the default path.
+- Added `--inspect-output` to measure actual selected video/audio stream packet bytes, duration, FPS, display dimensions, and average stream bitrate without decoding all frames.
+- Added Display Matrix autorotation using the same 90/180/270-degree transpose/flip decisions as FFmpeg so rotated MP4/MOV output is physically oriented correctly.
+- Separated ffprobe-style display rotation reporting from FFmpeg autorotate's internal normalized angle so a 90-degree Display Matrix is reported as 90 while the filter path correctly uses its 270-degree autorotate equivalent.
+- Enabled WORKERFS for video-compressor input so inspection and compression can read browser File/Blob data without first copying the full source into MEMFS.
+- Added dependency-aware Docker stages and release packaging for libvpx/Opus while leaving every unrelated profile unchanged.
+- Extended the browser runtime and smoke test to cover H.264, VP9, source inspection, and WORKERFS input.
+
+
 ## 1.5.0 - 2026-08-20
 
 - Added normalized positioned crop rectangles to `video-to-gif` and `video-to-webp`.

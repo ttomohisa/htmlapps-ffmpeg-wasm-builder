@@ -10,10 +10,18 @@ source "$ROOT/versions.env"
 [[ -f "$ROOT/runners/$PROFILE.c" ]] || { echo "Missing runner: runners/$PROFILE.c" >&2; exit 1; }
 
 PROFILE_USE_X264="$(grep '^PROFILE_USE_X264=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
+PROFILE_USE_LIBVPX="$(grep '^PROFILE_USE_LIBVPX=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]' || true)"
+PROFILE_USE_LIBVPX="${PROFILE_USE_LIBVPX:-0}"
+PROFILE_USE_LIBOPUS="$(grep '^PROFILE_USE_LIBOPUS=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]' || true)"
+PROFILE_USE_LIBOPUS="${PROFILE_USE_LIBOPUS:-0}"
 PROFILE_USE_LIBWEBP="$(grep '^PROFILE_USE_LIBWEBP=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
 [[ "$PROFILE_USE_X264" == "0" || "$PROFILE_USE_X264" == "1" ]] || { echo "Invalid PROFILE_USE_X264 in profiles/$PROFILE/profile.env" >&2; exit 1; }
+[[ "$PROFILE_USE_LIBVPX" == "0" || "$PROFILE_USE_LIBVPX" == "1" ]] || { echo "Invalid PROFILE_USE_LIBVPX in profiles/$PROFILE/profile.env" >&2; exit 1; }
+[[ "$PROFILE_USE_LIBOPUS" == "0" || "$PROFILE_USE_LIBOPUS" == "1" ]] || { echo "Invalid PROFILE_USE_LIBOPUS in profiles/$PROFILE/profile.env" >&2; exit 1; }
 [[ "$PROFILE_USE_LIBWEBP" == "0" || "$PROFILE_USE_LIBWEBP" == "1" ]] || { echo "Invalid PROFILE_USE_LIBWEBP in profiles/$PROFILE/profile.env" >&2; exit 1; }
-if [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBWEBP" == "1" ]]; then
+if [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBVPX" == "1" && "$PROFILE_USE_LIBOPUS" == "1" && "$PROFILE_USE_LIBWEBP" == "0" ]]; then
+  EXPORT_TARGET="export-with-video-codecs"
+elif [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBWEBP" == "1" ]]; then
   echo "Profiles cannot currently link x264 and libwebp together." >&2; exit 1
 elif [[ "$PROFILE_USE_X264" == "1" ]]; then
   EXPORT_TARGET="export-with-x264"
@@ -54,6 +62,14 @@ docker buildx build \
   --build-arg "LIBWEBP_FALLBACK_REPOSITORY=$LIBWEBP_FALLBACK_REPOSITORY" \
   --build-arg "LIBWEBP_REF=$LIBWEBP_REF" \
   --build-arg "LIBWEBP_COMMIT=$LIBWEBP_COMMIT" \
+  --build-arg "LIBVPX_REPOSITORY=$LIBVPX_REPOSITORY" \
+  --build-arg "LIBVPX_FALLBACK_REPOSITORY=$LIBVPX_FALLBACK_REPOSITORY" \
+  --build-arg "LIBVPX_REF=$LIBVPX_REF" \
+  --build-arg "LIBVPX_COMMIT=$LIBVPX_COMMIT" \
+  --build-arg "LIBOPUS_REPOSITORY=$LIBOPUS_REPOSITORY" \
+  --build-arg "LIBOPUS_FALLBACK_REPOSITORY=$LIBOPUS_FALLBACK_REPOSITORY" \
+  --build-arg "LIBOPUS_REF=$LIBOPUS_REF" \
+  --build-arg "LIBOPUS_COMMIT=$LIBOPUS_COMMIT" \
   --build-arg "PROFILE=$PROFILE" \
   --output "type=local,dest=$OUT_DIR" \
   "$ROOT"

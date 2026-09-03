@@ -5,7 +5,7 @@ FFmpeg + Emscripten から、用途ごとに小さく絞ったブラウザー向
 FFmpeg本家CLIはリンクせず、各ツール専用のpublic `libav*` runnerだけをWASM化します。
 
 ```text
-pinned FFmpeg / Emscripten / optional x264 / libwebp
+pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
                  ↓
           profile flags
                  ↓
@@ -26,16 +26,19 @@ pinned FFmpeg / Emscripten / optional x264 / libwebp
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.5.0 profiles
+## v1.6.0 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
-| `video-compressor` | 動画圧縮 | あり | あり | H.264 + AAC MP4 |
+| `video-compressor` | 動画圧縮 | あり | あり | H.264 + AAC MP4 / VP9 + Opus WebM |
 | `lossless-video-cutter` | 無劣化カット | **なし** | **なし** | 元codecのstream copy |
 | `media-inspector` | codec / fps / bitrate / metadata解析 | **なし** | **なし** | structured JSON report |
 | `video-contact-sheet` | 動画全体から12/24/48枚を均等抽出 | decoderのみ | **なし** | RGB PPM + sample JSON |
 | `video-to-gif` | 動画の一部をAnimated GIF化 | decode + GIF encode | **なし** | GIF89a animation |
 | `video-to-webp` | 動画の一部をAnimated WebP化 | decode + libwebp_anim | **なし** | Animated WebP |
+
+
+`video-compressor` はv1.6.0で H.264/AAC MP4 に加えて VP9/Opus WebM を出力できます。入力動画はWORKERFSで読み込み、圧縮前のinspect modeでは映像packetの総bytesとstream durationから平均映像bitrateを測定します。MP4/MOVのDisplay Matrixも読み取り、90/180/270度の回転はFFmpeg本体と同じtranspose/flip分岐で実画素へ適用してからresize/encodeします。
 
 `lossless-video-cutter` はdecode / encode / filterをせず、圧縮済みpacketをそのままremuxします。開始位置は動画codecの性質上、直前のキーフレームへ調整される場合があります。入力File/BlobはWORKERFSでWorkerから必要な範囲だけ読み込むため、大きな入力を丸ごとMEMFSへ複製しません。出力は現在MEMFS上に作るため、切り出し結果そのもののサイズはブラウザーの利用可能メモリに依存します。
 
@@ -45,7 +48,9 @@ pinned FFmpeg / Emscripten / optional x264 / libwebp
 
 `video-to-gif` は短い動画区間をtrim / FPS削減 / autorotate / resizeし、1回目のdecodeで `palettegen`、2回目で `paletteuse` を行う2-pass構成です。GIF encoderはFFmpeg内蔵のみを使い、x264/libwebp/audio stackはリンクしません。
 
-`video-to-gif` / `video-to-webp` はv1.5.0から、autorotate後の映像に対する正規化crop矩形 (`x/y/width/height`: 0..1) を受け取れます。crop後にresizeするため、アプリ側はプレビュー上の切り抜き枠をそのままrunnerへ渡せます。\n\n`video-to-webp` は同じ動画前処理を共有し、FFmpegの `libwebp_anim` wrapperからAnimated WebPを生成します。libwebpはこのprofileだけにリンクされ、lossy/lossless、quality、compression levelを選べます。両profileとも入力File/BlobはWORKERFSを使います。
+`video-to-gif` / `video-to-webp` はv1.5.0から、autorotate後の映像に対する正規化crop矩形 (`x/y/width/height`: 0..1) を受け取れます。crop後にresizeするため、アプリ側はプレビュー上の切り抜き枠をそのままrunnerへ渡せます。
+
+`video-to-webp` は同じ動画前処理を共有し、FFmpegの `libwebp_anim` wrapperからAnimated WebPを生成します。libwebpはこのprofileだけにリンクされ、lossy/lossless、quality、compression levelを選べます。両profileとも入力File/BlobはWORKERFSを使います。
 
 ## pin
 
@@ -55,6 +60,8 @@ pinned FFmpeg / Emscripten / optional x264 / libwebp
 - Emscripten 6.0.6 / exact source commit
 - x264 stable / exact commit（x264を使うprofileだけが最終WASMへリンク）
 - libwebp 1.6.0 / exact commit（`video-to-webp`だけが最終WASMへリンク）
+- libvpx 1.16.0 / exact commit（`video-compressor`のVP9出力だけが最終WASMへリンク）
+- Opus 1.5.2 / exact commit（`video-compressor`のWebM音声出力だけが最終WASMへリンク）
 
 ## ビルド
 
@@ -274,16 +281,16 @@ Browser runtimeでは `BrowserFFmpeg.videoToWebpArgs()` を使います。`lossl
 
 ## Public Release
 
-v1.5.0ではRelease workflowが6 profileをbuild + smoke testしてから次を公開します。
+v1.6.0ではRelease workflowが6 profileをbuild + smoke testしてから次を公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.5.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.5.0.zip
-ffmpeg-wasm-media-inspector-v1.5.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.5.0.zip
-ffmpeg-wasm-video-to-gif-v1.5.0.zip
-ffmpeg-wasm-video-to-webp-v1.5.0.zip
-ffmpeg-wasm-sources-v1.5.0.tar.gz
+ffmpeg-wasm-video-compressor-v1.6.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.6.0.zip
+ffmpeg-wasm-media-inspector-v1.6.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.6.0.zip
+ffmpeg-wasm-video-to-gif-v1.6.0.zip
+ffmpeg-wasm-video-to-webp-v1.6.0.zip
+ffmpeg-wasm-sources-v1.6.0.tar.gz
 BUILDINFO-video-compressor.txt
 BUILDINFO-lossless-video-cutter.txt
 BUILDINFO-media-inspector.txt

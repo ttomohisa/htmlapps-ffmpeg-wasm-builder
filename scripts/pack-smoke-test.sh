@@ -7,7 +7,11 @@ source /workspace/scripts/docker-common.sh
 MODE_OUT="$OUT_DIR"
 TEMPLATE="/workspace/tests/smoke-test.template.html"
 RUNTIME="/workspace/runtime/browser-ffmpeg.js"
-FIXTURE="/workspace/tests/fixtures/smoke-input.mp4"
+if [[ "$PROFILE" == "video-compressor" ]]; then
+  FIXTURE="/workspace/tests/fixtures/smoke-rotated.mp4"
+else
+  FIXTURE="/workspace/tests/fixtures/smoke-input.mp4"
+fi
 SMOKE_BODY="/workspace/tests/smoke-tests/${PROFILE}.js"
 OUTPUT="$MODE_OUT/smoke-test.html"
 

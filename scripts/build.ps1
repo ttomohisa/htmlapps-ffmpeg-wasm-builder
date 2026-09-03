@@ -52,7 +52,9 @@ $required = @(
   "BUILDER_VERSION", "EMSDK_VERSION", "EMSCRIPTEN_REPOSITORY", "EMSCRIPTEN_REF", "EMSCRIPTEN_COMMIT",
   "FFMPEG_REPOSITORY", "FFMPEG_REF", "FFMPEG_COMMIT",
   "X264_REPOSITORY", "X264_FALLBACK_REPOSITORY", "X264_REF", "X264_COMMIT",
-  "LIBWEBP_REPOSITORY", "LIBWEBP_FALLBACK_REPOSITORY", "LIBWEBP_REF", "LIBWEBP_COMMIT"
+  "LIBWEBP_REPOSITORY", "LIBWEBP_FALLBACK_REPOSITORY", "LIBWEBP_REF", "LIBWEBP_COMMIT",
+  "LIBVPX_REPOSITORY", "LIBVPX_FALLBACK_REPOSITORY", "LIBVPX_REF", "LIBVPX_COMMIT",
+  "LIBOPUS_REPOSITORY", "LIBOPUS_FALLBACK_REPOSITORY", "LIBOPUS_REF", "LIBOPUS_COMMIT"
 )
 foreach ($name in $required) {
   if (-not $values.ContainsKey($name) -or [string]::IsNullOrWhiteSpace($values[$name])) {
@@ -68,13 +70,17 @@ if (-not (Test-Path $profileConfig)) { throw "Build profile metadata is missing:
 if (-not (Test-Path $runnerFile)) { throw "Runner is missing: $runnerFile" }
 $profileConfigText = [IO.File]::ReadAllText($profileConfig)
 $useX264Match = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_X264=(0|1)\s*$')
+$useLibvpxMatch = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_LIBVPX=(0|1)\s*$')
+$useLibopusMatch = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_LIBOPUS=(0|1)\s*$')
 $useLibwebpMatch = [regex]::Match($profileConfigText, '(?m)^PROFILE_USE_LIBWEBP=(0|1)\s*$')
 if (-not $useX264Match.Success) { throw "profile.env must contain PROFILE_USE_X264=0 or 1: $profileConfig" }
 if (-not $useLibwebpMatch.Success) { throw "profile.env must contain PROFILE_USE_LIBWEBP=0 or 1: $profileConfig" }
 $UseX264 = $useX264Match.Groups[1].Value -eq "1"
+$UseLibvpx = $useLibvpxMatch.Success -and $useLibvpxMatch.Groups[1].Value -eq "1"
+$UseLibopus = $useLibopusMatch.Success -and $useLibopusMatch.Groups[1].Value -eq "1"
 $UseLibwebp = $useLibwebpMatch.Groups[1].Value -eq "1"
 if ($UseX264 -and $UseLibwebp) { throw "Profiles cannot currently link x264 and libwebp together." }
-$ExportTarget = if ($UseX264) { "export-with-x264" } elseif ($UseLibwebp) { "export-with-libwebp" } else { "export-no-x264" }
+$ExportTarget = if ($UseX264 -and $UseLibvpx -and $UseLibopus -and -not $UseLibwebp) { "export-with-video-codecs" } elseif ($UseX264) { "export-with-x264" } elseif ($UseLibwebp) { "export-with-libwebp" } else { "export-no-x264" }
 
 if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -97,6 +103,14 @@ $DockerArgs = @(
   "--build-arg", "LIBWEBP_FALLBACK_REPOSITORY=$($values['LIBWEBP_FALLBACK_REPOSITORY'])",
   "--build-arg", "LIBWEBP_REF=$($values['LIBWEBP_REF'])",
   "--build-arg", "LIBWEBP_COMMIT=$($values['LIBWEBP_COMMIT'])",
+  "--build-arg", "LIBVPX_REPOSITORY=$($values['LIBVPX_REPOSITORY'])",
+  "--build-arg", "LIBVPX_FALLBACK_REPOSITORY=$($values['LIBVPX_FALLBACK_REPOSITORY'])",
+  "--build-arg", "LIBVPX_REF=$($values['LIBVPX_REF'])",
+  "--build-arg", "LIBVPX_COMMIT=$($values['LIBVPX_COMMIT'])",
+  "--build-arg", "LIBOPUS_REPOSITORY=$($values['LIBOPUS_REPOSITORY'])",
+  "--build-arg", "LIBOPUS_FALLBACK_REPOSITORY=$($values['LIBOPUS_FALLBACK_REPOSITORY'])",
+  "--build-arg", "LIBOPUS_REF=$($values['LIBOPUS_REF'])",
+  "--build-arg", "LIBOPUS_COMMIT=$($values['LIBOPUS_COMMIT'])",
   "--build-arg", "PROFILE=$Profile",
   "--output", "type=local,dest=$OutDir",
   $Root

@@ -4,9 +4,9 @@ Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg a
 
 The upstream `ffmpeg` CLI is not linked. Each profile enables only the FFmpeg components it needs and links a small runner against public `libav*` APIs. Pthreads are disabled, so the browser runtime needs neither SharedArrayBuffer nor cross-origin isolation.
 
-## v1.5.0 profiles
+## v1.6.0 profiles
 
-- `video-compressor`: decode/filter/encode to H.264 + AAC MP4; links x264.
+- `video-compressor`: decode/filter/encode to H.264 + AAC MP4 or VP9 + Opus WebM; links x264, libvpx, and Opus. It measures source video bitrate from actual demuxed video-packet bytes, uses WORKERFS input, and applies display-matrix autorotation before resize/encode.
 - `lossless-video-cutter`: packet-level stream copy with no decoder, encoder, filter, or x264 linked into the final Wasm. Blob/File input is exposed through Emscripten WORKERFS so the whole source file is not copied into MEMFS first.
 - `media-inspector`: structured JSON inspection of container, codec, FPS, bitrate, metadata, chapters, subtitles, rotation, audio layout, and HDR signals without decoding frames. WORKERFS keeps large input files out of MEMFS.
 - `video-contact-sheet`: seek-based 12/24/48-frame sampling, video decode, rotation-aware RGB scaling, and one PPM contact sheet plus optional JSON timestamps.
@@ -24,8 +24,8 @@ Video Contact Sheet exposes `BrowserFFmpeg.videoContactSheetArgs({ input, output
 
 ## Public releases
 
-A v1.5.0 tag rebuilds and smoke-tests all six profiles and publishes profile-specific binary ZIPs, build information, SHA-256 checksums, and one exact corresponding-source archive.
+A v1.6.0 tag rebuilds and smoke-tests all six profiles and publishes profile-specific binary ZIPs, build information, SHA-256 checksums, and one exact corresponding-source archive.
 
 ## Licensing
 
-The root MIT license covers this repository's original builder/runtime source. It does **not** relicense generated `ffmpeg.wasm`. `video-compressor` is GPL-2.0-or-later because it enables GPL FFmpeg components and links x264. `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` enable no GPL-only FFmpeg component and are LGPL-2.1-or-later. The WebP bundle also carries libwebp notices. See `THIRD_PARTY_NOTICES.md` and `docs/LICENSES.md`.
+The root MIT license covers this repository's original builder/runtime source. It does **not** relicense generated `ffmpeg.wasm`. `video-compressor` is GPL-2.0-or-later because it enables GPL FFmpeg components and links x264. `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` enable no GPL-only FFmpeg component and are LGPL-2.1-or-later. The WebP bundle also carries libwebp notices. The video-compressor bundle additionally carries libvpx and Opus notices/patent grants. See `THIRD_PARTY_NOTICES.md` and `docs/LICENSES.md`.

@@ -60,10 +60,14 @@ FFMPEG_SRC="$WORK_DIR/ffmpeg-${FFMPEG_REF}"
 X264_SRC="$WORK_DIR/x264-${X264_COMMIT:0:12}"
 EMSCRIPTEN_SRC="$WORK_DIR/emscripten-${EMSCRIPTEN_REF}"
 LIBWEBP_SRC="$WORK_DIR/libwebp-${LIBWEBP_REF}"
+LIBVPX_SRC="$WORK_DIR/libvpx-${LIBVPX_REF}"
+LIBOPUS_SRC="$WORK_DIR/opus-${LIBOPUS_REF}"
 fetch_exact "FFmpeg" "$FFMPEG_REPOSITORY" "" "$FFMPEG_COMMIT" "$FFMPEG_SRC"
 fetch_exact "x264" "$X264_REPOSITORY" "$X264_FALLBACK_REPOSITORY" "$X264_COMMIT" "$X264_SRC"
 fetch_exact "Emscripten" "$EMSCRIPTEN_REPOSITORY" "" "$EMSCRIPTEN_COMMIT" "$EMSCRIPTEN_SRC"
 fetch_exact "libwebp" "$LIBWEBP_REPOSITORY" "$LIBWEBP_FALLBACK_REPOSITORY" "$LIBWEBP_COMMIT" "$LIBWEBP_SRC"
+fetch_exact "libvpx" "$LIBVPX_REPOSITORY" "$LIBVPX_FALLBACK_REPOSITORY" "$LIBVPX_COMMIT" "$LIBVPX_SRC"
+fetch_exact "Opus" "$LIBOPUS_REPOSITORY" "$LIBOPUS_FALLBACK_REPOSITORY" "$LIBOPUS_COMMIT" "$LIBOPUS_SRC"
 
 [[ -s "$FFMPEG_SRC/LICENSE.md" ]] || fail "FFmpeg LICENSE.md missing from source checkout"
 [[ -s "$FFMPEG_SRC/COPYING.GPLv2" ]] || fail "FFmpeg COPYING.GPLv2 missing from source checkout"
@@ -73,11 +77,13 @@ fetch_exact "libwebp" "$LIBWEBP_REPOSITORY" "$LIBWEBP_FALLBACK_REPOSITORY" "$LIB
 [[ -s "$EMSCRIPTEN_SRC/system/lib/libc/musl/COPYRIGHT" ]] || fail "Emscripten musl COPYRIGHT missing from source checkout"
 [[ -s "$EMSCRIPTEN_SRC/system/lib/compiler-rt/LICENSE.TXT" ]] || fail "Emscripten compiler-rt LICENSE.TXT missing from source checkout"
 [[ -s "$LIBWEBP_SRC/COPYING" ]] || fail "libwebp COPYING missing from source checkout"
+[[ -s "$LIBVPX_SRC/LICENSE" ]] || fail "libvpx LICENSE missing from source checkout"
+[[ -s "$LIBOPUS_SRC/COPYING" ]] || fail "Opus COPYING missing from source checkout"
 
 write_buildinfo() {
   local profile="$1"
   local output="$2"
-  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_LIBWEBP PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
+  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_LIBVPX PROFILE_USE_LIBOPUS PROFILE_USE_LIBWEBP PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
   local -a PROFILE_REQUIRED_CONFIG PROFILE_LINK_LIBS
   # shellcheck disable=SC1090
   source "$ROOT/profiles/$profile/profile.env"
@@ -92,6 +98,8 @@ write_buildinfo() {
     echo "Generated core license: $PROFILE_BINARY_LICENSE"
     echo "Output: $PROFILE_OUTPUT_DESCRIPTION"
     echo "x264 linked into this profile: $([[ "$PROFILE_USE_X264" == "1" ]] && echo yes || echo no)"
+    echo "libvpx linked into this profile: $([[ "$PROFILE_USE_LIBVPX" == "1" ]] && echo yes || echo no)"
+    echo "Opus linked into this profile: $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo yes || echo no)"
     echo "libwebp linked into this profile: $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo yes || echo no)"
     echo "WORKERFS input enabled: $([[ "$PROFILE_USE_WORKERFS" == "1" ]] && echo yes || echo no)"
     echo
@@ -113,6 +121,16 @@ write_buildinfo() {
     echo "libwebp commit: $LIBWEBP_COMMIT"
     echo "libwebp repository: $LIBWEBP_REPOSITORY"
     echo "libwebp fallback repository: $LIBWEBP_FALLBACK_REPOSITORY"
+    echo
+    echo "libvpx ref: $LIBVPX_REF"
+    echo "libvpx commit: $LIBVPX_COMMIT"
+    echo "libvpx repository: $LIBVPX_REPOSITORY"
+    echo "libvpx fallback repository: $LIBVPX_FALLBACK_REPOSITORY"
+    echo
+    echo "Opus ref: $LIBOPUS_REF"
+    echo "Opus commit: $LIBOPUS_COMMIT"
+    echo "Opus repository: $LIBOPUS_REPOSITORY"
+    echo "Opus fallback repository: $LIBOPUS_FALLBACK_REPOSITORY"
     echo
     echo "FFmpeg base configure arguments:"
     cat <<'ARGS'
@@ -151,6 +169,14 @@ ARGS
 --chroma-format=420
 ARGS
     fi
+    if [[ "$PROFILE_USE_LIBVPX" == "1" ]]; then
+      echo
+      echo "libvpx configure: VP9 encoder-only, static, single-threaded; see scripts/build-libvpx.sh"
+    fi
+    if [[ "$PROFILE_USE_LIBOPUS" == "1" ]]; then
+      echo
+      echo "Opus configure: static, tests/programs/intrinsics disabled; see scripts/build-libopus.sh"
+    fi
     if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
       echo
       echo "libwebp configure arguments:"
@@ -178,7 +204,7 @@ make_binary_zip() {
   local profile="$1"
   local buildinfo="$2"
   local DIST="$ROOT/dist/$profile"
-  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_LIBWEBP PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
+  local PROFILE_DISPLAY_NAME PROFILE_USE_X264 PROFILE_USE_LIBVPX PROFILE_USE_LIBOPUS PROFILE_USE_LIBWEBP PROFILE_USE_WORKERFS PROFILE_BINARY_LICENSE PROFILE_OUTPUT_DESCRIPTION PROFILE_CAPABILITIES_JSON
   local -a PROFILE_REQUIRED_CONFIG PROFILE_LINK_LIBS
   local binary_dir="$WORK_DIR/binary-$profile"
   local binary_zip="$RELEASE_DIR/ffmpeg-wasm-${profile}-v${BUILDER_VERSION}.zip"
@@ -203,6 +229,13 @@ make_binary_zip() {
   fi
   if [[ "$PROFILE_USE_X264" == "1" ]]; then
     cp "$X264_SRC/COPYING" "$binary_dir/LICENSES/x264-COPYING"
+  fi
+  if [[ "$PROFILE_USE_LIBVPX" == "1" ]]; then
+    cp "$LIBVPX_SRC/LICENSE" "$binary_dir/LICENSES/libvpx-LICENSE"
+    [[ ! -s "$LIBVPX_SRC/PATENTS" ]] || cp "$LIBVPX_SRC/PATENTS" "$binary_dir/LICENSES/libvpx-PATENTS"
+  fi
+  if [[ "$PROFILE_USE_LIBOPUS" == "1" ]]; then
+    cp "$LIBOPUS_SRC/COPYING" "$binary_dir/LICENSES/Opus-COPYING"
   fi
   if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
     cp "$LIBWEBP_SRC/COPYING" "$binary_dir/LICENSES/libwebp-COPYING"
@@ -239,6 +272,8 @@ mv "$FFMPEG_SRC" "$SOURCE_ROOT/ffmpeg-${FFMPEG_REF}"
 mv "$X264_SRC" "$SOURCE_ROOT/x264-${X264_COMMIT:0:12}"
 mv "$EMSCRIPTEN_SRC" "$SOURCE_ROOT/emscripten-${EMSCRIPTEN_REF}"
 mv "$LIBWEBP_SRC" "$SOURCE_ROOT/libwebp-${LIBWEBP_REF}"
+mv "$LIBVPX_SRC" "$SOURCE_ROOT/libvpx-${LIBVPX_REF}"
+mv "$LIBOPUS_SRC" "$SOURCE_ROOT/opus-${LIBOPUS_REF}"
 cp "$RELEASE_DIR"/BUILDINFO-*.txt "$SOURCE_ROOT/"
 
 BUILDER_COPY="$SOURCE_ROOT/builder-v${BUILDER_VERSION}"
@@ -260,6 +295,8 @@ This archive contains:
 - exact x264 source at $X264_COMMIT (used by profiles that link x264)
 - exact Emscripten source at $EMSCRIPTEN_COMMIT
 - exact libwebp source at $LIBWEBP_COMMIT (used by animated-WebP profile)
+- exact libvpx source at $LIBVPX_COMMIT (used by video-compressor VP9 output)
+- exact Opus source at $LIBOPUS_COMMIT (used by video-compressor WebM audio)
 - the FFmpeg WASM Builder recipe at version $BUILDER_VERSION
 - profile-specific BUILDINFO files
 

@@ -5,13 +5,40 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.5.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.5.0.zip
-ffmpeg-wasm-media-inspector-v1.5.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.5.0.zip
-ffmpeg-wasm-video-to-gif-v1.5.0.zip
-ffmpeg-wasm-video-to-webp-v1.5.0.zip
+ffmpeg-wasm-video-compressor-v1.6.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.6.0.zip
+ffmpeg-wasm-media-inspector-v1.6.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.6.0.zip
+ffmpeg-wasm-video-to-gif-v1.6.0.zip
+ffmpeg-wasm-video-to-webp-v1.6.0.zip
 ```
+
+
+## Video Compressor
+
+Builder v1.6.0 adds VP9/Opus and inspection to the existing compact H.264/AAC profile. Keep the browser `File` on WORKERFS for both inspection and compression.
+
+```js
+const input = "/workerfs/input.mp4";
+const reportPath = "/inspect.json";
+const inspected = await runner.run({
+  files: [{ name: input, data: file, workerfs: true }],
+  outputs: [reportPath],
+  args: BrowserFFmpeg.videoCompressorInspectArgs({ input, output: reportPath })
+});
+const report = BrowserFFmpeg.decodeJsonOutput(inspected, reportPath);
+
+const output = "/output.webm";
+const compressed = await runner.run({
+  files: [{ name: input, data: file, workerfs: true }],
+  outputs: [output],
+  args: BrowserFFmpeg.videoCompressorArgs({
+    input, output, codec: "vp9", videoBitrate: report.video.bitRateKbps
+  })
+});
+```
+
+The inspection bitrate is calculated from actual video-stream packet bytes and stream duration. Display-matrix rotation is applied to pixels before resizing/encoding.
 
 The profile bundle contains `ffmpeg.js`, `ffmpeg.wasm`, gzip copies, `manifest.json`, `browser-ffmpeg.js`, `BUILDINFO.txt`, and license notices.
 

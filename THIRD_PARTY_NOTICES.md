@@ -29,3 +29,11 @@ Emscripten is available under the MIT and University of Illinois/NCSA Open Sourc
 The root MIT license applies to the Builder's original source only and does **not** relicense generated `ffmpeg.wasm`. Every binary bundle includes profile-specific `BUILDINFO.txt`, upstream notices, and a pointer to the same tagged release's corresponding-source archive.
 
 This file is engineering documentation, not legal advice.
+
+## libvpx (VP9)
+
+`video-compressor` links libvpx only to provide VP9/WebM output (`PROFILE_USE_LIBVPX=1`). The pinned libvpx source is distributed under a BSD-style license; upstream also provides a separate patent grant in `PATENTS`. Other profiles keep libvpx disabled so it does not add to their Wasm payload.
+
+## Opus
+
+`video-compressor` links libopus only for Opus audio when WebM/VP9 is selected (`PROFILE_USE_LIBOPUS=1`). Opus is distributed under a three-clause BSD license with the upstream royalty-free patent grant described in its `COPYING` file. Other profiles keep libopus disabled.

@@ -28,8 +28,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *
- * Scope: one best video stream, optional one best audio stream, H.264 (x264)
- * + AAC in MP4, resize/FPS/quality controls. It is deliberately not a drop-in
+ * Scope: one best video stream, optional one best audio stream, H.264/AAC MP4
+ * or VP9/Opus WebM, measured stream bitrate inspection, autorotation, and resize/FPS/quality controls. It is deliberately not a drop-in
  * replacement for the full ffmpeg CLI.
  */
 
@@ -48,17 +48,21 @@
 #include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
+#include <libavutil/display.h>
 #include <libavutil/error.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.5.0"
+#define RUNNER_VERSION "1.6.0"
 
 typedef struct RunnerOptions {
     const char *input_path;
     const char *output_path;
+    const char *inspect_output_path;
+    const char *codec;
+    const char *speed;
     const char *preset;
     int crf;
     int video_bitrate_kbps;
@@ -83,6 +87,10 @@ typedef struct StreamContext {
     AVFilterGraph *filter_graph;
     AVFilterContext *buffersrc_ctx;
     AVFilterContext *buffersink_ctx;
+    int has_display_matrix;
+    int32_t display_matrix[9];
+    double display_rotation_degrees;
+    double autorotate_degrees;
 } StreamContext;
 
 typedef struct RunnerContext {
@@ -109,21 +117,25 @@ static void print_usage(const char *program)
     fprintf(stderr,
         "FFmpeg WASM video runner %s\n"
         "Usage:\n"
-        "  %s --input INPUT --output OUTPUT [options]\n\n"
+        "  %s --input INPUT --output OUTPUT [options]\n"
+        "  %s --input INPUT --inspect-output REPORT.json\n\n"
         "Options:\n"
-        "  --max-width N          Maximum output width (0 = source)\n"
-        "  --max-height N         Maximum output height (0 = source)\n"
+        "  --codec NAME           h264 (MP4) or vp9 (WebM), default h264\n"
+        "  --speed NAME           fastest, fast, balanced, quality (default fast)\n"
+        "  --max-width N          Maximum display-oriented output width (0 = source)\n"
+        "  --max-height N         Maximum display-oriented output height (0 = source)\n"
         "  --allow-upscale        Allow dimensions larger than the source\n"
         "  --fps N                Output FPS (0 = preserve source timing)\n"
-        "  --crf N                x264 CRF, 0-51 (default 28)\n"
-        "  --video-bitrate N      Video bitrate in kbit/s; overrides CRF\n"
-        "  --preset NAME          x264 preset (default veryfast)\n"
-        "  --audio-bitrate N      AAC bitrate in kbit/s (default 128)\n"
+        "  --crf N                Encoder quality fallback when bitrate is 0\n"
+        "  --video-bitrate N      Video bitrate in kbit/s\n"
+        "  --preset NAME          Legacy x264 preset (accepted for compatibility)\n"
+        "  --audio-bitrate N      AAC/Opus bitrate in kbit/s (default 128)\n"
         "  --no-audio             Drop audio\n"
         "  --no-faststart         Do not move MP4 metadata to the front\n"
+        "  --inspect-output PATH  Measure source stream information and write JSON\n"
         "  --version              Print runner/FFmpeg version\n"
         "  --help                 Show this help\n",
-        RUNNER_VERSION, program);
+        RUNNER_VERSION, program, program);
 }
 
 static int parse_int(const char *value, int minimum, int maximum, int *out)
@@ -157,7 +169,9 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
     int i;
 
     memset(options, 0, sizeof(*options));
-    options->preset = "veryfast";
+    options->codec = "h264";
+    options->speed = "fast";
+    options->preset = NULL;
     options->crf = 28;
     options->audio_bitrate_kbps = 128;
     options->faststart = 1;
@@ -195,6 +209,9 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
 
         if (!strcmp(arg, "--input")) options->input_path = value;
         else if (!strcmp(arg, "--output")) options->output_path = value;
+        else if (!strcmp(arg, "--inspect-output")) options->inspect_output_path = value;
+        else if (!strcmp(arg, "--codec")) options->codec = value;
+        else if (!strcmp(arg, "--speed")) options->speed = value;
         else if (!strcmp(arg, "--preset")) options->preset = value;
         else if (!strcmp(arg, "--crf")) {
             if (parse_int(value, 0, 51, &options->crf) < 0) goto invalid;
@@ -219,11 +236,85 @@ invalid:
         return -1;
     }
 
-    if (!options->input_path || !options->output_path) {
-        fprintf(stderr, "--input and --output are required.\n");
+    if (!options->input_path || (!options->output_path && !options->inspect_output_path)) {
+        fprintf(stderr, "--input and either --output or --inspect-output are required.\n");
+        return -1;
+    }
+    if (options->output_path && options->inspect_output_path) {
+        fprintf(stderr, "--output and --inspect-output cannot be used together.\n");
+        return -1;
+    }
+    if (strcmp(options->codec, "h264") && strcmp(options->codec, "vp9")) {
+        fprintf(stderr, "--codec must be h264 or vp9.\n");
+        return -1;
+    }
+    if (strcmp(options->speed, "fastest") && strcmp(options->speed, "fast") &&
+        strcmp(options->speed, "balanced") && strcmp(options->speed, "quality")) {
+        fprintf(stderr, "--speed must be fastest, fast, balanced, or quality.\n");
         return -1;
     }
     return 0;
+}
+
+static const AVPacketSideData *codec_side_data(const AVCodecParameters *par,
+                                                enum AVPacketSideDataType type)
+{
+    if (!par || !par->coded_side_data || par->nb_coded_side_data <= 0)
+        return NULL;
+    return av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data, type);
+}
+
+/* Match fftools/cmdutils.c rotation normalization used by FFmpeg autorotate. */
+static double get_display_rotation_degrees(const int32_t *display_matrix)
+{
+    double theta = 0.0;
+    if (display_matrix)
+        theta = round(av_display_rotation_get(display_matrix));
+    return isfinite(theta) ? theta : 0.0;
+}
+
+/* Match fftools/cmdutils.c get_rotation() used by FFmpeg autorotate. */
+static double get_autorotate_degrees(const int32_t *display_matrix)
+{
+    double theta = 0.0;
+    if (display_matrix)
+        theta = -round(av_display_rotation_get(display_matrix));
+    if (!isfinite(theta))
+        return 0.0;
+    theta -= 360.0 * floor(theta / 360.0 + 0.9 / 360.0);
+    return theta;
+}
+
+static void capture_display_matrix(StreamContext *stream, const AVCodecParameters *par)
+{
+    const AVPacketSideData *side = codec_side_data(par, AV_PKT_DATA_DISPLAYMATRIX);
+    stream->has_display_matrix = 0;
+    stream->display_rotation_degrees = 0.0;
+    stream->autorotate_degrees = 0.0;
+    if (!side || side->size < 9 * sizeof(int32_t))
+        return;
+    memcpy(stream->display_matrix, side->data, 9 * sizeof(int32_t));
+    stream->has_display_matrix = 1;
+    stream->display_rotation_degrees = get_display_rotation_degrees(stream->display_matrix);
+    stream->autorotate_degrees = get_autorotate_degrees(stream->display_matrix);
+}
+
+static int rotation_swaps_dimensions(const StreamContext *stream)
+{
+    return stream->has_display_matrix &&
+           (fabs(stream->autorotate_degrees - 90.0) < 1.0 ||
+            fabs(stream->autorotate_degrees - 270.0) < 1.0);
+}
+
+static void display_source_dimensions(const StreamContext *stream, int *width, int *height)
+{
+    *width = stream->dec_ctx->width;
+    *height = stream->dec_ctx->height;
+    if (rotation_swaps_dimensions(stream)) {
+        int temp = *width;
+        *width = *height;
+        *height = temp;
+    }
 }
 
 static void compute_output_dimensions(const RunnerOptions *options,
@@ -343,21 +434,56 @@ static int open_decoder(RunnerContext *ctx, int stream_index, StreamContext *str
     return 0;
 }
 
+static const char *x264_preset_for_speed(const RunnerOptions *options)
+{
+    if (options->preset && *options->preset)
+        return options->preset;
+    if (!strcmp(options->speed, "fastest")) return "ultrafast";
+    if (!strcmp(options->speed, "balanced")) return "medium";
+    if (!strcmp(options->speed, "quality")) return "slow";
+    return "veryfast";
+}
+
+static const char *vp9_cpu_used_for_speed(const RunnerOptions *options)
+{
+    if (!strcmp(options->speed, "fastest")) return "8";
+    if (!strcmp(options->speed, "balanced")) return "4";
+    if (!strcmp(options->speed, "quality")) return "2";
+    return "6";
+}
+
+static const char *vp9_lag_in_frames_for_speed(const RunnerOptions *options)
+{
+    /*
+     * A small look-ahead materially improves VP9 compression efficiency.
+     * Keep the default browser-friendly while allowing the slower modes to
+     * spend more memory/time for better compression.
+     */
+    if (!strcmp(options->speed, "fastest")) return "0";
+    if (!strcmp(options->speed, "balanced")) return "16";
+    if (!strcmp(options->speed, "quality")) return "25";
+    return "8";
+}
+
 static int setup_video_output(RunnerContext *ctx)
 {
     StreamContext *stream = &ctx->video;
     AVStream *input_stream = ctx->ifmt_ctx->streams[stream->input_index];
     AVStream *output_stream;
-    const AVCodec *encoder = avcodec_find_encoder_by_name("libx264");
+    const int use_vp9 = !strcmp(ctx->options.codec, "vp9");
+    const char *encoder_name = use_vp9 ? "libvpx-vp9" : "libx264";
+    const AVCodec *encoder = avcodec_find_encoder_by_name(encoder_name);
     AVDictionary *encoder_options = NULL;
     AVRational frame_rate;
     int ret;
+    int source_width;
+    int source_height;
     int width;
     int height;
     char crf_text[16];
 
     if (!encoder) {
-        av_log(NULL, AV_LOG_ERROR, "libx264 encoder is not available in this WASM build\n");
+        av_log(NULL, AV_LOG_ERROR, "%s encoder is not available in this WASM build\n", encoder_name);
         return AVERROR_ENCODER_NOT_FOUND;
     }
 
@@ -369,9 +495,8 @@ static int setup_video_output(RunnerContext *ctx)
     if (!stream->enc_ctx)
         return AVERROR(ENOMEM);
 
-    compute_output_dimensions(&ctx->options,
-                              stream->dec_ctx->width, stream->dec_ctx->height,
-                              &width, &height);
+    display_source_dimensions(stream, &source_width, &source_height);
+    compute_output_dimensions(&ctx->options, source_width, source_height, &width, &height);
 
     frame_rate = ctx->options.fps > 0.0
         ? av_d2q(ctx->options.fps, 1001000)
@@ -387,7 +512,7 @@ static int setup_video_output(RunnerContext *ctx)
     stream->enc_ctx->time_base = av_inv_q(frame_rate);
     stream->enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
     stream->enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
-    stream->enc_ctx->max_b_frames = 2;
+    stream->enc_ctx->max_b_frames = use_vp9 ? 0 : 2;
     stream->enc_ctx->thread_count = 1;
     stream->enc_ctx->thread_type = 0;
 
@@ -397,7 +522,14 @@ static int setup_video_output(RunnerContext *ctx)
         snprintf(crf_text, sizeof(crf_text), "%d", ctx->options.crf);
         av_dict_set(&encoder_options, "crf", crf_text, 0);
     }
-    av_dict_set(&encoder_options, "preset", ctx->options.preset, 0);
+
+    if (use_vp9) {
+        av_dict_set(&encoder_options, "deadline", "good", 0);
+        av_dict_set(&encoder_options, "cpu-used", vp9_cpu_used_for_speed(&ctx->options), 0);
+        av_dict_set(&encoder_options, "lag-in-frames", vp9_lag_in_frames_for_speed(&ctx->options), 0);
+    } else {
+        av_dict_set(&encoder_options, "preset", x264_preset_for_speed(&ctx->options), 0);
+    }
 
     if (ctx->ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
         stream->enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -405,7 +537,7 @@ static int setup_video_output(RunnerContext *ctx)
     ret = avcodec_open2(stream->enc_ctx, encoder, &encoder_options);
     av_dict_free(&encoder_options);
     if (ret < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Could not open libx264 encoder\n");
+        av_log(NULL, AV_LOG_ERROR, "Could not open %s encoder\n", encoder_name);
         return ret;
     }
 
@@ -417,11 +549,11 @@ static int setup_video_output(RunnerContext *ctx)
     stream->output_index = output_stream->index;
 
     av_log(NULL, AV_LOG_INFO,
-           "video: %dx%d -> %dx%d, %.3f fps, %s=%d\n",
+           "video: %dx%d display=%dx%d rotation=%.0f -> %dx%d, %.3f fps, %s, %d kbit/s\n",
            stream->dec_ctx->width, stream->dec_ctx->height,
-           width, height, av_q2d(frame_rate),
-           ctx->options.video_bitrate_kbps > 0 ? "kbit/s" : "crf",
-           ctx->options.video_bitrate_kbps > 0 ? ctx->options.video_bitrate_kbps : ctx->options.crf);
+           source_width, source_height, stream->display_rotation_degrees,
+           width, height, av_q2d(frame_rate), encoder_name,
+           ctx->options.video_bitrate_kbps);
     return 0;
 }
 
@@ -429,7 +561,8 @@ static int setup_audio_output(RunnerContext *ctx)
 {
     StreamContext *stream = &ctx->audio;
     AVStream *output_stream;
-    const AVCodec *encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
+    const int use_opus = !strcmp(ctx->options.codec, "vp9");
+    const AVCodec *encoder = use_opus ? avcodec_find_encoder_by_name("libopus") : avcodec_find_encoder(AV_CODEC_ID_AAC);
     int channels;
     int ret;
 
@@ -466,7 +599,7 @@ static int setup_audio_output(RunnerContext *ctx)
 
     ret = avcodec_open2(stream->enc_ctx, encoder, NULL);
     if (ret < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Could not open AAC encoder\n");
+        av_log(NULL, AV_LOG_ERROR, "Could not open %s encoder\n", use_opus ? "libopus" : "AAC");
         return ret;
     }
 
@@ -635,21 +768,79 @@ end:
     return ret;
 }
 
+static int append_filter(char *buffer, size_t buffer_size, const char *value)
+{
+    size_t used = strlen(buffer);
+    if (used && used + 1 < buffer_size) {
+        buffer[used++] = ',';
+        buffer[used] = '\0';
+    }
+    if (used + strlen(value) + 1 > buffer_size)
+        return AVERROR(ENOSPC);
+    strcat(buffer, value);
+    return 0;
+}
+
+static int append_autorotate_filter(const StreamContext *stream, char *buffer, size_t buffer_size)
+{
+    char spec[64];
+    double theta;
+    int ret;
+
+    if (!stream->has_display_matrix)
+        return 0;
+    theta = stream->autorotate_degrees;
+
+    if (fabs(theta - 90.0) < 1.0) {
+        snprintf(spec, sizeof(spec), "transpose=%s",
+                 stream->display_matrix[3] > 0 ? "cclock_flip" : "clock");
+        return append_filter(buffer, buffer_size, spec);
+    }
+    if (fabs(theta - 180.0) < 1.0) {
+        if (stream->display_matrix[0] < 0) {
+            ret = append_filter(buffer, buffer_size, "hflip");
+            if (ret < 0) return ret;
+        }
+        if (stream->display_matrix[4] < 0)
+            return append_filter(buffer, buffer_size, "vflip");
+        return 0;
+    }
+    if (fabs(theta - 270.0) < 1.0) {
+        snprintf(spec, sizeof(spec), "transpose=%s",
+                 stream->display_matrix[3] < 0 ? "clock_flip" : "cclock");
+        return append_filter(buffer, buffer_size, spec);
+    }
+    if (fabs(theta) < 1.0 && stream->display_matrix[4] < 0)
+        return append_filter(buffer, buffer_size, "vflip");
+
+    if (fabs(theta) >= 1.0)
+        av_log(NULL, AV_LOG_WARNING, "Unsupported odd display rotation %.2f degrees; keeping coded orientation\n", theta);
+    return 0;
+}
+
 static int init_filters(RunnerContext *ctx)
 {
-    char video_filter[512];
+    char video_filter[768] = {0};
+    char part[256];
     char audio_filter[128];
     int ret;
 
+    ret = append_autorotate_filter(&ctx->video, video_filter, sizeof(video_filter));
+    if (ret < 0)
+        return ret;
+
     if (ctx->options.fps > 0.0) {
-        snprintf(video_filter, sizeof(video_filter),
-                 "fps=fps=%.6f,scale=%d:%d:flags=bicubic,format=pix_fmts=yuv420p,setsar=1",
-                 ctx->options.fps, ctx->video.enc_ctx->width, ctx->video.enc_ctx->height);
-    } else {
-        snprintf(video_filter, sizeof(video_filter),
-                 "scale=%d:%d:flags=bicubic,format=pix_fmts=yuv420p,setsar=1",
-                 ctx->video.enc_ctx->width, ctx->video.enc_ctx->height);
+        snprintf(part, sizeof(part), "fps=fps=%.6f", ctx->options.fps);
+        ret = append_filter(video_filter, sizeof(video_filter), part);
+        if (ret < 0) return ret;
     }
+    snprintf(part, sizeof(part), "scale=%d:%d:flags=bicubic", ctx->video.enc_ctx->width, ctx->video.enc_ctx->height);
+    ret = append_filter(video_filter, sizeof(video_filter), part);
+    if (ret < 0) return ret;
+    ret = append_filter(video_filter, sizeof(video_filter), "format=pix_fmts=yuv420p");
+    if (ret < 0) return ret;
+    ret = append_filter(video_filter, sizeof(video_filter), "setsar=1");
+    if (ret < 0) return ret;
 
     ret = init_filter(&ctx->video, video_filter);
     if (ret < 0) {
@@ -801,6 +992,160 @@ static void report_progress(RunnerContext *ctx, const AVPacket *packet)
     }
 }
 
+typedef struct PacketMeasure {
+    int stream_index;
+    int64_t bytes;
+    int64_t first_us;
+    int64_t last_us;
+    int seen_timestamp;
+} PacketMeasure;
+
+static void measure_packet(PacketMeasure *measure, const AVPacket *packet, const AVStream *stream)
+{
+    int64_t timestamp;
+    int64_t start_us;
+    int64_t end_us;
+
+    if (packet->stream_index != measure->stream_index)
+        return;
+    if (packet->size > 0)
+        measure->bytes += packet->size;
+
+    timestamp = packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts;
+    if (timestamp == AV_NOPTS_VALUE)
+        return;
+    start_us = av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q);
+    end_us = start_us;
+    if (packet->duration > 0)
+        end_us += av_rescale_q(packet->duration, stream->time_base, AV_TIME_BASE_Q);
+    if (!measure->seen_timestamp) {
+        measure->first_us = start_us;
+        measure->last_us = end_us;
+        measure->seen_timestamp = 1;
+    } else {
+        measure->first_us = FFMIN(measure->first_us, start_us);
+        measure->last_us = FFMAX(measure->last_us, end_us);
+    }
+}
+
+static double stream_duration_seconds(const AVFormatContext *format, const AVStream *stream,
+                                      const PacketMeasure *measure)
+{
+    if (stream && stream->duration != AV_NOPTS_VALUE && stream->duration > 0)
+        return stream->duration * av_q2d(stream->time_base);
+    if (measure && measure->seen_timestamp && measure->last_us > measure->first_us)
+        return (measure->last_us - measure->first_us) / (double)AV_TIME_BASE;
+    if (format->duration != AV_NOPTS_VALUE && format->duration > 0)
+        return format->duration / (double)AV_TIME_BASE;
+    return NAN;
+}
+
+static int64_t measured_kbps(const PacketMeasure *measure, double duration_seconds)
+{
+    if (!measure || measure->bytes <= 0 || !isfinite(duration_seconds) || duration_seconds <= 0.0)
+        return 0;
+    return (int64_t)llround((measure->bytes * 8.0) / duration_seconds / 1000.0);
+}
+
+static int inspect_media(const RunnerOptions *options)
+{
+    AVFormatContext *format = NULL;
+    AVPacket *packet = NULL;
+    FILE *out = NULL;
+    int video_index;
+    int audio_index;
+    PacketMeasure video = {.stream_index = -1};
+    PacketMeasure audio = {.stream_index = -1};
+    int ret;
+    double duration;
+    double video_duration;
+    double audio_duration;
+    int64_t video_kbps;
+    int64_t audio_kbps;
+    AVStream *video_stream;
+    AVStream *audio_stream = NULL;
+    const AVPacketSideData *side;
+    int32_t matrix[9];
+    int has_matrix = 0;
+    double rotation = 0.0;
+    int display_width;
+    int display_height;
+    AVRational fps;
+
+    ret = avformat_open_input(&format, options->input_path, NULL, NULL);
+    if (ret < 0) goto end;
+    ret = avformat_find_stream_info(format, NULL);
+    if (ret < 0) goto end;
+
+    video_index = av_find_best_stream(format, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
+    if (video_index < 0) { ret = video_index; goto end; }
+    audio_index = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, video_index, NULL, 0);
+    video.stream_index = video_index;
+    audio.stream_index = audio_index;
+    video_stream = format->streams[video_index];
+    if (audio_index >= 0) audio_stream = format->streams[audio_index];
+
+    packet = av_packet_alloc();
+    if (!packet) { ret = AVERROR(ENOMEM); goto end; }
+    while ((ret = av_read_frame(format, packet)) >= 0) {
+        measure_packet(&video, packet, video_stream);
+        if (audio_stream) measure_packet(&audio, packet, audio_stream);
+        av_packet_unref(packet);
+    }
+    if (ret == AVERROR_EOF) ret = 0;
+    if (ret < 0) goto end;
+
+    duration = format->duration > 0 ? format->duration / (double)AV_TIME_BASE : NAN;
+    video_duration = stream_duration_seconds(format, video_stream, &video);
+    audio_duration = audio_stream ? stream_duration_seconds(format, audio_stream, &audio) : NAN;
+    if (!isfinite(duration)) duration = video_duration;
+    video_kbps = measured_kbps(&video, video_duration);
+    audio_kbps = audio_stream ? measured_kbps(&audio, audio_duration) : 0;
+
+    display_width = video_stream->codecpar->width;
+    display_height = video_stream->codecpar->height;
+    side = codec_side_data(video_stream->codecpar, AV_PKT_DATA_DISPLAYMATRIX);
+    if (side && side->size >= 9 * sizeof(int32_t)) {
+        memcpy(matrix, side->data, sizeof(matrix));
+        has_matrix = 1;
+        rotation = get_display_rotation_degrees(matrix);
+        if (fabs(rotation - 90.0) < 1.0 || fabs(rotation - 270.0) < 1.0) {
+            int temp = display_width;
+            display_width = display_height;
+            display_height = temp;
+        }
+    }
+    fps = av_guess_frame_rate(format, video_stream, NULL);
+
+    out = fopen(options->inspect_output_path, "wb");
+    if (!out) { ret = AVERROR(errno); goto end; }
+    fprintf(out,
+            "{\"duration\":%.6f,\"video\":{\"codec\":\"%s\",\"width\":%d,\"height\":%d,"
+            "\"displayWidth\":%d,\"displayHeight\":%d,\"rotation\":%.0f,\"hasDisplayMatrix\":%s,"
+            "\"fps\":%.6f,\"bitRateKbps\":%lld,\"packetBytes\":%lld},\"audio\":",
+            isfinite(duration) ? duration : 0.0,
+            avcodec_get_name(video_stream->codecpar->codec_id),
+            video_stream->codecpar->width, video_stream->codecpar->height,
+            display_width, display_height, rotation, has_matrix ? "true" : "false",
+            (fps.num > 0 && fps.den > 0) ? av_q2d(fps) : 0.0,
+            (long long)video_kbps, (long long)video.bytes);
+    if (audio_stream) {
+        fprintf(out,
+                "{\"codec\":\"%s\",\"bitRateKbps\":%lld,\"packetBytes\":%lld}",
+                avcodec_get_name(audio_stream->codecpar->codec_id),
+                (long long)audio_kbps, (long long)audio.bytes);
+    } else {
+        fputs("null", out);
+    }
+    fputs("}\n", out);
+
+end:
+    if (out) fclose(out);
+    av_packet_free(&packet);
+    avformat_close_input(&format);
+    return ret;
+}
+
 static int open_input(RunnerContext *ctx)
 {
     int video_index;
@@ -828,6 +1173,7 @@ static int open_input(RunnerContext *ctx)
     ret = open_decoder(ctx, video_index, &ctx->video);
     if (ret < 0)
         return ret;
+    capture_display_matrix(&ctx->video, ctx->ifmt_ctx->streams[video_index]->codecpar);
     ctx->have_video = 1;
 
     if (!ctx->options.no_audio) {
@@ -849,7 +1195,9 @@ static int open_output(RunnerContext *ctx)
     AVDictionary *mux_options = NULL;
     int ret;
 
-    avformat_alloc_output_context2(&ctx->ofmt_ctx, NULL, "mp4", ctx->options.output_path);
+    avformat_alloc_output_context2(&ctx->ofmt_ctx, NULL,
+                                   !strcmp(ctx->options.codec, "vp9") ? "webm" : "mp4",
+                                   ctx->options.output_path);
     if (!ctx->ofmt_ctx)
         return AVERROR_UNKNOWN;
 
@@ -870,7 +1218,7 @@ static int open_output(RunnerContext *ctx)
             return ret;
     }
 
-    if (ctx->options.faststart)
+    if (ctx->options.faststart && !strcmp(ctx->options.codec, "h264"))
         av_dict_set(&mux_options, "movflags", "+faststart", 0);
     ret = avformat_write_header(ctx->ofmt_ctx, &mux_options);
     av_dict_free(&mux_options);
@@ -975,6 +1323,13 @@ int main(int argc, char **argv)
     }
 
     av_log(NULL, AV_LOG_INFO, "ffmpeg-wasm-runner %s / FFmpeg %s\n", RUNNER_VERSION, av_version_info());
+
+    if (ctx.options.inspect_output_path) {
+        ret = inspect_media(&ctx.options);
+        if (ret < 0)
+            av_log(NULL, AV_LOG_ERROR, "Media inspection failed: %s\n", av_err2str(ret));
+        return ret < 0 ? 1 : 0;
+    }
 
     ret = open_input(&ctx);
     if (ret < 0)

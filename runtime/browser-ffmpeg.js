@@ -204,20 +204,30 @@
   }
 
   const videoCompressorArgs = (options = {}) => {
-    const args = ["--input", options.input || "/input.bin", "--output", options.output || "/output.mp4"];
+    const codec = String(options.codec || "h264");
+    if (!["h264", "vp9"].includes(codec)) throw new RangeError("Video Compressor codec must be h264 or vp9.");
+    const speed = String(options.speed || "fast");
+    if (!["fastest", "fast", "balanced", "quality"].includes(speed)) throw new RangeError("Video Compressor speed is invalid.");
+    const defaultOutput = codec === "vp9" ? "/output.webm" : "/output.mp4";
+    const args = ["--input", options.input || "/workerfs/input.bin", "--output", options.output || defaultOutput, "--codec", codec, "--speed", speed];
     const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
     add("--max-width", options.maxWidth ?? 0);
     add("--max-height", options.maxHeight ?? 0);
     add("--fps", options.fps ?? 0);
     add("--crf", options.crf ?? 28);
     if (options.videoBitrateKbps) add("--video-bitrate", options.videoBitrateKbps);
-    add("--preset", options.preset || "veryfast");
+    if (options.preset) add("--preset", options.preset);
     add("--audio-bitrate", options.audioBitrateKbps ?? 128);
     if (options.noAudio) args.push("--no-audio");
     if (options.allowUpscale) args.push("--allow-upscale");
     if (options.faststart === false) args.push("--no-faststart");
     return args;
   };
+
+  const videoCompressorInspectArgs = (options = {}) => [
+    "--input", options.input || "/workerfs/input.bin",
+    "--inspect-output", options.output || "/report.json"
+  ];
 
   const losslessVideoCutterArgs = (options = {}) => {
     const args = ["--input", options.input || "/workerfs/input.mp4", "--output", options.output || "/output.mp4"];
@@ -363,6 +373,7 @@
     loadHosted,
     loadEmbedded,
     videoCompressorArgs,
+    videoCompressorInspectArgs,
     losslessVideoCutterArgs,
     mediaInspectorArgs,
     videoContactSheetArgs,
