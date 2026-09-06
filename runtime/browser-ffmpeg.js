@@ -122,12 +122,18 @@
     }
   };
 
+  const createAbortError = (message = "FFmpeg WASM operation was cancelled.") => {
+    try { return new DOMException(message, "AbortError"); }
+    catch (_) { const error = new Error(message); error.name = "AbortError"; return error; }
+  };
+
   class FFmpegRunner {
     constructor(coreJsText, wasmBytes, revokeUrls = []) {
       this.coreJsText = coreJsText;
       this.wasmBytes = wasmBytes;
       this.revokeUrls = revokeUrls;
       this.disposed = false;
+      this.activeRuns = new Set();
     }
     async run(options = {}) {
       if (this.disposed) throw new Error("Runner has been disposed.");
@@ -136,6 +142,14 @@
       const outputs = Array.isArray(options.outputs) ? [...options.outputs] : [];
       const onLog = typeof options.onLog === "function" ? options.onLog : () => {};
       const onProgress = typeof options.onProgress === "function" ? options.onProgress : () => {};
+      const signal = options.signal && typeof options.signal.addEventListener === "function" ? options.signal : null;
+      if (signal?.aborted) throw createAbortError();
+      const recentLogs = [];
+      const rememberLog = (entry) => {
+        recentLogs.push(`[${entry.stream}] ${entry.message}`);
+        if (recentLogs.length > 40) recentLogs.shift();
+        onLog(entry);
+      };
       const files = [];
       const transfer = [];
       for (const file of Array.isArray(options.files) ? options.files : []) {
@@ -145,8 +159,6 @@
           if (!file.name.startsWith("/") || file.name.lastIndexOf("/") <= 0) {
             throw new Error("WORKERFS input names must include a mount directory, for example /workerfs/input.mp4.");
           }
-          // Blob/File is structured-cloned to the Worker. WORKERFS then reads only
-          // the requested slices instead of copying the whole media file into MEMFS.
           files.push({ name: file.name, data: file.data, workerfs: true });
           continue;
         }
@@ -154,33 +166,56 @@
         files.push({ name: file.name, data, workerfs: false });
         transfer.push(data);
       }
+      if (this.disposed) throw createAbortError("FFmpeg WASM runner was disposed.");
+      if (signal?.aborted) throw createAbortError();
       const wasmForRun = this.wasmBytes.slice(0);
       transfer.push(wasmForRun);
       return await new Promise((resolve, reject) => {
         const created = createWorker(this.coreJsText);
         const worker = created.worker;
-        const finish = () => { worker.terminate(); URL.revokeObjectURL(created.url); };
+        let settled = false;
+        const operation = { cancel: null };
+        const finish = () => {
+          if (settled) return false;
+          settled = true;
+          if (signal) signal.removeEventListener("abort", onAbort);
+          this.activeRuns.delete(operation);
+          worker.terminate();
+          URL.revokeObjectURL(created.url);
+          return true;
+        };
+        const fail = (error) => { if (finish()) reject(error); };
+        const succeed = (value) => { if (finish()) resolve(value); };
+        const onAbort = () => fail(createAbortError());
+        operation.cancel = (error = createAbortError("FFmpeg WASM runner was disposed.")) => fail(error);
+        this.activeRuns.add(operation);
+        if (signal) signal.addEventListener("abort", onAbort, { once: true });
         worker.onmessage = (event) => {
           const message = event.data;
-          if (message?.type === "log") { onLog({ stream: message.stream, message: message.message }); return; }
+          if (message?.type === "log") { rememberLog({ stream: message.stream, message: message.message }); return; }
           if (message?.type === "progress") { onProgress(message.progress); return; }
           if (message?.type === "done") {
-            finish();
-            resolve({ exitCode: message.exitCode, files: message.files.map((file) => ({ name: file.name, data: new Uint8Array(file.data) })) });
+            succeed({ exitCode: message.exitCode, files: message.files.map((file) => ({ name: file.name, data: new Uint8Array(file.data) })) });
             return;
           }
           if (message?.type === "error") {
-            finish();
-            const error = new Error(message.message); error.name = message.name || "Error"; error.stack = message.stack || error.stack; reject(error);
+            const tail = recentLogs.length ? `\nRecent FFmpeg log:\n${recentLogs.slice(-20).join("\n")}` : "";
+            const error = new Error(String(message.message || "FFmpeg WASM worker failed.") + tail);
+            error.name = message.name || "Error";
+            error.stack = (message.stack || error.stack || "") + tail;
+            fail(error);
           }
         };
-        worker.onerror = (event) => { finish(); reject(event.error || new Error(event.message || "FFmpeg WASM worker failed.")); };
+        worker.onerror = (event) => fail(event.error || new Error(event.message || "FFmpeg WASM worker failed."));
+        if (signal?.aborted) { onAbort(); return; }
         worker.postMessage({ wasmBytes: wasmForRun, args, files, outputs }, transfer);
       });
     }
     dispose() {
       if (this.disposed) return;
       this.disposed = true;
+      for (const operation of [...this.activeRuns]) operation.cancel();
+      this.activeRuns.clear();
       for (const url of this.revokeUrls) URL.revokeObjectURL(url);
       this.revokeUrls = [];
       this.coreJsText = "";
@@ -223,6 +258,33 @@
     if (options.faststart === false) args.push("--no-faststart");
     return args;
   };
+
+
+  const videoSpeedChangerArgs = (options = {}) => {
+    const rate = Number(options.rate ?? 1);
+    if (!Number.isFinite(rate) || rate < 0.25 || rate > 4) throw new RangeError("Video Speed Changer rate must be from 0.25 to 4.00.");
+    const crf = Number(options.crf ?? 23);
+    if (!Number.isInteger(crf) || crf < 0 || crf > 51) throw new RangeError("Video Speed Changer CRF must be an integer from 0 to 51.");
+    const audioBitrateKbps = Number(options.audioBitrateKbps ?? 128);
+    if (!Number.isInteger(audioBitrateKbps) || audioBitrateKbps < 8 || audioBitrateKbps > 1000000) throw new RangeError("Video Speed Changer audio bitrate is out of range.");
+    const args = [
+      "--input", options.input || "/workerfs/input.bin",
+      "--output", options.output || "/output.mp4",
+      "--codec", "h264",
+      "--rate", String(rate),
+      "--speed", String(options.encoderSpeed || "fast"),
+      "--crf", String(crf),
+      "--audio-bitrate", String(audioBitrateKbps)
+    ];
+    if (options.noAudio) args.push("--no-audio");
+    else if (options.preservePitch === false) args.push("--pitch-shift");
+    return args;
+  };
+
+  const videoSpeedChangerInspectArgs = (options = {}) => [
+    "--input", options.input || "/workerfs/input.bin",
+    "--inspect-output", options.output || "/inspect.json"
+  ];
 
   const videoCompressorInspectArgs = (options = {}) => [
     "--input", options.input || "/workerfs/input.bin",
@@ -373,6 +435,8 @@
     loadHosted,
     loadEmbedded,
     videoCompressorArgs,
+    videoSpeedChangerArgs,
+    videoSpeedChangerInspectArgs,
     videoCompressorInspectArgs,
     losslessVideoCutterArgs,
     mediaInspectorArgs,

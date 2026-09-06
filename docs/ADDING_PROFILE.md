@@ -60,4 +60,4 @@ The build is successful only after the browser smoke test prints:
 
 ## Current examples
 
-`video-compressor` demonstrates a decode/filter/encode profile with x264. `lossless-video-cutter` demonstrates a much smaller packet-copy/remux profile with no decoder, encoder, filter, or x264 in the final Wasm.
+`video-compressor` demonstrates a decode/filter/encode profile with x264. `video-speed-changer` demonstrates a second x264 profile with dedicated speed filters and a narrow public API. `lossless-video-cutter` demonstrates a much smaller packet-copy/remux profile with no decoder, encoder, filter, or x264 in the final Wasm.

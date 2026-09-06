@@ -39,11 +39,16 @@ $windowsBuild = Require-File "scripts/build.ps1"
 $unixBuild = Require-File "build.sh"
 $runtime = Require-File "runtime/browser-ffmpeg.js"
 $videoRunner = Require-File "runners/video-compressor.c"
+$speedRunner = Require-File "runners/video-speed-changer.c"
 $cutterRunner = Require-File "runners/lossless-video-cutter.c"
 $inspectorRunner = Require-File "runners/media-inspector.c"
 $contactRunner = Require-File "runners/video-contact-sheet.c"
 $videoProfile = Require-File "profiles/video-compressor/ffmpeg.flags"
 $videoProfileEnv = Require-File "profiles/video-compressor/profile.env"
+$speedProfile = Require-File "profiles/video-speed-changer/ffmpeg.flags"
+$speedProfileEnv = Require-File "profiles/video-speed-changer/profile.env"
+$speedReadme = Require-File "profiles/video-speed-changer/README.md"
+$speedTemplate = Require-File "profiles/video-speed-changer/single-html/template.html"
 $cutterProfile = Require-File "profiles/lossless-video-cutter/ffmpeg.flags"
 $cutterProfileEnv = Require-File "profiles/lossless-video-cutter/profile.env"
 $cutterReadme = Require-File "profiles/lossless-video-cutter/README.md"
@@ -72,6 +77,7 @@ $packer = Require-File "scripts/pack-single-html.ps1"
 $smokePacker = Require-File "scripts/pack-smoke-test.sh"
 $smokeTemplate = Require-File "tests/smoke-test.template.html"
 $videoSmoke = Require-File "tests/smoke-tests/video-compressor.js"
+$speedSmoke = Require-File "tests/smoke-tests/video-speed-changer.js"
 $cutterSmoke = Require-File "tests/smoke-tests/lossless-video-cutter.js"
 $inspectorSmoke = Require-File "tests/smoke-tests/media-inspector.js"
 $contactSmoke = Require-File "tests/smoke-tests/video-contact-sheet.js"
@@ -216,6 +222,36 @@ foreach ($forbiddenApi in @("avcodec_send_frame", "avcodec_receive_packet", "av_
 }
 
 Require-Text $videoProfileEnv "PROFILE_USE_X264=1" "Video profile must link x264."
+Require-Text $speedProfileEnv "PROFILE_USE_X264=1" "Video Speed Changer profile must link x264."
+Require-Text $speedProfile "--enable-filter=setpts" "Video Speed Changer must enable setpts."
+Require-Text $speedProfile "--enable-filter=atempo" "Video Speed Changer must enable atempo."
+Require-Text $speedProfile "--enable-filter=asetrate" "Video Speed Changer must enable asetrate for pitch-shifting audio."
+Require-Text $speedRunner "--rate" "Video Speed Changer runner must expose a bounded rate option."
+Require-Text $runtime "videoSpeedChangerArgs" "Browser runtime must expose Video Speed Changer helper."
+$speedRunnerText = [IO.File]::ReadAllText($speedRunner)
+if ($speedRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Speed Changer runner must not call pthread APIs." }
+Require-Text $speedRunner '#define RUNNER_VERSION "1.8.0"' "Video Speed Changer runner version remains 1.8.0 because v1.8.1 is a browser-runtime-only patch."
+Require-Text $speedRunner "setpts=PTS/" "Video Speed Changer runner must adjust video timestamps."
+Require-Text $speedRunner "stream->enc_ctx->time_base = input_stream->time_base" "Video Speed Changer must preserve a high-resolution input time base when available."
+Require-Text $speedRunner "frame_rate = av_mul_q(source_frame_rate, speed_q)" "Video Speed Changer must scale encoder frame rate with playback rate to avoid duplicate PTS."
+Require-Text $runtime "Recent FFmpeg log" "Browser runtime must preserve recent FFmpeg logs on runner failure."
+Require-Text $runtime "options.signal" "Browser runtime must accept AbortSignal for cancellable runs."
+Require-Text $runtime "activeRuns" "Browser runtime dispose must terminate active runs."
+Require-Text $runtime "videoSpeedChangerInspectArgs" "Browser runtime must expose Video Speed Changer inspect helper."
+Require-Text $speedSmoke 'append("case=" + label + " start")' "Video Speed Changer smoke test must identify the failing rate/audio mode."
+Require-Text $speedRunner "append_atempo_chain" "Video Speed Changer runner must chain pitch-preserving atempo filters."
+Require-Text $speedRunner "asetrate=%d" "Video Speed Changer runner must support pitch-shifting audio."
+Require-Text $runtime "options.preservePitch === false" "Video Speed Changer browser helper must expose pitch-shifting mode."
+Require-Text $speedSmoke "0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0" "Video Speed Changer smoke test must cover the full preset rate range."
+Require-Text $speedSmoke "preservePitch: false" "Video Speed Changer smoke test must cover pitch-shifting audio."
+Require-Text $speedSmoke "noAudio: true" "Video Speed Changer smoke test must cover audio removal."
+Require-Text $speedSmoke "source-no-audio" "Video Speed Changer smoke test must cover a source video without audio."
+Require-Text $speedSmoke "case=abort start" "Video Speed Changer smoke test must cover AbortSignal cancellation."
+Require-Text $speedSmoke "videoSpeedChangerInspectArgs" "Video Speed Changer smoke test must cover media inspection."
+Require-Text $thirdParty "video-speed-changer" "Third-party notice must explain Video Speed Changer licensing."
+Require-Text $readme "video-speed-changer" "Japanese README must document the Video Speed Changer profile."
+Require-Text $readme "BrowserFFmpeg.videoSpeedChangerArgs" "Japanese README must document the Video Speed Changer browser helper."
+Require-Text $readmeEn "video-speed-changer" "English README must document the Video Speed Changer profile."
 Require-Text $videoProfileEnv "PROFILE_USE_LIBVPX=1" "Video profile must link libvpx for VP9."
 Require-Text $videoProfileEnv "PROFILE_USE_LIBOPUS=1" "Video profile must link Opus for WebM audio."
 Require-Text $videoProfileEnv "PROFILE_USE_WORKERFS=1" "Video profile must use WORKERFS to avoid copying full media files into MEMFS."
@@ -368,7 +404,7 @@ if ($null -ne $gitattributes) {
 }
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.6\.0$') { throw "Builder version must be 1.6.0." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.8\.1$') { throw "Builder version must be 1.8.1." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -421,9 +457,9 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.6.0" "Release documentation must include the v1.6.0 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.8.1" "Release documentation must include the v1.8.1 tag procedure."
 
-Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
 Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
 Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
@@ -443,6 +479,7 @@ Require-Text $releaseScript "sha256sum" "Release packer must generate SHA-256 ch
 
 Require-Text $buildWorkflow "lossless-video-cutter" "Main CI must build and smoke-test the cutter."
 Require-Text $buildWorkflow "video-compressor" "Main CI must keep testing video compressor."
+Require-Text $buildWorkflow "video-speed-changer" "Main CI must build and smoke-test Video Speed Changer."
 Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test Media Inspector."
 Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
 Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
@@ -451,6 +488,7 @@ Require-Text $releaseWorkflow 'tags:' "Release workflow must be tag-driven."
 Require-Text $releaseWorkflow 'test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"' "Release workflow must verify tag/version equality."
 Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workflow must smoke-test cutter before publishing."
 Require-Text $releaseWorkflow "./build.sh video-compressor" "Release workflow must smoke-test video compressor before publishing."
+Require-Text $releaseWorkflow "./build.sh video-speed-changer" "Release workflow must smoke-test Video Speed Changer before publishing."
 Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow must smoke-test Media Inspector before publishing."
 Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
@@ -467,7 +505,7 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
-  foreach ($smokeBody in @($videoSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke)) {
+  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke)) {
     $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
     [IO.File]::WriteAllText($temp, $wrapped)

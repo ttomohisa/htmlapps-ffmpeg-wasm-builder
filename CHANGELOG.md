@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.8.1 - 2026-09-06
+
+- Add AbortSignal support to browser runtime runs so apps can terminate an active FFmpeg Worker cleanly.
+- Ensure `dispose()` terminates and rejects any active run instead of leaving a Worker alive.
+- Add `videoSpeedChangerInspectArgs()` for source metadata fallback without changing the video-speed-changer runner or WASM payload.
+- Keep the video-speed-changer runner at 1.8.0; this patch changes only the browser runtime/package contract.
+- Document release-consumer pinning by exact tag, profile asset, and SHA-256 so app release builds are reproducible without runtime network access.
+
+## 1.8.0 - 2026-09-06
+
+- Extend `video-speed-changer` to all three audio modes: preserve pitch, shift pitch with speed, or remove audio.
+- Add the `asetrate` filter and `--pitch-shift` runner option while keeping existing `--no-audio` behavior.
+- Extend `BrowserFFmpeg.videoSpeedChangerArgs()` with `preservePitch: false` and keep `noAudio: true` backward compatible.
+- Expand the real-browser smoke test to cover every 0.25x to 4.0x preset plus pitch-shifting and silent output.
+
+## 1.7.2 - 2026-09-05
+
+- Fixed the Video Speed Changer profile so libavfilter buffer source/sink endpoints are no longer passed to `--enable-filter=` or asserted as nonexistent `CONFIG_*_FILTER` components.
+- Preserved the input video time base in the H.264 encoder to avoid PTS collapse at fractional and faster playback rates.
+- Skip `setpts` / `atempo` at exactly 1.0x so the baseline transcode follows the proven compressor filter path.
+- Kept rate-specific browser smoke diagnostics with recent FFmpeg logs.
+
+## 1.7.0
+
+- Add `video-speed-changer` profile with H.264/AAC MP4 output.
+- Add `BrowserFFmpeg.videoSpeedChangerArgs()` helper.
+- Add real-browser speed-change smoke test for 1.0x, 1.5x, and 2.0x.
+
+
 ## 1.6.0 - 2026-09-03
 
 - Fixed release packaging under `set -u` by defaulting profile-specific libvpx/Opus flags to disabled when older profiles do not define them.

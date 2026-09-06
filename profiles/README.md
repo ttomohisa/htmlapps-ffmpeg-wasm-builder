@@ -16,4 +16,9 @@ tests/smoke-tests/<profile>.js
 
 `ffmpeg.flags` starts from `--disable-everything` and enables only the components needed by that tool. `profile.env` tells the linker which FFmpeg static libraries are actually required and whether x264 or libwebp belongs in the final Wasm. The C runner exposes the operation; the profile-specific smoke test must exercise it in a real browser.
 
-Current release profiles include `video-compressor`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`. The two animation profiles share a public-libav runner: GIF uses a two-pass palette pipeline, while WebP links pinned libwebp only in its own build. WORKERFS is used for large browser File/Blob inputs where random access is useful.
+Current release profiles include `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`. The two animation profiles share a public-libav runner: GIF uses a two-pass palette pipeline, while WebP links pinned libwebp only in its own build. WORKERFS is used for large browser File/Blob inputs where random access is useful.
+
+
+## Video Speed Changer
+
+`video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.

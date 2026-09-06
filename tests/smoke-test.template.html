@@ -50,10 +50,12 @@ __FFMPEG_RUNTIME__
     };
     const fail = (error) => {
       const message = error?.stack || error?.message || String(error);
-      document.documentElement.dataset.smoke = "fail";
-      status.textContent = "SMOKE_TEST_FAIL: " + message;
-      location.replace("about:blank#SMOKE_TEST_FAIL_" + encodeURIComponent(message.slice(0, 500)));
       append(message);
+      const logTail = log.textContent.slice(-2200);
+      const report = (message + (logTail ? "\nSmoke log tail:\n" + logTail : "")).slice(-3000);
+      document.documentElement.dataset.smoke = "fail";
+      status.textContent = "SMOKE_TEST_FAIL: " + report;
+      location.replace("about:blank#SMOKE_TEST_FAIL_" + encodeURIComponent(report));
     };
     const pass = (details) => {
       document.documentElement.dataset.smoke = "pass";

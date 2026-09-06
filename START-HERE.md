@@ -67,3 +67,8 @@ check-updates.bat
 ## 5. 新しいツールを増やす
 
 `profiles/<profile>/profile.env`、`ffmpeg.flags`、`runners/<profile>.c`、`tests/smoke-tests/<profile>.js` を1セットとして追加します。詳しくは `docs/ADDING_PROFILE.md` を参照してください。
+
+
+## Video Speed Changer
+
+`video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.

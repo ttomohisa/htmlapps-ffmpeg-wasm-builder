@@ -26,11 +26,12 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.6.0 profiles
+## v1.8.1 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
 | `video-compressor` | 動画圧縮 | あり | あり | H.264 + AAC MP4 / VP9 + Opus WebM |
+| `video-speed-changer` | 動画速度変更 | あり | あり | H.264 + AAC MP4 / H.264-only MP4 |
 | `lossless-video-cutter` | 無劣化カット | **なし** | **なし** | 元codecのstream copy |
 | `media-inspector` | codec / fps / bitrate / metadata解析 | **なし** | **なし** | structured JSON report |
 | `video-contact-sheet` | 動画全体から12/24/48枚を均等抽出 | decoderのみ | **なし** | RGB PPM + sample JSON |
@@ -69,6 +70,18 @@ Video Compressor:
 
 ```text
 build.bat video-compressor
+```
+
+Video Speed Changer:
+
+```text
+build-video-speed-changer.bat
+```
+
+または：
+
+```text
+build.bat video-speed-changer
 ```
 
 Lossless Video Cutter:
@@ -281,17 +294,19 @@ Browser runtimeでは `BrowserFFmpeg.videoToWebpArgs()` を使います。`lossl
 
 ## Public Release
 
-v1.6.0ではRelease workflowが6 profileをbuild + smoke testしてから次を公開します。
+v1.8.1ではRelease workflowが7 profileをbuild + smoke testしてから次を公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.6.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.6.0.zip
-ffmpeg-wasm-media-inspector-v1.6.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.6.0.zip
-ffmpeg-wasm-video-to-gif-v1.6.0.zip
-ffmpeg-wasm-video-to-webp-v1.6.0.zip
-ffmpeg-wasm-sources-v1.6.0.tar.gz
+ffmpeg-wasm-video-compressor-v1.8.1.zip
+ffmpeg-wasm-video-speed-changer-v1.8.1.zip
+ffmpeg-wasm-lossless-video-cutter-v1.8.1.zip
+ffmpeg-wasm-media-inspector-v1.8.1.zip
+ffmpeg-wasm-video-contact-sheet-v1.8.1.zip
+ffmpeg-wasm-video-to-gif-v1.8.1.zip
+ffmpeg-wasm-video-to-webp-v1.8.1.zip
+ffmpeg-wasm-sources-v1.8.1.tar.gz
 BUILDINFO-video-compressor.txt
+BUILDINFO-video-speed-changer.txt
 BUILDINFO-lossless-video-cutter.txt
 BUILDINFO-media-inspector.txt
 BUILDINFO-video-contact-sheet.txt
@@ -318,7 +333,12 @@ check-updates.bat
 
 **ルートのMIT LicenseはBuilder自身のソースに対するものです。生成された `ffmpeg.wasm` をMITとして配布するものではありません。**
 
-`video-compressor` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter`、`media-inspector`、`video-contact-sheet`、`video-to-gif`、`video-to-webp` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。`video-to-webp` がリンクするlibwebpは別途upstream noticeをRelease bundleへ同梱します。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
+`video-compressor` と `video-speed-changer` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter`、`media-inspector`、`video-contact-sheet`、`video-to-gif`、`video-to-webp` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。`video-to-webp` がリンクするlibwebpは別途upstream noticeをRelease bundleへ同梱します。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
 
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - [docs/LICENSES.md](docs/LICENSES.md)
+
+
+## Video Speed Changer
+
+`video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.

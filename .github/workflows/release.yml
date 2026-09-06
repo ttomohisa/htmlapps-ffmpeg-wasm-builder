@@ -44,6 +44,7 @@ jobs:
         run: |
           chmod +x ./build.sh ./scripts/*.sh
           ./build.sh video-compressor
+          ./build.sh video-speed-changer
           ./build.sh lossless-video-cutter
           ./build.sh media-inspector
           ./build.sh video-contact-sheet
@@ -66,6 +67,7 @@ jobs:
           source ./versions.env
           gh release create "${GITHUB_REF_NAME}" \
             release/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-video-speed-changer-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-contact-sheet-v${BUILDER_VERSION}.zip \
@@ -73,6 +75,7 @@ jobs:
             release/ffmpeg-wasm-video-to-webp-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
             release/BUILDINFO-video-compressor.txt \
+            release/BUILDINFO-video-speed-changer.txt \
             release/BUILDINFO-lossless-video-cutter.txt \
             release/BUILDINFO-media-inspector.txt \
             release/BUILDINFO-video-contact-sheet.txt \

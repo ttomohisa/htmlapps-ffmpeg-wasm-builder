@@ -5,12 +5,13 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.6.0.zip
-ffmpeg-wasm-lossless-video-cutter-v1.6.0.zip
-ffmpeg-wasm-media-inspector-v1.6.0.zip
-ffmpeg-wasm-video-contact-sheet-v1.6.0.zip
-ffmpeg-wasm-video-to-gif-v1.6.0.zip
-ffmpeg-wasm-video-to-webp-v1.6.0.zip
+ffmpeg-wasm-video-compressor-v1.8.1.zip
+ffmpeg-wasm-video-speed-changer-v1.8.1.zip
+ffmpeg-wasm-lossless-video-cutter-v1.8.1.zip
+ffmpeg-wasm-media-inspector-v1.8.1.zip
+ffmpeg-wasm-video-contact-sheet-v1.8.1.zip
+ffmpeg-wasm-video-to-gif-v1.8.1.zip
+ffmpeg-wasm-video-to-webp-v1.8.1.zip
 ```
 
 
@@ -157,3 +158,20 @@ The WebP profile alone links libwebp. Apps that ship both GIF and WebP can embed
 ## Animation crop rectangles
 
 `videoToGifArgs()` and `videoToWebpArgs()` accept `crop: { x, y, width, height }`. Crop coordinates are normalized to `0..1`, refer to the autorotated source frame, must stay inside that frame, and are applied before the final resize.
+
+
+## Video Speed Changer
+
+`video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.
+
+## Release pinning
+
+For a production app, prefer a tagged profile ZIP from the Builder GitHub Release over an arbitrary local `dist/` directory. Pin all of the following in the consumer repository:
+
+- Builder tag (for example `v1.8.1`),
+- exact profile asset name,
+- SHA-256 of that asset.
+
+Download and verify the asset only at **app build time**. The generated app should embed the required JS/WASM/runtime and must not contact GitHub at runtime when it claims fully local processing.
+
+Keep a separate local-Builder import path for runner/profile development, and record its provenance so local builds cannot be mistaken for release artifacts.

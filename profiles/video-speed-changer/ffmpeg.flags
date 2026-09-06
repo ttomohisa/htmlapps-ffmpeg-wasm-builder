@@ -1,0 +1,52 @@
+# Public-library browser runner for changing playback speed.
+# H.264/AAC MP4 only. No upstream ffmpeg CLI and no pthreads.
+--enable-gpl
+--enable-small
+--disable-everything
+--enable-libx264
+--enable-encoder=libx264
+--enable-encoder=aac
+--enable-decoder=h264
+--enable-decoder=hevc
+--enable-decoder=vp8
+--enable-decoder=vp9
+--enable-decoder=av1
+--enable-decoder=mpeg4
+--enable-decoder=mjpeg
+--enable-decoder=prores
+--enable-decoder=aac
+--enable-decoder=mp3
+--enable-decoder=opus
+--enable-decoder=vorbis
+--enable-decoder=flac
+--enable-decoder=alac
+--enable-decoder=pcm_s16le
+--enable-decoder=pcm_s24le
+--enable-decoder=pcm_f32le
+--enable-demuxer=mov
+--enable-demuxer=matroska
+--enable-demuxer=avi
+--enable-demuxer=mpegts
+--enable-demuxer=ogg
+--enable-demuxer=mp3
+--enable-demuxer=wav
+--enable-demuxer=flac
+--enable-muxer=mp4
+--enable-parser=h264
+--enable-parser=hevc
+--enable-parser=aac
+--enable-parser=av1
+--enable-parser=vp9
+--enable-protocol=file
+# buffer/buffersink/abuffer/abuffersink are libavfilter API endpoints.
+# FFmpeg adds them manually and they are not --enable-filter components.
+--enable-filter=scale
+--enable-filter=transpose
+--enable-filter=hflip
+--enable-filter=vflip
+--enable-filter=format
+--enable-filter=setsar
+--enable-filter=setpts
+--enable-filter=atempo
+--enable-filter=asetrate
+--enable-filter=aresample
