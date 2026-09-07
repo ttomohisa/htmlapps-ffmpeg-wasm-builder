@@ -83,6 +83,12 @@ $inspectorSmoke = Require-File "tests/smoke-tests/media-inspector.js"
 $contactSmoke = Require-File "tests/smoke-tests/video-contact-sheet.js"
 $gifSmoke = Require-File "tests/smoke-tests/video-to-gif.js"
 $webpSmoke = Require-File "tests/smoke-tests/video-to-webp.js"
+$filterRunner = Require-File "runners/ffmpeg-filter-builder.c"
+$filterProfile = Require-File "profiles/ffmpeg-filter-builder/ffmpeg.flags"
+$filterProfileEnv = Require-File "profiles/ffmpeg-filter-builder/profile.env"
+$filterReadme = Require-File "profiles/ffmpeg-filter-builder/README.md"
+$filterSmoke = Require-File "tests/smoke-tests/ffmpeg-filter-builder.js"
+$filterLauncher = Require-File "build-ffmpeg-filter-builder.bat"
 $libwebpBuild = Require-File "scripts/build-libwebp.sh"
 $libvpxBuild = Require-File "scripts/build-libvpx.sh"
 $libopusBuild = Require-File "scripts/build-libopus.sh"
@@ -129,17 +135,26 @@ Require-Text $buildScript 'PROFILE_USE_LIBWEBP' "Build must make libwebp profile
 Require-Text $buildScript 'PROFILE_USE_WORKERFS' "Build must make WORKERFS profile-specific."
 Require-Text $buildScript '-lworkerfs.js' "WORKERFS profiles must explicitly link Emscripten WORKERFS."
 Require-Text $buildScript 'WORKERFS' "WORKERFS must be exported to the browser runtime when enabled."
-Require-Text $buildScript "--disable-pthreads" "WASM build must disable pthreads."
+Require-Text $buildScript "--disable-pthreads" "Single-thread WASM builds must explicitly disable pthreads."
+Require-Text $buildScript "--enable-pthreads" "Explicit multi-thread WASM builds must enable pthreads."
+Require-Text $buildScript 'THREADING_MODE' "WASM build must select threading per profile variant."
+Require-Text $buildScript 'PTHREAD_POOL_SIZE' "Multi-thread builds must declare a bounded pthread pool."
 Require-Text $buildScript "--disable-programs" "WASM build must not link the upstream ffmpeg CLI."
 Require-Text $buildScript "-sEXPORT_NAME=createFFmpegCore" "WASM factory name must stay stable."
-Require-Text $buildScript "INCOMING_MODULE_JS_API=wasmBinary,instantiateWasm,locateFile,print,printErr" "WASM build must preserve custom loader hooks."
-Require-Text $buildScript '"schemaVersion": 7' "Manifest schema must include dependency-aware metadata."
+Require-Text $buildScript "mainScriptUrlOrBlob" "WASM build must allow Blob-hosted main script URLs for pthread workers."
+Require-Text $buildScript "-sUSE_ZLIB=1" "Profiles that request zlib must use the pinned Emscripten zlib system port."
+Require-Text $buildScript '"schemaVersion": 8' "Manifest schema must include threading-aware metadata."
+Require-Text $buildScript '"requiresSharedArrayBuffer":' "Manifest must describe SharedArrayBuffer requirements."
+Require-Text $buildScript '"requiresCrossOriginIsolation":' "Manifest must describe cross-origin isolation requirements."
+Require-Text $buildScript '"decoderThreadCount":' "Manifest must describe decoder thread usage."
+Require-Text $buildScript '"encoderThreadCount":' "Manifest must describe encoder thread usage."
+Require-Text $buildScript '"x264LookaheadThreadCount":' "Manifest must describe the x264 lookahead worker budget."
+Require-Text $buildScript '"pthreadWorkerStrategy":' "Manifest must describe how pthread workers load the main script."
+Require-Text $buildScript 'Unexpected legacy pthread worker asset' "Build must reject obsolete separate pthread worker assets."
 Require-Text $buildScript '"x264Linked":' "Manifest must state whether x264 is linked."
 Require-Text $buildScript '"libvpxLinked":' "Manifest must state whether libvpx is linked."
 Require-Text $buildScript '"libopusLinked":' "Manifest must state whether Opus is linked."
 Require-Text $buildScript '"libwebpLinked":' "Manifest must state whether libwebp is linked."
-$buildText = [IO.File]::ReadAllText($buildScript)
-if ($buildText -match '(^|\s)-pthread(\s|$)') { throw "WASM build must not link with -pthread." }
 
 Require-Text $runtime "instantiateWasm" "Browser runtime must instantiate transferred Wasm bytes directly."
 Require-Text $runtime "new Blob([coreJsText" "Browser runtime must combine generated core JS and Worker body into one Blob."
@@ -153,9 +168,13 @@ Require-Text $runtime "decodeJsonOutput" "Browser runtime must decode structured
 Require-Text $runtime "mountWorkerFiles" "Browser runtime must support Blob/File-backed WORKERFS mounts."
 Require-Text $runtime "file.workerfs === true" "Browser runtime must keep WORKERFS inputs out of the ArrayBuffer/MEMFS path."
 Require-Text $runtime "window.BrowserFFmpeg" "Browser runtime must expose BrowserFFmpeg."
+Require-Text $runtime "mainScriptUrlOrBlob" "Browser runtime must pass the Blob-hosted Emscripten main script to pthread workers."
+Require-Text $runtime "new Blob([coreJsText]" "Browser runtime must reuse embedded core JS as the pthread worker program."
+Require-Text $runtime 'threading === "multi-thread"' "Browser runtime must explicitly gate pthread behavior."
+Require-Text $runtime "crossOriginIsolated" "Multi-thread browser runtime must reject non-isolated hosting."
+Require-Text $runtime "ffmpegFilterBuilderArgs" "Browser runtime must expose FFmpeg Filter Builder args."
 $runtimeText = [IO.File]::ReadAllText($runtime)
-if ($runtimeText.Contains("importScripts(")) { throw "Browser runtime must not use nested importScripts; file:// blob origins are not portable." }
-if ($runtimeText -match 'typeof\s+SharedArrayBuffer|crossOriginIsolated') { throw "Browser runtime must not depend on SharedArrayBuffer/cross-origin isolation." }
+if ($runtimeText.Contains("pthreadWorkerJsText") -or $runtimeText.Contains("pthreadWorkerJsUrl")) { throw "Browser runtime must not require a separate pthread worker asset on Emscripten 6.x." }
 
 $videoRunnerText = [IO.File]::ReadAllText($videoRunner)
 if ($videoRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video runner must not call pthread APIs." }
@@ -230,7 +249,7 @@ Require-Text $speedRunner "--rate" "Video Speed Changer runner must expose a bou
 Require-Text $runtime "videoSpeedChangerArgs" "Browser runtime must expose Video Speed Changer helper."
 $speedRunnerText = [IO.File]::ReadAllText($speedRunner)
 if ($speedRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Speed Changer runner must not call pthread APIs." }
-Require-Text $speedRunner '#define RUNNER_VERSION "1.8.0"' "Video Speed Changer runner version remains 1.8.0 because v1.8.1 is a browser-runtime-only patch."
+Require-Text $speedRunner '#define RUNNER_VERSION "1.8.0"' "Video Speed Changer runner remains 1.8.0; Builder v1.9.x keeps the Video Speed Changer runner unchanged while evolving the Filter Builder runtime architecture."
 Require-Text $speedRunner "setpts=PTS/" "Video Speed Changer runner must adjust video timestamps."
 Require-Text $speedRunner "stream->enc_ctx->time_base = input_stream->time_base" "Video Speed Changer must preserve a high-resolution input time base when available."
 Require-Text $speedRunner "frame_rate = av_mul_q(source_frame_rate, speed_q)" "Video Speed Changer must scale encoder frame rate with playback rate to avoid duplicate PTS."
@@ -403,8 +422,36 @@ if ($null -ne $gitattributes) {
   Require-Text $gitattributes "*.mp4 binary" "Smoke fixture must be marked binary."
 }
 
+Require-Text $filterProfileEnv 'PROFILE_THREADING_VARIANTS="single-thread,multi-thread"' "FFmpeg Filter Builder must ship both threading variants."
+Require-Text $filterProfileEnv 'PROFILE_PTHREAD_POOL_SIZE=8' "FFmpeg Filter Builder must pin a pthread pool large enough for concurrent decode + encode."
+Require-Text $filterProfileEnv 'PROFILE_DECODER_THREAD_COUNT=2' "FFmpeg Filter Builder must reserve a smaller decoder worker budget."
+Require-Text $filterProfileEnv 'PROFILE_ENCODER_THREAD_COUNT=4' "FFmpeg Filter Builder must reserve four x264 encoder workers."
+Require-Text $filterProfileEnv 'PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1' "FFmpeg Filter Builder must explicitly budget the x264 lookahead worker."
+Require-Text $filterProfileEnv 'PROFILE_USE_X264=1' "FFmpeg Filter Builder must provide H.264 output."
+Require-Text $filterProfileEnv 'PROFILE_USE_ZLIB=1' "FFmpeg Filter Builder must explicitly enable the zlib system port for PNG input."
+Require-Text $filterProfile '--enable-zlib' "FFmpeg Filter Builder must enable FFmpeg zlib support for PNG decoding."
+Require-Text $filterProfileEnv 'CONFIG_ZLIB' "FFmpeg Filter Builder must assert zlib was enabled by configure."
+Require-Text $filterProfileEnv 'PROFILE_USE_WORKERFS=1' "FFmpeg Filter Builder must use WORKERFS input."
+foreach ($filterName in @("scale", "crop", "overlay", "amix", "loudnorm")) {
+  Require-Text $filterProfile "--enable-filter=$filterName" "FFmpeg Filter Builder profile is missing a required filter."
+}
+Require-Text $filterRunner '#define RUNNER_VERSION "0.1.0"' "FFmpeg Filter Builder runner version must start at 0.1.0."
+Require-Text $filterRunner "--video-filter" "FFmpeg Filter Builder runner must accept compiled video filter chains."
+Require-Text $filterRunner "--audio-filter" "FFmpeg Filter Builder runner must accept compiled audio filter chains."
+Require-Text $filterRunner "FFMPEG_WASM_PTHREADS" "FFmpeg Filter Builder runner must be threading-aware."
+Require-Text $filterSmoke "scale=160:90" "FFmpeg Filter Builder smoke test must execute a real scale filter."
+Require-Text $filterSmoke "crossOriginIsolated" "FFmpeg Filter Builder MT smoke test must verify cross-origin isolation."
+Require-Text $filterLauncher "ffmpeg-filter-builder" "FFmpeg Filter Builder must have a Windows launcher."
+Require-Text $smokePacker 'line="${line//__THREADING_MODE__/$THREADING_MODE}"' "Smoke packer must replace inline threading placeholders, not only whole-line placeholders."
+Require-Text $smokeWindows "Cross-Origin-Opener-Policy" "MT smoke server must send COOP."
+Require-Text $smokeWindows "Cross-Origin-Embedder-Policy" "MT smoke server must send COEP."
+Require-Text $unixBuild "THREADING_MODE" "Unix build must pass the threading variant into Docker."
+Require-Text $windowsBuild "THREADING_MODE" "Windows build must pass the threading variant into Docker."
+Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the FFmpeg Filter Builder profile."
+Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
+
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.8\.1$') { throw "Builder version must be 1.8.1." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.4$') { throw "Builder version must be 1.9.4." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -457,9 +504,9 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.8.1" "Release documentation must include the v1.8.1 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.9.4" "Release documentation must include the v1.9.4 tag procedure."
 
-Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
 Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
 Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
@@ -484,6 +531,7 @@ Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test
 Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
 Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
 Require-Text $buildWorkflow "video-to-webp" "Main CI must build and smoke-test WebP output."
+Require-Text $buildWorkflow "ffmpeg-filter-builder" "Main CI must build and smoke-test both FFmpeg Filter Builder variants."
 Require-Text $releaseWorkflow 'tags:' "Release workflow must be tag-driven."
 Require-Text $releaseWorkflow 'test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"' "Release workflow must verify tag/version equality."
 Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workflow must smoke-test cutter before publishing."
@@ -493,11 +541,14 @@ Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow mus
 Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-webp" "Release workflow must smoke-test WebP before publishing."
+Require-Text $releaseWorkflow "./build.sh ffmpeg-filter-builder" "Release workflow must smoke-test both FFmpeg Filter Builder variants before publishing."
 Require-Text $releaseWorkflow "ffmpeg-wasm-lossless-video-cutter" "Release workflow must publish the cutter binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-media-inspector" "Release workflow must publish the Media Inspector binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-contact-sheet" "Release workflow must publish the Video Contact Sheet binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-gif" "Release workflow must publish the GIF binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-webp" "Release workflow must publish the WebP binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-ffmpeg-filter-builder-single-thread" "Release workflow must publish the FFmpeg Filter Builder ST bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-ffmpeg-filter-builder-multi-thread" "Release workflow must publish the FFmpeg Filter Builder MT bundle."
 Require-Text $releaseWorkflow "--verify-tag" "Release creation must refuse an unpushed/missing tag."
 Require-Text $releaseWorkflow "contents: write" "Release workflow needs explicit contents:write permission."
 
@@ -505,7 +556,7 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
-  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke)) {
+  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
     $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
     [IO.File]::WriteAllText($temp, $wrapped)

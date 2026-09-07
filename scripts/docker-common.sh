@@ -67,6 +67,8 @@ require_build_env() {
   : "${BUILDER_VERSION:?}"
   : "${PROFILE:?}"
   : "${OUT_DIR:?}"
+  THREADING_MODE="${THREADING_MODE:-single-thread}"
+  export THREADING_MODE
 }
 
 clone_exact_commit() {
@@ -113,6 +115,7 @@ load_profile_config() {
   source "$path"
   : "${PROFILE_DISPLAY_NAME:?}"
   : "${PROFILE_USE_X264:?}"
+  PROFILE_USE_ZLIB="${PROFILE_USE_ZLIB:-0}"
   : "${PROFILE_USE_LIBWEBP:?}"
   PROFILE_USE_LIBVPX="${PROFILE_USE_LIBVPX:-0}"
   PROFILE_USE_LIBOPUS="${PROFILE_USE_LIBOPUS:-0}"
@@ -120,8 +123,20 @@ load_profile_config() {
   : "${PROFILE_BINARY_LICENSE:?}"
   : "${PROFILE_OUTPUT_DESCRIPTION:?}"
   : "${PROFILE_CAPABILITIES_JSON:?}"
+  PROFILE_THREADING_VARIANTS="${PROFILE_THREADING_VARIANTS:-single-thread}"
+  PROFILE_PTHREAD_POOL_SIZE="${PROFILE_PTHREAD_POOL_SIZE:-8}"
+  PROFILE_DECODER_THREAD_COUNT="${PROFILE_DECODER_THREAD_COUNT:-2}"
+  PROFILE_ENCODER_THREAD_COUNT="${PROFILE_ENCODER_THREAD_COUNT:-4}"
+  PROFILE_X264_LOOKAHEAD_THREAD_COUNT="${PROFILE_X264_LOOKAHEAD_THREAD_COUNT:-1}"
+  PROFILE_FILTERS_JSON="${PROFILE_FILTERS_JSON:-[]}"
+  PROFILE_ENCODERS_JSON="${PROFILE_ENCODERS_JSON:-[]}"
+  PROFILE_DECODERS_JSON="${PROFILE_DECODERS_JSON:-[]}"
+  PROFILE_MUXERS_JSON="${PROFILE_MUXERS_JSON:-[]}"
+  PROFILE_DEMUXERS_JSON="${PROFILE_DEMUXERS_JSON:-[]}"
   [[ "$PROFILE_USE_X264" == "0" || "$PROFILE_USE_X264" == "1" ]] \
     || fail "PROFILE_USE_X264 must be 0 or 1"
+  [[ "$PROFILE_USE_ZLIB" == "0" || "$PROFILE_USE_ZLIB" == "1" ]] \
+    || fail "PROFILE_USE_ZLIB must be 0 or 1"
   [[ "$PROFILE_USE_LIBWEBP" == "0" || "$PROFILE_USE_LIBWEBP" == "1" ]] \
     || fail "PROFILE_USE_LIBWEBP must be 0 or 1"
   [[ "$PROFILE_USE_LIBVPX" == "0" || "$PROFILE_USE_LIBVPX" == "1" ]] \
@@ -134,6 +149,24 @@ load_profile_config() {
     || fail "A profile cannot currently link libwebp and libvpx at the same time"
   [[ "$PROFILE_USE_WORKERFS" == "0" || "$PROFILE_USE_WORKERFS" == "1" ]] \
     || fail "PROFILE_USE_WORKERFS must be 0 or 1"
+  case ",$PROFILE_THREADING_VARIANTS," in
+    *,single-thread,*|*,multi-thread,*) ;;
+    *) fail "PROFILE_THREADING_VARIANTS must include single-thread and/or multi-thread" ;;
+  esac
+  case ",$PROFILE_THREADING_VARIANTS," in
+    *,$THREADING_MODE,*) ;;
+    *) fail "Profile $PROFILE does not support threading mode: $THREADING_MODE" ;;
+  esac
+  [[ "$PROFILE_PTHREAD_POOL_SIZE" =~ ^[1-9][0-9]*$ ]] \
+    || fail "PROFILE_PTHREAD_POOL_SIZE must be a positive integer"
+  [[ "$PROFILE_DECODER_THREAD_COUNT" =~ ^[1-9][0-9]*$ ]] \
+    || fail "PROFILE_DECODER_THREAD_COUNT must be a positive integer"
+  [[ "$PROFILE_ENCODER_THREAD_COUNT" =~ ^[1-9][0-9]*$ ]] \
+    || fail "PROFILE_ENCODER_THREAD_COUNT must be a positive integer"
+  [[ "$PROFILE_X264_LOOKAHEAD_THREAD_COUNT" =~ ^[1-9][0-9]*$ ]] \
+    || fail "PROFILE_X264_LOOKAHEAD_THREAD_COUNT must be a positive integer"
+  (( PROFILE_PTHREAD_POOL_SIZE >= PROFILE_DECODER_THREAD_COUNT + PROFILE_ENCODER_THREAD_COUNT + PROFILE_X264_LOOKAHEAD_THREAD_COUNT )) \
+    || fail "PROFILE_PTHREAD_POOL_SIZE must cover decoder + encoder + x264 lookahead workers"
   declare -p PROFILE_REQUIRED_CONFIG >/dev/null 2>&1 \
     || fail "PROFILE_REQUIRED_CONFIG array is missing: $path"
   declare -p PROFILE_LINK_LIBS >/dev/null 2>&1 \

@@ -43,6 +43,7 @@ jobs:
           - video-contact-sheet
           - video-to-gif
           - video-to-webp
+          - ffmpeg-filter-builder
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -70,7 +71,8 @@ jobs:
 
       - name: Show manifest
         shell: bash
-        run: cat "dist/${{ matrix.profile }}/manifest.json"
+        run: |
+          find "dist/${{ matrix.profile }}" -maxdepth 2 -name manifest.json -print -exec cat {} \;
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v7

@@ -7,15 +7,36 @@ load_profile_config
 print_toolchain "wasm"
 
 JOBS="${JOBS:-$(nproc)}"
+THREADING_MODE="${THREADING_MODE:-single-thread}"
 RUNNER_SOURCE="/workspace/runners/${PROFILE}.c"
 [[ -f "$RUNNER_SOURCE" ]] || fail "Runner not found: $RUNNER_SOURCE"
 mkdir -p "$OUT_DIR"
 
 export PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig"
 export EM_PKG_CONFIG_PATH="$PKG_CONFIG_PATH"
-export CFLAGS="-O3 -I$INSTALL_DIR/include"
-export CXXFLAGS="$CFLAGS"
-export LDFLAGS="-L$INSTALL_DIR/lib"
+profile_compile_flags=()
+profile_link_flags=()
+if [[ "$PROFILE_USE_ZLIB" == "1" ]]; then
+  # FFmpeg's native PNG decoder selects inflate_wrapper, which requires zlib.
+  # Emscripten provides zlib as a system port; enable it for configure tests,
+  # FFmpeg compilation, and the final public-libav runner link.
+  profile_compile_flags+=("-sUSE_ZLIB=1")
+  profile_link_flags+=("-sUSE_ZLIB=1")
+fi
+
+profile_compile_flags_text="${profile_compile_flags[*]:-}"
+profile_link_flags_text="${profile_link_flags[*]:-}"
+if [[ "$THREADING_MODE" == "multi-thread" ]]; then
+  export CFLAGS="-O3 -pthread ${profile_compile_flags_text} -I$INSTALL_DIR/include"
+  export CXXFLAGS="$CFLAGS"
+  export LDFLAGS="-pthread ${profile_link_flags_text} -L$INSTALL_DIR/lib"
+  thread_config=(--enable-pthreads --disable-w32threads --disable-os2threads)
+else
+  export CFLAGS="-O3 ${profile_compile_flags_text} -I$INSTALL_DIR/include"
+  export CXXFLAGS="$CFLAGS"
+  export LDFLAGS="${profile_link_flags_text} -L$INSTALL_DIR/lib"
+  thread_config=(--disable-pthreads --disable-w32threads --disable-os2threads)
+fi
 
 pushd "$SRC_DIR/ffmpeg" >/dev/null
 log "Configuring FFmpeg libraries for profile: $PROFILE_DISPLAY_NAME"
@@ -32,9 +53,7 @@ emconfigure ./configure \
   --disable-autodetect \
   --disable-network \
   --disable-iconv \
-  --disable-pthreads \
-  --disable-w32threads \
-  --disable-os2threads \
+  "${thread_config[@]}" \
   --disable-programs \
   --disable-avdevice \
   --nm=emnm --ar=emar --ranlib=emranlib \
@@ -48,11 +67,18 @@ for feature in "${PROFILE_REQUIRED_CONFIG[@]}"; do
   assert_ffmpeg_config "$feature"
 done
 
-if grep -q '^HAVE_PTHREADS=yes$' ffbuild/config.mak; then
-  fail "The browser build unexpectedly enabled pthreads"
-fi
-if grep -q '^HAVE_THREADS=yes$' ffbuild/config.mak; then
-  fail "The browser build unexpectedly enabled a thread backend"
+if [[ "$THREADING_MODE" == "multi-thread" ]]; then
+  grep -q '^HAVE_PTHREADS=yes$' ffbuild/config.mak \
+    || fail "The multi-thread browser build did not enable pthreads"
+  grep -q '^HAVE_THREADS=yes$' ffbuild/config.mak \
+    || fail "The multi-thread browser build did not enable a thread backend"
+else
+  if grep -q '^HAVE_PTHREADS=yes$' ffbuild/config.mak; then
+    fail "The single-thread browser build unexpectedly enabled pthreads"
+  fi
+  if grep -q '^HAVE_THREADS=yes$' ffbuild/config.mak; then
+    fail "The single-thread browser build unexpectedly enabled a thread backend"
+  fi
 fi
 if grep -q '^CONFIG_FFMPEG=yes$' ffbuild/config.mak; then
   fail "The upstream ffmpeg CLI must stay disabled; this builder links the public-libav runner only"
@@ -68,6 +94,14 @@ if [[ "$PROFILE_USE_LIBVPX" == "0" ]] && grep -q '^CONFIG_LIBVPX=yes$' ffbuild/c
 fi
 if [[ "$PROFILE_USE_LIBOPUS" == "0" ]] && grep -q '^CONFIG_LIBOPUS=yes$' ffbuild/config.mak; then
   fail "Profile $PROFILE must not enable libopus"
+fi
+if [[ "$PROFILE_USE_ZLIB" == "1" ]]; then
+  grep -q '^CONFIG_ZLIB=yes$' ffbuild/config.mak \
+    || fail "Profile $PROFILE requires zlib, but FFmpeg configure did not enable it"
+else
+  if grep -q '^CONFIG_ZLIB=yes$' ffbuild/config.mak; then
+    fail "Profile $PROFILE unexpectedly enabled zlib"
+  fi
 fi
 
 log "Building FFmpeg static libraries"
@@ -109,9 +143,30 @@ if [[ "$PROFILE_USE_WORKERFS" == "1" ]]; then
   extra_runtime_libs+=("-lworkerfs.js")
 fi
 
-log "Linking the profile runner"
+log "Linking the profile runner ($THREADING_MODE)"
+thread_link_flags=()
+thread_defines=(-DFFMPEG_WASM_PTHREADS=0 -DFFMPEG_WASM_DECODER_THREAD_COUNT=1 -DFFMPEG_WASM_ENCODER_THREAD_COUNT=1 -DFFMPEG_WASM_X264_LOOKAHEAD_THREAD_COUNT=1)
+if [[ "$THREADING_MODE" == "multi-thread" ]]; then
+  thread_defines=(
+    -DFFMPEG_WASM_PTHREADS=1
+    "-DFFMPEG_WASM_DECODER_THREAD_COUNT=${PROFILE_DECODER_THREAD_COUNT}"
+    "-DFFMPEG_WASM_ENCODER_THREAD_COUNT=${PROFILE_ENCODER_THREAD_COUNT}"
+    "-DFFMPEG_WASM_X264_LOOKAHEAD_THREAD_COUNT=${PROFILE_X264_LOOKAHEAD_THREAD_COUNT}"
+  )
+  thread_link_flags=(
+    -pthread
+    "-sPTHREAD_POOL_SIZE=${PROFILE_PTHREAD_POOL_SIZE}"
+    -sPTHREAD_POOL_SIZE_STRICT=2
+    -sDEFAULT_PTHREAD_STACK_SIZE=1048576
+    -sINITIAL_MEMORY=134217728
+  )
+else
+  thread_link_flags=(-sINITIAL_HEAP=67108864)
+fi
+
 emcc "$RUNNER_SOURCE" \
   -I. -I"$INSTALL_DIR/include" \
+  "${thread_defines[@]}" \
   -Oz \
   -sMODULARIZE=1 \
   -sWASM_BIGINT=1 \
@@ -120,11 +175,12 @@ emcc "$RUNNER_SOURCE" \
   -sEXIT_RUNTIME=0 \
   -sFORCE_FILESYSTEM=1 \
   -sALLOW_MEMORY_GROWTH=1 \
-  -sINITIAL_HEAP=67108864 \
   -sMAXIMUM_MEMORY=2147483648 \
+  "${thread_link_flags[@]}" \
+  "${profile_link_flags[@]}" \
   -sSTACK_SIZE=5242880 \
   -sENVIRONMENT=worker \
-  -sINCOMING_MODULE_JS_API=wasmBinary,instantiateWasm,locateFile,print,printErr \
+  -sINCOMING_MODULE_JS_API=wasmBinary,instantiateWasm,locateFile,mainScriptUrlOrBlob,print,printErr \
   "-sEXPORTED_RUNTIME_METHODS=${runtime_methods}" \
   "${extra_runtime_libs[@]}" \
   -sERROR_ON_UNDEFINED_SYMBOLS=1 \
@@ -136,6 +192,11 @@ popd >/dev/null
 
 [[ -s "$OUT_DIR/ffmpeg.js" ]] || fail "ffmpeg.js was not produced"
 [[ -s "$OUT_DIR/ffmpeg.wasm" ]] || fail "ffmpeg.wasm was not produced"
+# Emscripten 6.x non-ESM pthread builds reuse the generated main JS as the
+# pthread Worker script. No separate *.worker.js asset is expected.
+if [[ -e "$OUT_DIR/ffmpeg.worker.js" || -e "$OUT_DIR/ffmpeg.worker.js.gz" ]]; then
+  fail "Unexpected legacy pthread worker asset was produced; Emscripten 6.x should reuse ffmpeg.js via mainScriptUrlOrBlob"
+fi
 gzip -9 -c "$OUT_DIR/ffmpeg.js" > "$OUT_DIR/ffmpeg.js.gz"
 gzip -9 -c "$OUT_DIR/ffmpeg.wasm" > "$OUT_DIR/ffmpeg.wasm.gz"
 validate_wasm "$OUT_DIR/ffmpeg.wasm"
@@ -144,7 +205,7 @@ for gz in "$OUT_DIR"/*.gz; do gzip -t "$gz"; done
 
 cat > "$OUT_DIR/manifest.json" <<EOF_JSON
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "builderVersion": "$BUILDER_VERSION",
   "profile": "$PROFILE",
   "displayName": "$PROFILE_DISPLAY_NAME",
@@ -157,6 +218,7 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
     "x264Ref": "$X264_REF",
     "x264Commit": "$X264_COMMIT",
     "x264Linked": $([[ "$PROFILE_USE_X264" == "1" ]] && echo true || echo false),
+    "zlibLinked": $([[ "$PROFILE_USE_ZLIB" == "1" ]] && echo true || echo false),
     "libwebpRef": "$LIBWEBP_REF",
     "libwebpCommit": "$LIBWEBP_COMMIT",
     "libwebpLinked": $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo true || echo false),
@@ -170,14 +232,26 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
   "runtime": {
     "frontend": "public-libav-runner",
     "runnerApiVersion": 1,
-    "threading": "none",
+    "threading": "$THREADING_MODE",
     "factory": "createFFmpegCore",
-    "requiresSharedArrayBuffer": false,
-    "requiresCrossOriginIsolation": false,
-    "fileProtocolSingleHtml": true,
-    "workerFsInput": $([[ "$PROFILE_USE_WORKERFS" == "1" ]] && echo true || echo false)
+    "pthreadPoolSize": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo "$PROFILE_PTHREAD_POOL_SIZE" || echo 0),
+    "decoderThreadCount": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo "$PROFILE_DECODER_THREAD_COUNT" || echo 1),
+    "encoderThreadCount": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo "$PROFILE_ENCODER_THREAD_COUNT" || echo 1),
+    "x264LookaheadThreadCount": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo "$PROFILE_X264_LOOKAHEAD_THREAD_COUNT" || echo 0),
+    "requiresSharedArrayBuffer": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo true || echo false),
+    "requiresCrossOriginIsolation": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo true || echo false),
+    "fileProtocolSingleHtml": $([[ "$THREADING_MODE" == "multi-thread" ]] && echo false || echo true),
+    "workerFsInput": $([[ "$PROFILE_USE_WORKERFS" == "1" ]] && echo true || echo false),
+    "pthreadWorkerStrategy": "$([[ "$THREADING_MODE" == "multi-thread" ]] && echo main-script-url-or-blob || echo none)"
   },
   "capabilities": $PROFILE_CAPABILITIES_JSON,
+  "catalog": {
+    "filters": $PROFILE_FILTERS_JSON,
+    "encoders": $PROFILE_ENCODERS_JSON,
+    "decoders": $PROFILE_DECODERS_JSON,
+    "muxers": $PROFILE_MUXERS_JSON,
+    "demuxers": $PROFILE_DEMUXERS_JSON
+  },
   "files": {
     "ffmpeg.js": { "bytes": $(bytes_of "$OUT_DIR/ffmpeg.js"), "sha256": "$(sha256_of "$OUT_DIR/ffmpeg.js")" },
     "ffmpeg.wasm": { "bytes": $(bytes_of "$OUT_DIR/ffmpeg.wasm"), "sha256": "$(sha256_of "$OUT_DIR/ffmpeg.wasm")" },

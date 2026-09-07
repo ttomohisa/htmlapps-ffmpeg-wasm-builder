@@ -40,6 +40,7 @@ __FFMPEG_RUNTIME__
       const response = new Response(stream);
       return asText ? await response.text() : await response.arrayBuffer();
     };
+    const threadingMode = "__THREADING_MODE__";
     const containsAscii = (bytes, text) => {
       const target = new TextEncoder().encode(text);
       outer: for (let i = 0; i <= bytes.length - target.length; i++) {
@@ -70,6 +71,7 @@ __FFMPEG_RUNTIME__
           gunzip("ffmpeg-js-gzip", true),
           gunzip("ffmpeg-wasm-gzip", false)
         ]);
+        if (threadingMode === "multi-thread" && !crossOriginIsolated) throw new Error("Multi-thread smoke test requires cross-origin isolation.");
         const input = decodeBase64("smoke-input");
 __SMOKE_TEST_BODY__
       } catch (error) {

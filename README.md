@@ -16,17 +16,18 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
        real browser smoke test
 ```
 
-- pthread不使用 / SharedArrayBuffer不要
-- COOP / COEP不要
-- Web Worker実行
-- `file://` の単一HTMLでも利用可能
+- 既存profileは従来どおりsingle-thread / SharedArrayBuffer不要
+- `ffmpeg-filter-builder` はsingle-thread + multi-threadを同時生成
+- single-thread版はCOOP / COEP不要で`file://`単一HTML向け
+- multi-thread版はSharedArrayBuffer + cross-origin isolation（COOP / COEP）が必要
+- どちらもWeb Worker上で実行
 - `--disable-everything` からprofileごとに必要機能だけ有効化
 - FFmpeg更新時は各profileを実ブラウザーでsmoke test
 - Tagged Releaseでは対応ソース・build info・SHA-256を同時配布
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.8.1 profiles
+## v1.9.4 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
@@ -37,6 +38,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 | `video-contact-sheet` | 動画全体から12/24/48枚を均等抽出 | decoderのみ | **なし** | RGB PPM + sample JSON |
 | `video-to-gif` | 動画の一部をAnimated GIF化 | decode + GIF encode | **なし** | GIF89a animation |
 | `video-to-webp` | 動画の一部をAnimated WebP化 | decode + libwebp_anim | **なし** | Animated WebP |
+| `ffmpeg-filter-builder` | Visual filtergraph preview/render | decode/filter/encode | あり | H.264 + AAC MP4（ST / MT） |
 
 
 `video-compressor` はv1.6.0で H.264/AAC MP4 に加えて VP9/Opus WebM を出力できます。入力動画はWORKERFSで読み込み、圧縮前のinspect modeでは映像packetの総bytesとstream durationから平均映像bitrateを測定します。MP4/MOVのDisplay Matrixも読み取り、90/180/270度の回転はFFmpeg本体と同じtranspose/flip分岐で実画素へ適用してからresize/encodeします。
@@ -52,6 +54,8 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 `video-to-gif` / `video-to-webp` はv1.5.0から、autorotate後の映像に対する正規化crop矩形 (`x/y/width/height`: 0..1) を受け取れます。crop後にresizeするため、アプリ側はプレビュー上の切り抜き枠をそのままrunnerへ渡せます。
 
 `video-to-webp` は同じ動画前処理を共有し、FFmpegの `libwebp_anim` wrapperからAnimated WebPを生成します。libwebpはこのprofileだけにリンクされ、lossy/lossless、quality、compression levelを選べます。両profileとも入力File/BlobはWORKERFSを使います。
+
+`ffmpeg-filter-builder` は同一profileから `single-thread` と `multi-thread` の2 runtimeを生成します。MT初期設定はpthread pool 8に対して、video decoder 2 / libx264 encoder 4 / x264 lookahead 1を明示的に割り当てます。decodeとencodeを同じ4-thread設定にせず、ブラウザの有限なWorker poolを枯渇させない構成です。ST版は可搬性優先、MT版はBrowser Kitty等のcross-origin isolatedなHTTP(S)配信向けです。初期v0.1 runnerは1入力のvideo/audio filter chainを実行し、complex multi-input graphはFilter Builderアプリの後続段階で拡張します。
 
 ## pin
 
@@ -132,7 +136,19 @@ Video to Animated WebP:
 build-video-to-webp.bat
 ```
 
-生成物はprofileごとに分かれます。
+FFmpeg Filter Builder（ST + MTを連続build）:
+
+```text
+build-ffmpeg-filter-builder.bat
+```
+
+または：
+
+```text
+build.bat ffmpeg-filter-builder
+```
+
+生成物はprofileごとに分かれます。通常profileは従来のflat配置を維持し、dual-runtime profileだけvariant subdirectoryを使います。
 
 ```text
 dist/<profile>/
@@ -142,6 +158,12 @@ dist/<profile>/
 ├─ ffmpeg.wasm.gz
 ├─ manifest.json
 └─ smoke-test.html
+
+dist/ffmpeg-filter-builder/
+├─ single-thread/
+│  └─ ffmpeg.js / ffmpeg.wasm / manifest.json / smoke-test.html ...
+└─ multi-thread/
+   └─ ffmpeg.js / ffmpeg.wasm / manifest.json / smoke-test.html ...
 ```
 
 `build.bat` はWASM生成後にChrome / Edgeをheadless起動し、profile専用のsmoke testを実行します。
@@ -286,6 +308,21 @@ const result = await runner.run({
 
 Browser runtimeでは `BrowserFFmpeg.videoToWebpArgs()` を使います。`lossless: true` を指定するとBGRA経路のlossless WebP、それ以外はYUV420Pのlossy WebPを生成します。
 
+## FFmpeg Filter Builder runner API
+
+初期v0.1 profileは、Graph compilerが生成した1-stream filter chainをpublic libav runnerへ渡します。
+
+```js
+const args = BrowserFFmpeg.ffmpegFilterBuilderArgs({
+  input: "/workerfs/input.mp4",
+  output: "/output.mp4",
+  videoFilter: "crop=1080:1080,scale=720:720",
+  audioFilter: "volume=-3dB"
+});
+```
+
+MT版をembedded assetから起動するときは `threading: "multi-thread"` を指定します。Emscripten 6系では `ffmpeg.js` 自身をpthread Workerとして再利用し、runtimeが `mainScriptUrlOrBlob` に埋め込みJSのBlobを渡します。cross-origin isolationがない環境では明示的に失敗します。ST版は従来どおり`file://`利用を維持します。
+
 ## アプリへ組み込む場合
 
 ブラウザー実行時にGitHub Releaseへアクセスするのではなく、**アプリの更新・ビルド時に特定Builder Releaseを取得し、そのアプリへ固定して埋め込む**方式を推奨します。
@@ -294,24 +331,21 @@ Browser runtimeでは `BrowserFFmpeg.videoToWebpArgs()` を使います。`lossl
 
 ## Public Release
 
-v1.8.1ではRelease workflowが7 profileをbuild + smoke testしてから次を公開します。
+v1.9.4では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.8.1.zip
-ffmpeg-wasm-video-speed-changer-v1.8.1.zip
-ffmpeg-wasm-lossless-video-cutter-v1.8.1.zip
-ffmpeg-wasm-media-inspector-v1.8.1.zip
-ffmpeg-wasm-video-contact-sheet-v1.8.1.zip
-ffmpeg-wasm-video-to-gif-v1.8.1.zip
-ffmpeg-wasm-video-to-webp-v1.8.1.zip
-ffmpeg-wasm-sources-v1.8.1.tar.gz
-BUILDINFO-video-compressor.txt
-BUILDINFO-video-speed-changer.txt
-BUILDINFO-lossless-video-cutter.txt
-BUILDINFO-media-inspector.txt
-BUILDINFO-video-contact-sheet.txt
-BUILDINFO-video-to-gif.txt
-BUILDINFO-video-to-webp.txt
+ffmpeg-wasm-video-compressor-v1.9.4.zip
+ffmpeg-wasm-video-speed-changer-v1.9.4.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.4.zip
+ffmpeg-wasm-media-inspector-v1.9.4.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.4.zip
+ffmpeg-wasm-video-to-gif-v1.9.4.zip
+ffmpeg-wasm-video-to-webp-v1.9.4.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.4.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.4.zip
+ffmpeg-wasm-sources-v1.9.4.tar.gz
+BUILDINFO-ffmpeg-filter-builder-single-thread.txt
+BUILDINFO-ffmpeg-filter-builder-multi-thread.txt
 SHA256SUMS.txt
 ```
 

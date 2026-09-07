@@ -12,13 +12,18 @@ The repository does not vendor FFmpeg, x264, libwebp, or Emscripten source trees
 
 ## x264
 
-x264 is pinned in `versions.env` because the `video-compressor` and `video-speed-changer` profiles link it. The `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` profiles set `PROFILE_USE_X264=0`; x264 is not linked into those generated Wasm cores.
+x264 is pinned in `versions.env` because the `video-compressor`, `video-speed-changer`, and `ffmpeg-filter-builder` profiles link it. The `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` profiles set `PROFILE_USE_X264=0`; x264 is not linked into those generated Wasm cores.
 
 The open-source x264 build used by the video-compressor profile is GPL-2.0-or-later.
 
 ## libwebp
 
 libwebp is pinned in `versions.env` and linked only by `video-to-webp` (`PROFILE_USE_LIBWEBP=1`). The GIF and existing profiles keep `PROFILE_USE_LIBWEBP=0`, so libwebp does not contribute to their Wasm size. The release bundle for `video-to-webp` includes libwebp's `COPYING` and, when present, `PATENTS` notice files.
+
+
+## zlib
+
+`ffmpeg-filter-builder` enables the zlib system port supplied by the pinned Emscripten toolchain because FFmpeg's native PNG decoder requires zlib/`inflate_wrapper`. Other profiles keep zlib disabled unless they explicitly opt in. zlib is distributed under the upstream zlib license; the exact port recipe is tied to the pinned Emscripten revision.
 
 ## Emscripten
 
@@ -42,3 +47,7 @@ This file is engineering documentation, not legal advice.
 ### video-speed-changer
 
 The generated `ffmpeg.wasm` for `video-speed-changer` links FFmpeg with x264 and is distributed under GPL-2.0-or-later, with corresponding source included alongside release artifacts.
+
+## FFmpeg Filter Builder threading
+
+`ffmpeg-filter-builder` publishes both single-thread and multi-thread variants from the same GPL-2.0-or-later profile because it links x264. The multi-thread variant additionally contains Emscripten pthread support. Emscripten 6.x reuses the generated `ffmpeg.js` as the pthread Worker program, so no separate worker asset is distributed; this does not change the FFmpeg/x264 license classification.

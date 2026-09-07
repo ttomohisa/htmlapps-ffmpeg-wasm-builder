@@ -1,4 +1,4 @@
-/* Browser runtime for the single-thread public-libav runner. No SharedArrayBuffer required. */
+/* Browser runtime for public-libav runners. Single-thread and explicit pthread variants are supported. */
 (() => {
   "use strict";
   const PROGRESS_PREFIX = "__FFMPEG_WASM_PROGRESS__";
@@ -34,7 +34,7 @@
       }
     };
     self.onmessage = async (event) => {
-      const { wasmBytes, args, files, outputs } = event.data;
+      const { wasmBytes, args, files, outputs, coreJsText, threading } = event.data;
       const sendLine = (stream, value) => {
         const message = String(value);
         if (message.startsWith(PROGRESS_PREFIX)) {
@@ -46,7 +46,17 @@
       };
       try {
         if (typeof createFFmpegCore !== "function") throw new Error("createFFmpegCore factory was not found.");
+        if (threading === "multi-thread" && (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer !== "function")) {
+          throw new Error("The multi-thread FFmpeg runtime requires cross-origin isolation and SharedArrayBuffer.");
+        }
         const wasmView = new Uint8Array(wasmBytes);
+        // Emscripten 6.x non-ESM pthread builds reuse the generated main JS
+        // as the pthread Worker program. Pass the embedded main script as a
+        // Blob so Emscripten can create its pthread pool without any external
+        // worker asset or network request.
+        const mainScriptUrlOrBlob = threading === "multi-thread"
+          ? new Blob([coreJsText], { type: "text/javascript;charset=utf-8" })
+          : null;
         const core = await createFFmpegCore({
           // Emscripten's generated loader normally resolves ffmpeg.wasm
           // relative to the JS script.  Our JS runs inside a blob Worker, where
@@ -61,6 +71,7 @@
             return instance.exports;
           },
           locateFile: (path, prefix) => prefix + path,
+          ...(mainScriptUrlOrBlob ? { mainScriptUrlOrBlob } : {}),
           print: (message) => sendLine("stdout", message),
           printErr: (message) => sendLine("stderr", message)
         });
@@ -128,9 +139,10 @@
   };
 
   class FFmpegRunner {
-    constructor(coreJsText, wasmBytes, revokeUrls = []) {
+    constructor(coreJsText, wasmBytes, options = {}, revokeUrls = []) {
       this.coreJsText = coreJsText;
       this.wasmBytes = wasmBytes;
+      this.threading = options.threading || "single-thread";
       this.revokeUrls = revokeUrls;
       this.disposed = false;
       this.activeRuns = new Set();
@@ -208,7 +220,11 @@
         };
         worker.onerror = (event) => fail(event.error || new Error(event.message || "FFmpeg WASM worker failed."));
         if (signal?.aborted) { onAbort(); return; }
-        worker.postMessage({ wasmBytes: wasmForRun, args, files, outputs }, transfer);
+        worker.postMessage({
+          wasmBytes: wasmForRun, args, files, outputs,
+          coreJsText: this.coreJsText,
+          threading: this.threading
+        }, transfer);
       });
     }
     dispose() {
@@ -223,19 +239,20 @@
     }
   }
 
-  async function loadHosted({ coreJsUrl, wasmUrl }) {
+  async function loadHosted({ coreJsUrl, wasmUrl, threading = "single-thread" }) {
     assertSupported();
     const coreHref = new URL(coreJsUrl, document.baseURI).href;
     const wasmHref = new URL(wasmUrl, document.baseURI).href;
     const [coreResponse, wasmResponse] = await Promise.all([fetch(coreHref), fetch(wasmHref)]);
     if (!coreResponse.ok) throw new Error(`Failed to load FFmpeg JS: ${coreResponse.status} ${coreResponse.statusText}`);
     if (!wasmResponse.ok) throw new Error(`Failed to load FFmpeg WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
-    return new FFmpegRunner(await coreResponse.text(), await wasmResponse.arrayBuffer());
+    return new FFmpegRunner(await coreResponse.text(), await wasmResponse.arrayBuffer(), { threading });
   }
 
-  async function loadEmbedded({ coreJsText, wasmBytes }) {
+  async function loadEmbedded({ coreJsText, wasmBytes, threading = "single-thread" }) {
     assertSupported();
-    return new FFmpegRunner(String(coreJsText), await toArrayBuffer(wasmBytes));
+    if (!["single-thread", "multi-thread"].includes(threading)) throw new RangeError("Unknown FFmpeg threading mode: " + threading);
+    return new FFmpegRunner(String(coreJsText), await toArrayBuffer(wasmBytes), { threading });
   }
 
   const videoCompressorArgs = (options = {}) => {
@@ -431,10 +448,31 @@
     return JSON.parse(new TextDecoder().decode(file.data));
   };
 
+
+  const ffmpegFilterBuilderArgs = (options = {}) => {
+    const args = [
+      "--input", options.input || "/workerfs/input.mp4",
+      "--output", options.output || "/output.mp4",
+      "--codec", "h264"
+    ];
+    const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
+    add("--video-filter", options.videoFilter);
+    add("--audio-filter", options.audioFilter);
+    add("--max-width", options.maxWidth ?? 0);
+    add("--max-height", options.maxHeight ?? 0);
+    add("--fps", options.fps ?? 0);
+    add("--crf", options.crf ?? 28);
+    add("--audio-bitrate", options.audioBitrateKbps ?? 128);
+    if (options.noAudio) args.push("--no-audio");
+    if (options.allowUpscale) args.push("--allow-upscale");
+    return args;
+  };
+
   window.BrowserFFmpeg = Object.freeze({
     loadHosted,
     loadEmbedded,
     videoCompressorArgs,
+    ffmpegFilterBuilderArgs,
     videoSpeedChangerArgs,
     videoSpeedChangerInspectArgs,
     videoCompressorInspectArgs,

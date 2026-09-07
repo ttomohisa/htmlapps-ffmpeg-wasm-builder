@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.9.4 - 2026-09-07
+
+- Fixed the FFmpeg Filter Builder multi-thread runtime worker budget so the H.264 decoder and libx264 encoder no longer contend for the same four-thread allocation.
+- Split the MT codec budget into 2 decoder threads and 4 encoder threads, while keeping the prewarmed pthread pool at 8 workers.
+- Capped x264 lookahead to one worker and forced frame-based x264 threading for predictable browser behavior.
+- Added encoder-open diagnostics that report the thread budget and the concrete libav error code.
+
+## 1.9.3 - 2026-09-07
+
+- Fixed the Filter Builder multi-thread output contract for Emscripten 6.x. Non-ESM pthread builds reuse the generated `ffmpeg.js` as the pthread Worker program instead of emitting a separate `ffmpeg.worker.js`.
+- Removed the obsolete worker-file requirement from Docker/PowerShell/Unix build validation, smoke-test packaging, release packaging, and browser runtime loading.
+- Embedded MT startup now passes the same `ffmpeg.js` source as a Blob through Emscripten `mainScriptUrlOrBlob`, preserving the single-HTML design without a second Worker asset.
+- Added manifest metadata (`pthreadWorkerStrategy: main-script-url-or-blob`) and repository assertions so the Emscripten 6.x worker contract is explicit.
+
+## 1.9.2 - 2026-09-07
+
+- Fixed smoke-test packaging for the dual-thread Filter Builder profile. `__THREADING_MODE__` is embedded inside a JavaScript source line, so the packer now replaces scalar placeholders in-place instead of requiring the placeholder to occupy the whole line.
+- Kept the unresolved-placeholder guard intact and added a repository assertion so this packaging regression cannot silently return.
+
+## 1.9.1 - 2026-09-07
+
+- Fixed the new `ffmpeg-filter-builder` profile so PNG decoding can actually be configured with FFmpeg 9.0.1. The profile now explicitly enables FFmpeg zlib support and Emscripten's zlib system port instead of declaring `png` without its `inflate_wrapper` dependency.
+- Added `PROFILE_USE_ZLIB` as an opt-in profile capability. Existing profiles keep zlib disabled and therefore keep their previous dependency/size contract.
+- Pass `-sUSE_ZLIB=1` consistently through FFmpeg configure/build and the final public-libav runner link for both single-thread and multi-thread Filter Builder variants.
+- Added configure/repository assertions for `CONFIG_ZLIB` and recorded zlib linkage in the runtime manifest.
+
+## 1.9.0 - 2026-09-07
+
+- Added the `ffmpeg-filter-builder` public-libav profile with real video/audio filter-chain execution and H.264/AAC MP4 output for the Filter Builder v0.1 runtime PoC.
+- Added explicit profile threading variants. Existing profiles remain single-threaded; Filter Builder builds both `single-thread` and `multi-thread` artifacts from the same source.
+- Added pthread-aware FFmpeg/x264/Emscripten build paths with an 8-worker pool / 4 codec threads, generated pthread worker packaging, manifest schema 8 threading metadata, and embedded-browser runtime support via `mainScriptUrlOrBlob`.
+- Added a COOP/COEP local smoke server for the multi-thread variant while preserving the existing portable ST smoke path.
+- Updated CI and release packaging to publish separate Filter Builder ST/MT ZIPs and BUILDINFO files.
+
 ## 1.8.1 - 2026-09-06
 
 - Add AbortSignal support to browser runtime runs so apps can terminate an active FFmpeg Worker cleanly.

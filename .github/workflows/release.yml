@@ -50,6 +50,7 @@ jobs:
           ./build.sh video-contact-sheet
           ./build.sh video-to-gif
           ./build.sh video-to-webp
+          ./build.sh ffmpeg-filter-builder
 
       - name: Prepare binary and corresponding-source bundles
         shell: bash
@@ -73,6 +74,8 @@ jobs:
             release/ffmpeg-wasm-video-contact-sheet-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-to-gif-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-to-webp-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
             release/BUILDINFO-video-compressor.txt \
             release/BUILDINFO-video-speed-changer.txt \
@@ -81,6 +84,8 @@ jobs:
             release/BUILDINFO-video-contact-sheet.txt \
             release/BUILDINFO-video-to-gif.txt \
             release/BUILDINFO-video-to-webp.txt \
+            release/BUILDINFO-ffmpeg-filter-builder-single-thread.txt \
+            release/BUILDINFO-ffmpeg-filter-builder-multi-thread.txt \
             release/SHA256SUMS.txt \
             --verify-tag \
             --title "FFmpeg WASM Builder ${GITHUB_REF_NAME}" \

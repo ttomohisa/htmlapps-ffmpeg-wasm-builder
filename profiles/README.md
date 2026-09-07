@@ -1,24 +1,7 @@
 # Build profiles
 
-Each app profile is a small build contract:
+Each profile contains `profile.env`, `ffmpeg.flags`, documentation, a public-libav runner, and a browser smoke test. Single-thread is the default. Profiles must opt in explicitly to additional variants with `PROFILE_THREADING_VARIANTS`.
 
-```text
-profiles/<profile>/
-├─ profile.env       # required config/link metadata + manifest capabilities
-├─ ffmpeg.flags      # FFmpeg configure flags
-├─ README.md         # profile behavior/limitations
-└─ single-html/      # optional Builder demo shell
+Current release profiles are `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, `video-to-webp`, and `ffmpeg-filter-builder`.
 
-runners/<profile>.c
-
-tests/smoke-tests/<profile>.js
-```
-
-`ffmpeg.flags` starts from `--disable-everything` and enables only the components needed by that tool. `profile.env` tells the linker which FFmpeg static libraries are actually required and whether x264 or libwebp belongs in the final Wasm. The C runner exposes the operation; the profile-specific smoke test must exercise it in a real browser.
-
-Current release profiles include `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`. The two animation profiles share a public-libav runner: GIF uses a two-pass palette pipeline, while WebP links pinned libwebp only in its own build. WORKERFS is used for large browser File/Blob inputs where random access is useful.
-
-
-## Video Speed Changer
-
-`video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.
+`ffmpeg-filter-builder` declares `PROFILE_THREADING_VARIANTS="single-thread,multi-thread"` and `PROFILE_PTHREAD_POOL_SIZE=8`, `PROFILE_DECODER_THREAD_COUNT=2`, `PROFILE_ENCODER_THREAD_COUNT=4`, and `PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1`. It is intentionally staged: the v0.1 runner accepts real video/audio filter chains and H.264/AAC MP4 output, while full multi-input complex graph execution and drawtext/font dependencies are added only when their app milestones are implemented and smoke-tested.

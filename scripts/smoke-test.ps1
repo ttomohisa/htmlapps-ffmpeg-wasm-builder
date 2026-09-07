@@ -1,5 +1,6 @@
 param(
   [string]$Profile = "video-compressor",
+  [ValidateSet("single-thread", "multi-thread")][string]$Threading = "single-thread",
   [int]$TimeoutSeconds = 120
 )
 
@@ -8,7 +9,9 @@ Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $DistRoot = Join-Path $Root "dist"
-$ProfileDist = Join-Path $DistRoot $Profile
+$ProfileRoot = Join-Path $DistRoot $Profile
+$VariantCandidate = Join-Path $ProfileRoot $Threading
+$ProfileDist = if (Test-Path $VariantCandidate -PathType Container) { $VariantCandidate } else { $ProfileRoot }
 $HtmlPath = Join-Path $ProfileDist "smoke-test.html"
 if (-not (Test-Path $HtmlPath)) {
   throw "Smoke-test HTML was not found: $HtmlPath`nRun build.bat first."
@@ -58,6 +61,7 @@ $StdoutPath = Join-Path $TempDir "stdout.txt"
 $StderrPath = Join-Path $TempDir "stderr.txt"
 New-Item -ItemType Directory -Force -Path $BrowserProfile | Out-Null
 $process = $null
+$serverJob = $null
 
 function Read-TextBestEffort {
   param([string]$Path)
@@ -75,8 +79,74 @@ function Read-TextBestEffort {
   }
 }
 
+function Get-FreeTcpPort {
+  $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  try { return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port } finally { $listener.Stop() }
+}
+
+function Start-CrossOriginIsolatedServer {
+  param([string]$RootPath, [int]$Port)
+  return Start-Job -ArgumentList $RootPath, $Port -ScriptBlock {
+    param($ServeRoot, $ServePort)
+    $listener = New-Object System.Net.HttpListener
+    $listener.Prefixes.Add("http://127.0.0.1:$ServePort/")
+    $listener.Start()
+    try {
+      while ($listener.IsListening) {
+        $context = $listener.GetContext()
+        try {
+          $relative = [Uri]::UnescapeDataString($context.Request.Url.AbsolutePath.TrimStart('/'))
+          if ([string]::IsNullOrWhiteSpace($relative)) { $relative = "smoke-test.html" }
+          $full = [IO.Path]::GetFullPath((Join-Path $ServeRoot $relative))
+          $rootFull = [IO.Path]::GetFullPath($ServeRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+          if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path $full -PathType Leaf)) {
+            $context.Response.StatusCode = 404
+            $context.Response.Close()
+            continue
+          }
+          $bytes = [IO.File]::ReadAllBytes($full)
+          $context.Response.Headers.Add("Cross-Origin-Opener-Policy", "same-origin")
+          $context.Response.Headers.Add("Cross-Origin-Embedder-Policy", "require-corp")
+          $context.Response.Headers.Add("Cross-Origin-Resource-Policy", "same-origin")
+          $context.Response.ContentType = if ($full.EndsWith(".html")) { "text/html; charset=utf-8" } elseif ($full.EndsWith(".js")) { "text/javascript; charset=utf-8" } else { "application/octet-stream" }
+          $context.Response.ContentLength64 = $bytes.Length
+          if ($context.Request.HttpMethod -ne "HEAD") {
+            $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+          }
+          $context.Response.Close()
+        } catch {
+          try { $context.Response.StatusCode = 500; $context.Response.Close() } catch {}
+        }
+      }
+    } finally {
+      if ($listener.IsListening) { $listener.Stop() }
+      $listener.Close()
+    }
+  }
+}
+
 try {
-  $Uri = (New-Object System.Uri((Resolve-Path $HtmlPath).Path)).AbsoluteUri
+  if ($Threading -eq "multi-thread") {
+    $ServerPort = Get-FreeTcpPort
+    $serverJob = Start-CrossOriginIsolatedServer -RootPath $ProfileDist -Port $ServerPort
+    $Uri = "http://127.0.0.1:$ServerPort/smoke-test.html"
+    $serverDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    $serverReady = $false
+    do {
+      try {
+        $probe = Invoke-WebRequest -Uri $Uri -Method Head -TimeoutSec 1 -UseBasicParsing
+        if ($probe.StatusCode -eq 200) { $serverReady = $true; break }
+      } catch {}
+      Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $serverDeadline)
+    if (-not $serverReady) {
+      $jobState = if ($serverJob) { [string]$serverJob.State } else { "missing" }
+      throw "Could not start the cross-origin-isolated smoke server. Job state: $jobState"
+    }
+  } else {
+    $Uri = (New-Object System.Uri((Resolve-Path $HtmlPath).Path)).AbsoluteUri
+  }
   $BrowserArgs = @(
     "--headless=new",
     "--disable-gpu",
@@ -91,7 +161,9 @@ try {
   if ($env:OS -ne "Windows_NT") { $BrowserArgs += "--no-sandbox" }
   $BrowserArgs += $Uri
 
-  Write-Host "[FFmpeg WASM] Smoke test: actual browser transcode" -ForegroundColor Cyan
+  $smokeKind = if ($Threading -eq "multi-thread") { "actual browser transcode (COOP/COEP + pthread)" } else { "actual browser transcode (file:// single-thread)" }
+  Write-Host "[FFmpeg WASM] Smoke test: $smokeKind" -ForegroundColor Cyan
+  Write-Host "[FFmpeg WASM] Threading: $Threading" -ForegroundColor DarkGray
   Write-Host "[FFmpeg WASM] Browser: $Browser" -ForegroundColor DarkGray
   $fixtureName = if ($Profile -eq "video-compressor") { "tests/fixtures/smoke-rotated.mp4" } else { "tests/fixtures/smoke-input.mp4" }
   Write-Host "[FFmpeg WASM] Input:   $fixtureName" -ForegroundColor DarkGray
@@ -147,6 +219,10 @@ try {
   if ($process -and -not $process.HasExited) {
     try { $process.Kill() } catch {}
     try { $process.WaitForExit(5000) | Out-Null } catch {}
+  }
+  if ($serverJob) {
+    try { Stop-Job $serverJob -ErrorAction SilentlyContinue | Out-Null } catch {}
+    try { Remove-Job $serverJob -Force -ErrorAction SilentlyContinue | Out-Null } catch {}
   }
   if (Test-Path $TempDir) { Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue }
 }

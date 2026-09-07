@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="${1:-v$(grep '^BUILDER_VERSION=' "$ROOT/versions.env" | cut -d= -f2-)}"
-RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp)
+RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)
 
 # shellcheck disable=SC1091
 source "$ROOT/versions.env"
@@ -14,16 +14,40 @@ log() { printf '\n[release] %s\n' "$*"; }
 EXPECTED_TAG="v${BUILDER_VERSION}"
 [[ "$TAG" == "$EXPECTED_TAG" ]] || fail "Release tag $TAG does not match BUILDER_VERSION=$BUILDER_VERSION (expected $EXPECTED_TAG)."
 
-for cmd in git tar gzip sha256sum python3; do
+for cmd in git tar gzip sha256sum python3 xargs; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Required release tool is missing: $cmd"
 done
 
+profile_threading_variants() {
+  local profile="$1"
+  local PROFILE_THREADING_VARIANTS="single-thread"
+  # shellcheck disable=SC1090
+  source "$ROOT/profiles/$profile/profile.env"
+  printf '%s\n' "$PROFILE_THREADING_VARIANTS"
+}
+
+profile_dist() {
+  local profile="$1" variant="$2"
+  if [[ -d "$ROOT/dist/$profile/$variant" ]]; then
+    printf '%s\n' "$ROOT/dist/$profile/$variant"
+  else
+    printf '%s\n' "$ROOT/dist/$profile"
+  fi
+}
+
 for profile in "${RELEASE_PROFILES[@]}"; do
-  DIST="$ROOT/dist/$profile"
-  for file in ffmpeg.js ffmpeg.wasm ffmpeg.js.gz ffmpeg.wasm.gz manifest.json smoke-test.html; do
-    [[ -s "$DIST/$file" ]] || fail "Build output is missing: $DIST/$file. Run the build + smoke test first."
-  done
   [[ -s "$ROOT/profiles/$profile/profile.env" ]] || fail "Profile metadata is missing: $profile/profile.env"
+  IFS=',' read -r -a variants <<< "$(profile_threading_variants "$profile")"
+  for variant in "${variants[@]}"; do
+    variant="$(printf '%s' "$variant" | xargs)"
+    DIST="$(profile_dist "$profile" "$variant")"
+    for file in ffmpeg.js ffmpeg.wasm ffmpeg.js.gz ffmpeg.wasm.gz manifest.json smoke-test.html; do
+      [[ -s "$DIST/$file" ]] || fail "Build output is missing: $DIST/$file. Run the build + smoke test first."
+    done
+    if [[ -e "$DIST/ffmpeg.worker.js" || -e "$DIST/ffmpeg.worker.js.gz" ]]; then
+      fail "Unexpected legacy pthread worker asset in $DIST; Emscripten 6.x reuses ffmpeg.js via mainScriptUrlOrBlob"
+    fi
+  done
 done
 
 RELEASE_DIR="$ROOT/release"
@@ -82,8 +106,9 @@ fetch_exact "Opus" "$LIBOPUS_REPOSITORY" "$LIBOPUS_FALLBACK_REPOSITORY" "$LIBOPU
 
 write_buildinfo() {
   local profile="$1"
-  local output="$2"
-  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON=""
+  local variant="$2"
+  local output="$3"
+  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
   local -a PROFILE_REQUIRED_CONFIG=() PROFILE_LINK_LIBS=()
   # shellcheck disable=SC1090
   source "$ROOT/profiles/$profile/profile.env"
@@ -95,9 +120,20 @@ write_buildinfo() {
     echo "Release tag: $TAG"
     echo "Profile: $profile"
     echo "Profile display name: $PROFILE_DISPLAY_NAME"
+    echo "Threading variant: $variant"
+    echo "SharedArrayBuffer required: $([[ "$variant" == "multi-thread" ]] && echo yes || echo no)"
+    echo "Cross-origin isolation required: $([[ "$variant" == "multi-thread" ]] && echo yes || echo no)"
+    echo "file:// standalone supported: $([[ "$variant" == "multi-thread" ]] && echo no || echo yes)"
+    if [[ "$variant" == "multi-thread" ]]; then
+      echo "Pthread pool size: $PROFILE_PTHREAD_POOL_SIZE"
+      echo "Decoder thread count: $PROFILE_DECODER_THREAD_COUNT"
+      echo "Encoder thread count: $PROFILE_ENCODER_THREAD_COUNT"
+      echo "x264 lookahead thread count: $PROFILE_X264_LOOKAHEAD_THREAD_COUNT"
+    fi
     echo "Generated core license: $PROFILE_BINARY_LICENSE"
     echo "Output: $PROFILE_OUTPUT_DESCRIPTION"
     echo "x264 linked into this profile: $([[ "$PROFILE_USE_X264" == "1" ]] && echo yes || echo no)"
+    echo "zlib system port linked into this profile: $([[ "$PROFILE_USE_ZLIB" == "1" ]] && echo yes || echo no)"
     echo "libvpx linked into this profile: $([[ "$PROFILE_USE_LIBVPX" == "1" ]] && echo yes || echo no)"
     echo "Opus linked into this profile: $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo yes || echo no)"
     echo "libwebp linked into this profile: $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo yes || echo no)"
@@ -146,15 +182,31 @@ write_buildinfo() {
 --disable-autodetect
 --disable-network
 --disable-iconv
+ARGS
+    if [[ "$variant" == "multi-thread" ]]; then
+      cat <<'ARGS'
+--enable-pthreads
+--disable-w32threads
+--disable-os2threads
+ARGS
+    else
+      cat <<'ARGS'
 --disable-pthreads
 --disable-w32threads
 --disable-os2threads
+ARGS
+    fi
+    cat <<'ARGS'
 --disable-programs
 --disable-avdevice
 ARGS
     echo
     echo "Profile FFmpeg configure arguments ($profile):"
     sed -e 's/\r$//' -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/profiles/$profile/ffmpeg.flags"
+    if [[ "$PROFILE_USE_ZLIB" == "1" ]]; then
+      echo
+      echo "Emscripten zlib system port: -sUSE_ZLIB=1 (used by FFmpeg configure/build and final link)"
+    fi
     if [[ "$PROFILE_USE_X264" == "1" ]]; then
       echo
       echo "x264 configure arguments:"
@@ -164,7 +216,9 @@ ARGS
 --disable-cli
 --disable-asm
 --disable-opencl
---disable-thread
+ARGS
+      if [[ "$variant" == "single-thread" ]]; then echo "--disable-thread"; else echo "-pthread via CFLAGS/LDFLAGS"; fi
+      cat <<'ARGS'
 --bit-depth=8
 --chroma-format=420
 ARGS
@@ -202,12 +256,16 @@ ARGS
 
 make_binary_zip() {
   local profile="$1"
-  local buildinfo="$2"
-  local DIST="$ROOT/dist/$profile"
-  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON=""
+  local variant="$2"
+  local buildinfo="$3"
+  local DIST
+  DIST="$(profile_dist "$profile" "$variant")"
+  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
   local -a PROFILE_REQUIRED_CONFIG=() PROFILE_LINK_LIBS=()
-  local binary_dir="$WORK_DIR/binary-$profile"
-  local binary_zip="$RELEASE_DIR/ffmpeg-wasm-${profile}-v${BUILDER_VERSION}.zip"
+  local suffix=""
+  [[ -d "$ROOT/dist/$profile/$variant" ]] && suffix="-$variant"
+  local binary_dir="$WORK_DIR/binary-$profile$suffix"
+  local binary_zip="$RELEASE_DIR/ffmpeg-wasm-${profile}${suffix}-v${BUILDER_VERSION}.zip"
   # shellcheck disable=SC1090
   source "$ROOT/profiles/$profile/profile.env"
 
@@ -261,9 +319,15 @@ PY
 }
 
 for profile in "${RELEASE_PROFILES[@]}"; do
-  buildinfo="$RELEASE_DIR/BUILDINFO-${profile}.txt"
-  write_buildinfo "$profile" "$buildinfo"
-  make_binary_zip "$profile" "$buildinfo"
+  IFS=',' read -r -a variants <<< "$(profile_threading_variants "$profile")"
+  for variant in "${variants[@]}"; do
+    variant="$(printf '%s' "$variant" | xargs)"
+    suffix=""
+    [[ -d "$ROOT/dist/$profile/$variant" ]] && suffix="-$variant"
+    buildinfo="$RELEASE_DIR/BUILDINFO-${profile}${suffix}.txt"
+    write_buildinfo "$profile" "$variant" "$buildinfo"
+    make_binary_zip "$profile" "$variant" "$buildinfo"
+  done
 done
 
 SOURCE_ROOT="$WORK_DIR/source-bundle"
@@ -308,6 +372,7 @@ Published binary profiles:
 - video-contact-sheet
 - video-to-gif
 - video-to-webp
+- ffmpeg-filter-builder (single-thread + multi-thread)
 EOF_README
 
 SOURCE_TGZ="$RELEASE_DIR/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
@@ -315,20 +380,8 @@ tar -C "$WORK_DIR" -czf "$SOURCE_TGZ" "source-bundle"
 
 (
   cd "$RELEASE_DIR"
-  sha256sum \
-    ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip \
-    ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
-    ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
-    ffmpeg-wasm-video-contact-sheet-v${BUILDER_VERSION}.zip \
-    ffmpeg-wasm-video-to-gif-v${BUILDER_VERSION}.zip \
-    ffmpeg-wasm-video-to-webp-v${BUILDER_VERSION}.zip \
-    ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz \
-    BUILDINFO-video-compressor.txt \
-    BUILDINFO-lossless-video-cutter.txt \
-    BUILDINFO-media-inspector.txt \
-    BUILDINFO-video-contact-sheet.txt \
-    BUILDINFO-video-to-gif.txt \
-    BUILDINFO-video-to-webp.txt > SHA256SUMS.txt
+  mapfile -t checksum_files < <(find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\n' | sort)
+  sha256sum "${checksum_files[@]}" > SHA256SUMS.txt
 )
 
 log "Release assets prepared"

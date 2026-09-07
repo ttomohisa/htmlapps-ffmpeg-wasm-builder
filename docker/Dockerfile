@@ -24,10 +24,12 @@ ARG X264_REPOSITORY
 ARG X264_FALLBACK_REPOSITORY
 ARG X264_REF
 ARG X264_COMMIT
+ARG THREADING_MODE=single-thread
 ENV X264_REPOSITORY=${X264_REPOSITORY} \
     X264_FALLBACK_REPOSITORY=${X264_FALLBACK_REPOSITORY} \
     X264_REF=${X264_REF} \
-    X264_COMMIT=${X264_COMMIT}
+    X264_COMMIT=${X264_COMMIT} \
+    THREADING_MODE=${THREADING_MODE}
 COPY scripts/docker-common.sh scripts/build-x264.sh /workspace/scripts/
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-x264.sh
 
@@ -83,7 +85,7 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/fetch-ffmpeg.sh
 
 # Common profile build inputs. This stage deliberately does not copy x264.
 FROM toolchain-base AS wasm-common
-ARG BUILDER_VERSION=1.8.1
+ARG BUILDER_VERSION=1.9.4
 ARG FFMPEG_REPOSITORY
 ARG FFMPEG_REF
 ARG FFMPEG_COMMIT
@@ -104,6 +106,7 @@ ARG LIBOPUS_FALLBACK_REPOSITORY
 ARG LIBOPUS_REF
 ARG LIBOPUS_COMMIT
 ARG PROFILE=video-compressor
+ARG THREADING_MODE=single-thread
 ENV BUILDER_VERSION=${BUILDER_VERSION} \
     FFMPEG_REPOSITORY=${FFMPEG_REPOSITORY} \
     FFMPEG_REF=${FFMPEG_REF} \
@@ -124,7 +127,8 @@ ENV BUILDER_VERSION=${BUILDER_VERSION} \
     LIBOPUS_FALLBACK_REPOSITORY=${LIBOPUS_FALLBACK_REPOSITORY} \
     LIBOPUS_REF=${LIBOPUS_REF} \
     LIBOPUS_COMMIT=${LIBOPUS_COMMIT} \
-    PROFILE=${PROFILE}
+    PROFILE=${PROFILE} \
+    THREADING_MODE=${THREADING_MODE}
 COPY --from=ffmpeg-source /src/ffmpeg /src/ffmpeg
 COPY profiles /workspace/profiles
 COPY runners /workspace/runners
@@ -150,7 +154,8 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-ffmpeg.sh
 # Runtime/smoke-test edits should not force FFmpeg to rebuild.
 FROM toolchain-base AS package-no-x264
 ARG PROFILE=lossless-video-cutter
-ENV PROFILE=${PROFILE} OUT_DIR=/out
+ARG THREADING_MODE=single-thread
+ENV PROFILE=${PROFILE} THREADING_MODE=${THREADING_MODE} OUT_DIR=/out
 COPY --from=wasm-builder-no-x264 /out/ /out/
 COPY runtime /workspace/runtime
 COPY tests /workspace/tests
@@ -159,7 +164,8 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
 
 FROM toolchain-base AS package-with-x264
 ARG PROFILE=video-compressor
-ENV PROFILE=${PROFILE} OUT_DIR=/out
+ARG THREADING_MODE=single-thread
+ENV PROFILE=${PROFILE} THREADING_MODE=${THREADING_MODE} OUT_DIR=/out
 COPY --from=wasm-builder-with-x264 /out/ /out/
 COPY runtime /workspace/runtime
 COPY tests /workspace/tests
@@ -168,7 +174,8 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
 
 FROM toolchain-base AS package-with-video-codecs
 ARG PROFILE=video-compressor
-ENV PROFILE=${PROFILE} OUT_DIR=/out
+ARG THREADING_MODE=single-thread
+ENV PROFILE=${PROFILE} THREADING_MODE=${THREADING_MODE} OUT_DIR=/out
 COPY --from=wasm-builder-with-video-codecs /out/ /out/
 COPY runtime /workspace/runtime
 COPY tests /workspace/tests
@@ -177,7 +184,8 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
 
 FROM toolchain-base AS package-with-libwebp
 ARG PROFILE=video-to-webp
-ENV PROFILE=${PROFILE} OUT_DIR=/out
+ARG THREADING_MODE=single-thread
+ENV PROFILE=${PROFILE} THREADING_MODE=${THREADING_MODE} OUT_DIR=/out
 COPY --from=wasm-builder-with-libwebp /out/ /out/
 COPY runtime /workspace/runtime
 COPY tests /workspace/tests

@@ -3,6 +3,7 @@ set -euo pipefail
 source /workspace/scripts/docker-common.sh
 : "${PROFILE:?}"
 : "${OUT_DIR:?}"
+THREADING_MODE="${THREADING_MODE:-single-thread}"
 
 MODE_OUT="$OUT_DIR"
 TEMPLATE="/workspace/tests/smoke-test.template.html"
@@ -46,12 +47,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       printf '\n' >> "$OUTPUT"
       ;;
     *)
+      # Some scalar placeholders live inside JavaScript source lines rather than
+      # on a line by themselves. Replace them in-place after handling the large
+      # payload placeholders above.
+      line="${line//__THREADING_MODE__/$THREADING_MODE}"
       printf '%s\n' "$line" >> "$OUTPUT"
       ;;
   esac
 done < "$TEMPLATE"
 
-if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__SMOKE_(INPUT_BASE64|TEST_BODY)__' "$OUTPUT"; then
+if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|TEST_BODY)__' "$OUTPUT"; then
   fail "A smoke-test packaging placeholder remains in $OUTPUT"
 fi
 [[ -s "$OUTPUT" ]] || fail "Smoke-test HTML was not produced"

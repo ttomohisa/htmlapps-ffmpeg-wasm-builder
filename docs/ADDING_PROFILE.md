@@ -29,6 +29,11 @@ PROFILE_DISPLAY_NAME="Media Inspector"
 PROFILE_USE_X264=0
 PROFILE_USE_LIBWEBP=0
 PROFILE_USE_WORKERFS=0
+PROFILE_THREADING_VARIANTS="single-thread"
+PROFILE_PTHREAD_POOL_SIZE=8
+PROFILE_DECODER_THREAD_COUNT=2
+PROFILE_ENCODER_THREAD_COUNT=4
+PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
 PROFILE_BINARY_LICENSE="GPL-2.0-or-later"
 PROFILE_OUTPUT_DESCRIPTION="metadata JSON"
 PROFILE_REQUIRED_CONFIG=(CONFIG_MOV_DEMUXER CONFIG_MATROSKA_DEMUXER CONFIG_FILE_PROTOCOL)
@@ -38,9 +43,11 @@ PROFILE_CAPABILITIES_JSON='{"operation":"inspect","arbitraryFfmpegArgs":false}'
 
 Keep `PROFILE_LINK_LIBS` minimal. If `PROFILE_USE_X264=0`, the final linker must not include `libx264.a`. Likewise, keep `PROFILE_USE_LIBWEBP=0` unless the profile needs FFmpeg's libwebp wrappers; libwebp then uses its own Docker/export target. Set `PROFILE_USE_WORKERFS=1` only when the browser profile should mount large File/Blob inputs read-only through Emscripten WORKERFS.
 
+Single-thread is the default contract. Only add `multi-thread` to `PROFILE_THREADING_VARIANTS` when the profile is intentionally designed, hosted, tested, and released as a pthread runtime. Budget decoder, encoder, and codec-internal helper workers separately. The pthread pool must cover their concurrent total; `ffmpeg-filter-builder` is the reference dual-runtime profile.
+
 ## 3. Write a public-libav runner
 
-Use installed FFmpeg public headers/APIs only. Do not copy or depend on `fftools` internals. Keep pthreads disabled unless the entire runtime architecture is intentionally redesigned.
+Use installed FFmpeg public headers/APIs only. Do not copy or depend on `fftools` internals. Existing profiles remain single-threaded. A dual-runtime runner must use the Builder threading macros rather than directly creating pthreads, and its MT variant must pass the dedicated COOP/COEP browser smoke test.
 
 ## 4. Add a real smoke test
 
@@ -60,4 +67,4 @@ The build is successful only after the browser smoke test prints:
 
 ## Current examples
 
-`video-compressor` demonstrates a decode/filter/encode profile with x264. `video-speed-changer` demonstrates a second x264 profile with dedicated speed filters and a narrow public API. `lossless-video-cutter` demonstrates a much smaller packet-copy/remux profile with no decoder, encoder, filter, or x264 in the final Wasm.
+`video-compressor` demonstrates a decode/filter/encode profile with x264. `video-speed-changer` demonstrates a second x264 profile with dedicated speed filters and a narrow public API. `lossless-video-cutter` demonstrates a much smaller packet-copy/remux profile with no decoder, encoder, filter, or x264 in the final Wasm. `ffmpeg-filter-builder` demonstrates explicit ST/MT variants generated from the same profile and runner.

@@ -1,23 +1,16 @@
 # Validation
 
-Static repository checks verify that:
+Repository validation checks that:
 
-- pthreads and the upstream FFmpeg program stay disabled
-- runtime has no SharedArrayBuffer / cross-origin-isolation dependency
-- runtime does not use nested `importScripts()`
-- runners use only their intended public libav APIs (transcode, stream-copy, or inspect-only)
-- FFmpeg 9+ typed buffer-sink array options are used
-- single-HTML packaging tokens are complete
-- removed dual-mode/CLI files do not reappear
-- the smoke-test fixture is a real MP4
-- Media Inspector stays decoder/encoder/muxer/filter-free and emits structured JSON through WORKERFS input
-- Windows and CI build entry points automatically invoke the browser smoke test
-- Builder/Emscripten/FFmpeg/x264 release pins are present
-- public release workflow verifies tag = `BUILDER_VERSION` and uses a pre-existing tag
-- release preparation includes binary licenses, exact corresponding source, build information, and SHA-256 checksums
+- the upstream FFmpeg CLI remains disabled;
+- existing profiles remain single-thread unless they explicitly opt in;
+- `ffmpeg-filter-builder` declares both ST and MT variants;
+- ST disables pthreads and requires no pthread Worker program;
+- MT enables FFmpeg/Emscripten pthreads, reuses `ffmpeg.js` as the pthread Worker program through `mainScriptUrlOrBlob`, and records SharedArrayBuffer / cross-origin-isolation requirements in manifest schema 8;
+- the browser runtime passes embedded `ffmpeg.js` to Emscripten through `mainScriptUrlOrBlob` without a separate pthread worker asset;
+- profile-required FFmpeg components exist;
+- release/CI include both Filter Builder variants.
 
-The decisive compatibility check is the real browser smoke test. Each profile executes its actual operation in headless Chromium. `video-compressor` transcodes the tiny H.264/AAC MP4 and validates the output container/codecs; `video-speed-changer` runs all 0.25x to 4.0x preset rates with pitch-preserving audio, plus pitch-shifting and audio-removal transcodes; it validates MP4/H.264/AAC markers as applicable, output duration, and progress; `lossless-video-cutter` performs a real stream-copy cut; `media-inspector` reads the same fixture through WORKERFS and validates the structured JSON report (container, H.264 video, AAC stereo audio, resolution, frame rate, duration, and bitrate); `video-contact-sheet` seeks/decodes 12 frames and validates the P6 RGB dimensions, image variation, grid metadata, codec, and sample timestamps.
+The decisive compatibility check remains the real browser smoke test. Existing profiles and Filter Builder ST use the portable path. Filter Builder MT is served from a temporary local HTTP server that adds COOP/COEP headers, then verifies cross-origin isolation and executes a real `scale=160:90` filter.
 
-A public release is stricter still: release preparation fetches and verifies the exact source commits again before packaging.
-
-This environment may not have Docker/Emscripten available, so static validation alone must never be described as a successful full FFmpeg build.
+Static validation alone must never be described as a successful full FFmpeg build.
