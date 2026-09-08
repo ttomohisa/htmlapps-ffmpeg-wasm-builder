@@ -46,5 +46,43 @@ if (!report.video || report.video.width !== 160 || report.video.height !== 90) {
     (report.video ? report.video.width + "x" + report.video.height : "missing video report"));
 }
 if (!report.audio || report.audio.codec !== "aac") throw new Error("Trimmed output did not preserve AAC audio");
+
+// A speed-up setpts chain must retain sub-frame timestamp precision. Runner
+// v0.2.1 used a 1/fps encoder time base, which rounded adjacent PTS values
+// together for PTS/1.5 and caused non-monotonic DTS at the MP4 muxer.
+const speedOutputPath = "/speed-output.mp4";
+const speedResult = await runner.run({
+  files: [{ name: "/workerfs/input-speed.mp4", data: new File([input], "smoke-input.mp4", { type: "video/mp4" }), workerfs: true }],
+  outputs: [speedOutputPath],
+  args: BrowserFFmpeg.ffmpegFilterBuilderArgs({
+    input: "/workerfs/input-speed.mp4",
+    output: speedOutputPath,
+    videoFilter: "setpts=PTS/1.5,scale=160:90",
+    startTimeSeconds: 0,
+    durationSeconds: 0.6,
+    crf: 34,
+    noAudio: true
+  }),
+  onLog: ({ message }) => append(message)
+});
+if (speedResult.exitCode !== 0) throw new Error("Speed setpts runner exit code was " + speedResult.exitCode);
+const speedOutput = speedResult.files?.[0]?.data;
+if (!speedOutput || speedOutput.byteLength < 512) throw new Error("Speed setpts MP4 is unexpectedly small");
+
+const speedInspectPath = "/speed-inspect.json";
+const speedInspect = await runner.run({
+  files: [{ name: "/workerfs/speed-output.mp4", data: new File([speedOutput], "speed-output.mp4", { type: "video/mp4" }), workerfs: true }],
+  outputs: [speedInspectPath],
+  args: ["--input", "/workerfs/speed-output.mp4", "--inspect-output", speedInspectPath],
+  onLog: ({ message }) => append(message)
+});
+const speedReport = BrowserFFmpeg.decodeJsonOutput(speedInspect, speedInspectPath);
+if (!(speedReport.duration >= 0.25 && speedReport.duration <= 0.55)) {
+  throw new Error("Speed setpts duration was unexpected: " + speedReport.duration);
+}
+if (!speedReport.video || speedReport.video.width !== 160 || speedReport.video.height !== 90) {
+  throw new Error("Speed setpts output geometry was unexpected");
+}
+
 runner.dispose();
-pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3));
+pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3) + ";speedDuration=" + speedReport.duration.toFixed(3));

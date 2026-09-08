@@ -53,7 +53,7 @@
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "0.2.1"
+#define RUNNER_VERSION "0.2.2"
 #ifndef FFMPEG_WASM_PTHREADS
 #define FFMPEG_WASM_PTHREADS 0
 #endif
@@ -98,6 +98,7 @@ typedef struct StreamContext {
     AVFrame *dec_frame;
     AVFrame *filtered_frame;
     AVPacket *enc_pkt;
+    AVRational filter_time_base;
     AVFilterGraph *filter_graph;
     AVFilterContext *buffersrc_ctx;
     AVFilterContext *buffersink_ctx;
@@ -135,6 +136,27 @@ static void reset_stream(StreamContext *stream)
     memset(stream, 0, sizeof(*stream));
     stream->input_index = -1;
     stream->output_index = -1;
+}
+
+static AVRational choose_filter_time_base(enum AVMediaType type, AVRational source_time_base)
+{
+    const AVRational video_minimum = {1, 90000};
+
+    if (source_time_base.num <= 0 || source_time_base.den <= 0)
+        return type == AVMEDIA_TYPE_VIDEO ? video_minimum : (AVRational){1, 48000};
+
+    /*
+     * setpts can compress timestamps (for example PTS/1.5). If the filter
+     * graph inherits a coarse source time base such as 1/30, adjacent frames
+     * can collapse onto the same integer PTS before they ever reach the
+     * encoder. Give video graphs at least a 90 kHz clock while preserving
+     * sources that already provide a finer time base. Audio keeps its native
+     * packet time base because sample-level timing is already sufficiently
+     * fine and the audio encoder later uses 1/sample_rate.
+     */
+    if (type == AVMEDIA_TYPE_VIDEO && av_cmp_q(source_time_base, video_minimum) > 0)
+        return video_minimum;
+    return source_time_base;
 }
 
 static void print_usage(const char *program)
@@ -447,6 +469,7 @@ static int open_decoder(RunnerContext *ctx, int stream_index, StreamContext *str
         return ret;
 
     stream->dec_ctx->pkt_timebase = input_stream->time_base;
+    stream->filter_time_base = choose_filter_time_base(input_stream->codecpar->codec_type, input_stream->time_base);
     if (FFMPEG_WASM_PTHREADS && input_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
         stream->dec_ctx->thread_count = FFMPEG_WASM_DECODER_THREAD_COUNT;
         stream->dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
@@ -558,7 +581,7 @@ static int setup_video_output(RunnerContext *ctx)
     stream->enc_ctx->height = height;
     stream->enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     stream->enc_ctx->framerate = frame_rate;
-    stream->enc_ctx->time_base = av_inv_q(frame_rate);
+    stream->enc_ctx->time_base = stream->filter_time_base;
     stream->enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
     stream->enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
     stream->enc_ctx->max_b_frames = use_vp9 ? 0 : 2;
@@ -706,7 +729,7 @@ static int init_filter(StreamContext *stream, const char *filter_spec)
         snprintf(args, sizeof(args),
                  "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
                  stream->dec_ctx->width, stream->dec_ctx->height, stream->dec_ctx->pix_fmt,
-                 stream->dec_ctx->pkt_timebase.num, stream->dec_ctx->pkt_timebase.den,
+                 stream->filter_time_base.num, stream->filter_time_base.den,
                  stream->dec_ctx->sample_aspect_ratio.num,
                  stream->dec_ctx->sample_aspect_ratio.den);
 
@@ -1094,6 +1117,14 @@ static int encode_write_frame(RunnerContext *ctx, StreamContext *stream, int flu
 static int filter_encode_write_frame(RunnerContext *ctx, StreamContext *stream, AVFrame *frame)
 {
     int ret;
+
+    if (frame && av_cmp_q(stream->dec_ctx->pkt_timebase, stream->filter_time_base) != 0) {
+        if (frame->pts != AV_NOPTS_VALUE)
+            frame->pts = av_rescale_q(frame->pts, stream->dec_ctx->pkt_timebase, stream->filter_time_base);
+        if (frame->duration > 0)
+            frame->duration = av_rescale_q(frame->duration, stream->dec_ctx->pkt_timebase, stream->filter_time_base);
+        frame->time_base = stream->filter_time_base;
+    }
 
     ret = av_buffersrc_add_frame_flags(stream->buffersrc_ctx, frame, 0);
     /*

@@ -28,6 +28,10 @@ PNG input uses FFmpeg's native PNG decoder. FFmpeg 9.0.1 selects `inflate_wrappe
 `BrowserFFmpeg.ffmpegFilterBuilderArgs()` accepts `startTimeSeconds` and `durationSeconds`. The runner prepends the range filters before the caller-supplied graph and resets output timestamps, and stops demux/decode shortly after the requested end (with a one-second guard for reordering/keyframe dependencies). The filter graph remains the authority for exact output bounds.
 
 
+## v1.9.7 speed timestamp fix
+
+Runner 0.2.2 uses a minimum 90 kHz video filter time base and rescales decoded PTS before frames enter the graph. This preserves sub-frame timestamp precision when `setpts` compresses time (for example `PTS/1.5`) and keeps encoded/muxed DTS strictly monotonic. The H.264 encoder uses the same fine-grained clock instead of the old `1/fps` time base.
+
 ## v1.9.6 fixes
 
 v1.9.6 hardens bounded preview rendering for long inputs: filter-source EOF after `trim` / `atrim` is a normal completion condition, not a runner failure. The runner also probes video filter output geometry before encoder creation, so graph filters that change frame dimensions are preserved in the encoded MP4.

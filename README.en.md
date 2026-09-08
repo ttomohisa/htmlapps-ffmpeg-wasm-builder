@@ -2,7 +2,7 @@
 
 Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg and Emscripten sources. Prebuilt `@ffmpeg/ffmpeg` / `@ffmpeg/core` binaries are not consumed, and the upstream `ffmpeg` CLI is not linked. Each profile uses a public `libav*` runner.
 
-## v1.9.6 profiles
+## v1.9.7 profiles
 
 Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
 
@@ -19,12 +19,16 @@ For embedded MT use, `BrowserFFmpeg.loadEmbedded(...)` accepts `threading: "mult
 
 ## Public releases
 
-A v1.9.6 tag rebuilds and smoke-tests the existing seven ST profiles plus both FFmpeg Filter Builder variants. The release publishes separate `ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.6.zip` and `ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.6.zip` assets, BUILDINFO files, SHA-256 checksums, and one exact corresponding-source archive.
+A v1.9.7 tag rebuilds and smoke-tests the existing seven ST profiles plus both FFmpeg Filter Builder variants. The release publishes separate `ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip` and `ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip` assets, BUILDINFO files, SHA-256 checksums, and one exact corresponding-source archive.
 
 ## Licensing
 
 The root MIT license covers this repository's original builder/runtime source. It does **not** relicense generated `ffmpeg.wasm`. Profiles that enable GPL FFmpeg components and link x264, including `ffmpeg-filter-builder`, produce GPL-2.0-or-later cores. See `THIRD_PARTY_NOTICES.md` and `docs/LICENSES.md`.
 
+
+### v1.9.7 Filter Builder speed timestamp fix
+
+Filter Builder runner 0.2.2 gives video filter graphs a minimum 90 kHz time base and rescales decoded frame PTS into that clock before `setpts` is evaluated. The H.264 encoder uses the same fine-grained time base, so speed-up chains such as `setpts=PTS/1.5` no longer collapse adjacent timestamps or trigger non-monotonic DTS errors in the MP4 muxer. The ST/MT browser smoke test now renders and inspects a real 1.5x speed graph.
 
 ### v1.9.6 Filter Builder fixes
 

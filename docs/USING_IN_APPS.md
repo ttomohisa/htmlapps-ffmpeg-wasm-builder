@@ -5,15 +5,15 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.6.zip
-ffmpeg-wasm-video-speed-changer-v1.9.6.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.6.zip
-ffmpeg-wasm-media-inspector-v1.9.6.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.6.zip
-ffmpeg-wasm-video-to-gif-v1.9.6.zip
-ffmpeg-wasm-video-to-webp-v1.9.6.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.6.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.6.zip
+ffmpeg-wasm-video-compressor-v1.9.7.zip
+ffmpeg-wasm-video-speed-changer-v1.9.7.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.7.zip
+ffmpeg-wasm-media-inspector-v1.9.7.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.7.zip
+ffmpeg-wasm-video-to-gif-v1.9.7.zip
+ffmpeg-wasm-video-to-webp-v1.9.7.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip
 ```
 
 
@@ -193,7 +193,7 @@ From v1.9.5, `startTimeSeconds` / `durationSeconds` are real runner bounds: the 
 
 For a production app, prefer a tagged profile ZIP from the Builder GitHub Release over an arbitrary local `dist/` directory. Pin all of the following in the consumer repository:
 
-- Builder tag (for example `v1.9.6`),
+- Builder tag (for example `v1.9.7`),
 - exact profile asset name,
 - SHA-256 of that asset.
 
@@ -201,6 +201,10 @@ Download and verify the asset only at **app build time**. The generated app shou
 
 Keep a separate local-Builder import path for runner/profile development, and record its provenance so local builds cannot be mistaken for release artifacts.
 
+
+### v1.9.7 Filter Builder speed timestamp hardening
+
+The Filter Builder runner now uses a minimum 90 kHz video filter/encoder time base. Decoded PTS values are rescaled into that clock before caller filters run, so accelerated `setpts` expressions such as `PTS/1.5` retain distinct timestamps and do not produce non-monotonic DTS at the MP4 muxer.
 
 ### v1.9.6 Filter Builder range hardening
 

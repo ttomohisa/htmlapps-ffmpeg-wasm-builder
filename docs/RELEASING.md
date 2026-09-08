@@ -2,26 +2,26 @@
 
 `main` builds and smoke-tests every profile listed in `.github/workflows/build.yml`. Do not tag a release until all matrix jobs are green.
 
-For v1.9.6:
+For v1.9.7:
 
 ```text
-git tag -a v1.9.6 -m "FFmpeg WASM Builder v1.9.6"
-git push origin v1.9.6
+git tag -a v1.9.7 -m "FFmpeg WASM Builder v1.9.7"
+git push origin v1.9.7
 ```
 
 The tag workflow verifies that the tag matches `BUILDER_VERSION`, rebuilds all current release profiles, runs their real browser smoke tests (including ST and COOP/COEP-hosted MT for `ffmpeg-filter-builder`), then publishes:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.6.zip
-ffmpeg-wasm-video-speed-changer-v1.9.6.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.6.zip
-ffmpeg-wasm-media-inspector-v1.9.6.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.6.zip
-ffmpeg-wasm-video-to-gif-v1.9.6.zip
-ffmpeg-wasm-video-to-webp-v1.9.6.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.6.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.6.zip
-ffmpeg-wasm-sources-v1.9.6.tar.gz
+ffmpeg-wasm-video-compressor-v1.9.7.zip
+ffmpeg-wasm-video-speed-changer-v1.9.7.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.7.zip
+ffmpeg-wasm-media-inspector-v1.9.7.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.7.zip
+ffmpeg-wasm-video-to-gif-v1.9.7.zip
+ffmpeg-wasm-video-to-webp-v1.9.7.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip
+ffmpeg-wasm-sources-v1.9.7.tar.gz
 BUILDINFO-video-compressor.txt
 BUILDINFO-video-speed-changer.txt
 BUILDINFO-lossless-video-cutter.txt

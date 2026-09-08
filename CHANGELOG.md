@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.7 - 2026-09-08
+
+- Fixed Filter Builder speed-up graphs such as `setpts=PTS/1.5` failing with `non-strictly-monotonic PTS` / `non monotonically increasing dts` in the MP4 muxer.
+- Added a minimum 90 kHz video filter time base and rescale decoded PTS before frames enter the filter graph, preserving sub-frame timestamp precision for accelerated timelines.
+- Changed the Filter Builder H.264 encoder time base from `1/fps` to the fine-grained filter time base so valid accelerated PTS values are not rounded back onto duplicate encoder timestamps.
+- Bumped the Filter Builder public-libav runner to 0.2.2.
+- Extended ST/MT browser smoke coverage with a real `setpts=PTS/1.5,scale=160:90` render and output-duration inspection.
+
 ## 1.9.6 - 2026-09-08
 
 - Fixed bounded Filter Builder renders on long inputs: `trim` / `atrim` can complete the filter graph before the one-second demux guard, and the resulting filter-source `AVERROR_EOF` is now treated as successful stream completion instead of exit code 1.

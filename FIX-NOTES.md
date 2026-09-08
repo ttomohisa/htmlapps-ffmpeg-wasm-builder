@@ -1,3 +1,9 @@
+## v1.9.7 Filter Builder speed PTS fix
+
+Speed-up filters compress presentation timestamps. In v1.9.6 the Filter Builder H.264 encoder used `time_base = 1 / frame_rate`; for a 30 fps input, `setpts=PTS/1.5` produces frame spacing smaller than one 1/30-second encoder tick. Rescaling therefore collapsed adjacent frames onto identical PTS values, x264 reported `non-strictly-monotonic PTS`, and the MP4 muxer rejected duplicate DTS values.
+
+v1.9.7 gives the video filter graph a clock of at least 90 kHz, rescales decoded frame PTS into that clock before `setpts`, and uses the same fine-grained clock for the video encoder. The graph can therefore represent accelerated timelines without integer timestamp collisions. A dedicated ST/MT smoke render now executes `setpts=PTS/1.5,scale=160:90` and inspects the resulting MP4 duration.
+
 ## v1.9.6 Filter Builder bounded-range/runtime geometry fix
 
 A real 36-second H.264/AAC input exposed two gaps not covered by the v1.9.5 one-second smoke fixture. First, `trim` / `atrim` can finish their filter graph while demux still has packets inside the decode guard. `av_buffersrc_add_frame_flags()` then reports `AVERROR_EOF`; this is now accepted as normal completion so encoder flush and MP4 trailer writing still run.

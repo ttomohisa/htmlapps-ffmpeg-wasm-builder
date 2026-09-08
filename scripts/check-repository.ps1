@@ -435,7 +435,7 @@ Require-Text $filterProfileEnv 'PROFILE_USE_WORKERFS=1' "FFmpeg Filter Builder m
 foreach ($filterName in @("scale", "crop", "trim", "overlay", "amix", "loudnorm")) {
   Require-Text $filterProfile "--enable-filter=$filterName" "FFmpeg Filter Builder profile is missing a required filter."
 }
-Require-Text $filterRunner '#define RUNNER_VERSION "0.2.1"' "FFmpeg Filter Builder runner version must be 0.2.1 for bounded-range EOF and dimension negotiation fixes."
+Require-Text $filterRunner '#define RUNNER_VERSION "0.2.2"' "FFmpeg Filter Builder runner version must be 0.2.2 for fine-grained Filter Builder video timestamps."
 Require-Text $filterRunner "--video-filter" "FFmpeg Filter Builder runner must accept compiled video filter chains."
 Require-Text $filterRunner "--audio-filter" "FFmpeg Filter Builder runner must accept compiled audio filter chains."
 Require-Text $filterRunner "--start-time" "FFmpeg Filter Builder runner must accept a relative preview start time."
@@ -453,6 +453,10 @@ Require-Text $filterSmoke "report.duration" "FFmpeg Filter Builder smoke test mu
 Require-Text $filterSmoke "report.video.width !== 160" "FFmpeg Filter Builder smoke test must verify caller scale dimensions are preserved without maxWidth/maxHeight masking."
 Require-Text $filterRunner "ret == AVERROR_EOF" "FFmpeg Filter Builder runner must treat filter-source EOF as a normal bounded-range completion."
 Require-Text $filterRunner "probe_video_filter_dimensions" "FFmpeg Filter Builder runner must negotiate graph output dimensions before opening the encoder."
+Require-Text $filterRunner "choose_filter_time_base" "FFmpeg Filter Builder runner must preserve sub-frame timestamp precision for setpts speed filters."
+Require-Text $filterRunner "video_minimum = {1, 90000}" "FFmpeg Filter Builder runner must use a fine video filter clock for speed-up graphs."
+Require-Text $filterSmoke "setpts=PTS/1.5" "FFmpeg Filter Builder smoke test must exercise a real speed-up setpts chain."
+Require-Text $filterSmoke "speedReport.duration" "FFmpeg Filter Builder smoke test must inspect the speed-up output rather than only checking exit status."
 Require-Text $filterSmoke "crossOriginIsolated" "FFmpeg Filter Builder MT smoke test must verify cross-origin isolation."
 Require-Text $filterLauncher "ffmpeg-filter-builder" "FFmpeg Filter Builder must have a Windows launcher."
 Require-Text $smokePacker 'line="${line//__THREADING_MODE__/$THREADING_MODE}"' "Smoke packer must replace inline threading placeholders, not only whole-line placeholders."
@@ -464,7 +468,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.6$') { throw "Builder version must be 1.9.6." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.7$') { throw "Builder version must be 1.9.7." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -517,7 +521,7 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.9.6" "Release documentation must include the v1.9.6 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.9.7" "Release documentation must include the v1.9.7 tag procedure."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."

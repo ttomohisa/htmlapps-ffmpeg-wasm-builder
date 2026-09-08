@@ -27,7 +27,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.9.6 profiles
+## v1.9.7 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
@@ -333,19 +333,19 @@ MT版をembedded assetから起動するときは `threading: "multi-thread"` �
 
 ## Public Release
 
-v1.9.6では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
+v1.9.7では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.6.zip
-ffmpeg-wasm-video-speed-changer-v1.9.6.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.6.zip
-ffmpeg-wasm-media-inspector-v1.9.6.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.6.zip
-ffmpeg-wasm-video-to-gif-v1.9.6.zip
-ffmpeg-wasm-video-to-webp-v1.9.6.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.6.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.6.zip
-ffmpeg-wasm-sources-v1.9.6.tar.gz
+ffmpeg-wasm-video-compressor-v1.9.7.zip
+ffmpeg-wasm-video-speed-changer-v1.9.7.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.7.zip
+ffmpeg-wasm-media-inspector-v1.9.7.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.7.zip
+ffmpeg-wasm-video-to-gif-v1.9.7.zip
+ffmpeg-wasm-video-to-webp-v1.9.7.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip
+ffmpeg-wasm-sources-v1.9.7.tar.gz
 BUILDINFO-ffmpeg-filter-builder-single-thread.txt
 BUILDINFO-ffmpeg-filter-builder-multi-thread.txt
 SHA256SUMS.txt
@@ -379,6 +379,10 @@ check-updates.bat
 
 `video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.
 
+
+### v1.9.7 Filter Builder修正
+
+Filter Builder runner 0.2.2では、`setpts=PTS/1.5` のような速度変更でframe間隔が1フレーム未満になる場合でもPTS精度を失わないよう、video filter graphに最低90 kHzのtime baseを使用します。decode済みframeのPTSをfilter time baseへrescaleし、H.264 encoderも同じ細粒度clockを使うため、MP4 muxerでnon-monotonic DTSになりません。ST/MT smoke testには実際の1.5x `setpts` renderと出力duration検証を追加しています。
 
 ### v1.9.6 Filter Builder修正
 

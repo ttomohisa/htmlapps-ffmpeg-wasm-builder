@@ -20,6 +20,8 @@ Legacy profiles remain at `dist/<profile>/`. Dual profiles use `dist/<profile>/<
 
 ## Filter Builder timeline ranges
 
+The v1.9.7 Filter Builder runner decouples video timestamp precision from nominal frame rate. Video filter graphs use a time base of at least 1/90000, decoded PTS values are rescaled into that clock before entering the graph, and the H.264 encoder keeps that fine-grained time base. This is required for speed-up expressions such as `setpts=PTS/1.5`, where adjacent output timestamps can be closer than one `1/fps` encoder tick.
+
 The v1.9.6 Filter Builder runner keeps range rendering inside the public-libav path. `--start-time` / `--duration` prepend `trim,setpts` to video and `atrim,asetpts` to audio. When a finite duration is requested, the demux loop stops after the requested end plus a one-second decode guard so preview renders do not continue through the full source. Exact bounds remain enforced by the filters.
 
 
