@@ -5,15 +5,15 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.5.zip
-ffmpeg-wasm-video-speed-changer-v1.9.5.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.5.zip
-ffmpeg-wasm-media-inspector-v1.9.5.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.5.zip
-ffmpeg-wasm-video-to-gif-v1.9.5.zip
-ffmpeg-wasm-video-to-webp-v1.9.5.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.5.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.5.zip
+ffmpeg-wasm-video-compressor-v1.9.6.zip
+ffmpeg-wasm-video-speed-changer-v1.9.6.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.6.zip
+ffmpeg-wasm-media-inspector-v1.9.6.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.6.zip
+ffmpeg-wasm-video-to-gif-v1.9.6.zip
+ffmpeg-wasm-video-to-webp-v1.9.6.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.6.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.6.zip
 ```
 
 
@@ -187,16 +187,21 @@ const args = BrowserFFmpeg.ffmpegFilterBuilderArgs({
 });
 ```
 
-In v1.9.5, `startTimeSeconds` / `durationSeconds` are real runner bounds: the generated MP4 is trimmed, video timestamps restart at zero, and audio is kept aligned through `atrim + asetpts`. Do not silently fall back from MT to ST under the same artifact. Select the intended release asset at app build time and expose the resulting execution mode honestly.
+From v1.9.5, `startTimeSeconds` / `durationSeconds` are real runner bounds: the generated MP4 is trimmed, video timestamps restart at zero, and audio is kept aligned through `atrim + asetpts`. Do not silently fall back from MT to ST under the same artifact. Select the intended release asset at app build time and expose the resulting execution mode honestly.
 
 ## Release pinning
 
 For a production app, prefer a tagged profile ZIP from the Builder GitHub Release over an arbitrary local `dist/` directory. Pin all of the following in the consumer repository:
 
-- Builder tag (for example `v1.9.5`),
+- Builder tag (for example `v1.9.6`),
 - exact profile asset name,
 - SHA-256 of that asset.
 
 Download and verify the asset only at **app build time**. The generated app should embed the required JS/WASM/runtime and must not contact GitHub at runtime when it claims fully local processing.
 
 Keep a separate local-Builder import path for runner/profile development, and record its provenance so local builds cannot be mistaken for release artifacts.
+
+
+### v1.9.6 Filter Builder range hardening
+
+v1.9.6 treats filter-source `AVERROR_EOF` after `trim` / `atrim` as normal bounded completion instead of a failed transcode. It also probes the compiled video chain before opening the encoder, so dimension-changing filters such as `scale`, `crop`, `pad`, and `transpose` determine the encoded frame size instead of being silently scaled back to the source geometry.

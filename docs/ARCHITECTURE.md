@@ -20,4 +20,9 @@ Legacy profiles remain at `dist/<profile>/`. Dual profiles use `dist/<profile>/<
 
 ## Filter Builder timeline ranges
 
-The v1.9.5 Filter Builder runner keeps range rendering inside the public-libav path. `--start-time` / `--duration` prepend `trim,setpts` to video and `atrim,asetpts` to audio. When a finite duration is requested, the demux loop stops after the requested end plus a one-second decode guard so preview renders do not continue through the full source. Exact bounds remain enforced by the filters.
+The v1.9.6 Filter Builder runner keeps range rendering inside the public-libav path. `--start-time` / `--duration` prepend `trim,setpts` to video and `atrim,asetpts` to audio. When a finite duration is requested, the demux loop stops after the requested end plus a one-second decode guard so preview renders do not continue through the full source. Exact bounds remain enforced by the filters.
+
+
+Filter Builder v1.9.6 performs a configuration-only probe of the video filter graph before opening the encoder. The probe uses the same caller chain but omits the final encoder-size scaler, then reads the negotiated sink width/height. The real graph is rebuilt with one final no-op-or-constraining scale to the negotiated encoder geometry. This keeps arbitrary supported dimension-changing filters authoritative while preserving explicit max-width/max-height limits.
+
+When `trim` / `atrim` causes a filter source to report `AVERROR_EOF` before the demux guard is reached, v1.9.6 treats that as successful completion of that filtered stream and continues normal encoder flush/trailer finalization.

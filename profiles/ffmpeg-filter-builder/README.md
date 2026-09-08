@@ -26,3 +26,8 @@ PNG input uses FFmpeg's native PNG decoder. FFmpeg 9.0.1 selects `inflate_wrappe
 ## Time-range rendering
 
 `BrowserFFmpeg.ffmpegFilterBuilderArgs()` accepts `startTimeSeconds` and `durationSeconds`. The runner prepends the range filters before the caller-supplied graph and resets output timestamps, and stops demux/decode shortly after the requested end (with a one-second guard for reordering/keyframe dependencies). The filter graph remains the authority for exact output bounds.
+
+
+## v1.9.6 fixes
+
+v1.9.6 hardens bounded preview rendering for long inputs: filter-source EOF after `trim` / `atrim` is a normal completion condition, not a runner failure. The runner also probes video filter output geometry before encoder creation, so graph filters that change frame dimensions are preserved in the encoded MP4.

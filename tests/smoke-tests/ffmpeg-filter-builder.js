@@ -13,10 +13,8 @@ const result = await runner.run({
     input: "/workerfs/input.mp4",
     output: outputPath,
     videoFilter: "scale=160:90",
-    startTimeSeconds: 0.25,
-    durationSeconds: 0.5,
-    maxWidth: 160,
-    maxHeight: 90,
+    startTimeSeconds: 0,
+    durationSeconds: 0.1,
     crf: 34,
     noAudio: false
   }),
@@ -40,8 +38,12 @@ const inspect = await runner.run({
   onLog: ({ message }) => append(message)
 });
 const report = BrowserFFmpeg.decodeJsonOutput(inspect, inspectPath);
-if (!(report.duration >= 0.30 && report.duration <= 0.75)) {
+if (!(report.duration >= 0.05 && report.duration <= 0.35)) {
   throw new Error("Time-range render duration was unexpected: " + report.duration);
+}
+if (!report.video || report.video.width !== 160 || report.video.height !== 90) {
+  throw new Error("Caller scale filter was overwritten: expected 160x90, got " +
+    (report.video ? report.video.width + "x" + report.video.height : "missing video report"));
 }
 if (!report.audio || report.audio.codec !== "aac") throw new Error("Trimmed output did not preserve AAC audio");
 runner.dispose();

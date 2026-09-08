@@ -1,3 +1,9 @@
+## v1.9.6 Filter Builder bounded-range/runtime geometry fix
+
+A real 36-second H.264/AAC input exposed two gaps not covered by the v1.9.5 one-second smoke fixture. First, `trim` / `atrim` can finish their filter graph while demux still has packets inside the decode guard. `av_buffersrc_add_frame_flags()` then reports `AVERROR_EOF`; this is now accepted as normal completion so encoder flush and MP4 trailer writing still run.
+
+Second, the v1.9.5 runner opened the encoder from the source geometry and appended a final scale to that size after the caller filter. A graph such as `scale=480:-2` was therefore scaled back to 1920x1080. v1.9.6 performs a configuration-only filtergraph probe first, reads the negotiated sink geometry, opens the encoder at that geometry, then rebuilds the real graph.
+
 # Video Speed Changer build/smoke fix (Builder v1.7.2)
 
 The v1.7.1 patch incorrectly added `buffer`, `buffersink`, `abuffer`, and `abuffersink` to `--enable-filter=` and to `CONFIG_*_FILTER` assertions. FFmpeg n9.0.1 registers these graph endpoints manually, so they are not configurable filter components. v1.7.2 removes those invalid flags/assertions.

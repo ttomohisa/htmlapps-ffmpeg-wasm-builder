@@ -27,7 +27,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.9.5 profiles
+## v1.9.6 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
@@ -333,19 +333,19 @@ MT版をembedded assetから起動するときは `threading: "multi-thread"` �
 
 ## Public Release
 
-v1.9.5では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
+v1.9.6では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.5.zip
-ffmpeg-wasm-video-speed-changer-v1.9.5.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.5.zip
-ffmpeg-wasm-media-inspector-v1.9.5.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.5.zip
-ffmpeg-wasm-video-to-gif-v1.9.5.zip
-ffmpeg-wasm-video-to-webp-v1.9.5.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.5.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.5.zip
-ffmpeg-wasm-sources-v1.9.5.tar.gz
+ffmpeg-wasm-video-compressor-v1.9.6.zip
+ffmpeg-wasm-video-speed-changer-v1.9.6.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.6.zip
+ffmpeg-wasm-media-inspector-v1.9.6.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.6.zip
+ffmpeg-wasm-video-to-gif-v1.9.6.zip
+ffmpeg-wasm-video-to-webp-v1.9.6.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.6.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.6.zip
+ffmpeg-wasm-sources-v1.9.6.tar.gz
 BUILDINFO-ffmpeg-filter-builder-single-thread.txt
 BUILDINFO-ffmpeg-filter-builder-multi-thread.txt
 SHA256SUMS.txt
@@ -378,3 +378,8 @@ check-updates.bat
 ## Video Speed Changer
 
 `video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.
+
+
+### v1.9.6 Filter Builder修正
+
+Filter Builder runner 0.2.1では、長い入力の範囲Previewで `trim` / `atrim` が先に完了して返す `AVERROR_EOF` を正常終了として扱い、encoder flushとMP4 trailer書き込みまで継続します。また、encoderを開く前にcompiled video graphの出力サイズをprobeするため、`scale` / `crop` / `pad` / `transpose` などのサイズ変更が元解像度へ戻されません。

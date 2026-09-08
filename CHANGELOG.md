@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.6 - 2026-09-08
+
+- Fixed bounded Filter Builder renders on long inputs: `trim` / `atrim` can complete the filter graph before the one-second demux guard, and the resulting filter-source `AVERROR_EOF` is now treated as successful stream completion instead of exit code 1.
+- Fixed dimension-changing Filter Builder video filters being silently scaled back to the source geometry. The runner now probes the caller video chain before opening the encoder and uses the negotiated sink dimensions for H.264 output.
+- Bumped the Filter Builder public-libav runner to 0.2.1.
+- Strengthened ST/MT smoke coverage so the scale filter is verified without `maxWidth` / `maxHeight` masking and a very short bounded range exercises early filter completion.
+
 ## 1.9.5 - 2026-09-08
 
 - Fixed the repository check to validate the Filter Builder range API against `runtime/browser-ffmpeg.js` via the existing `$runtime` path variable; this prevents StrictMode CI failure from an undefined `$browserRuntime` variable.

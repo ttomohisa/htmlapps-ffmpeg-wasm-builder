@@ -53,7 +53,7 @@
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "0.2.0"
+#define RUNNER_VERSION "0.2.1"
 #ifndef FFMPEG_WASM_PTHREADS
 #define FFMPEG_WASM_PTHREADS 0
 #endif
@@ -505,6 +505,8 @@ static const char *vp9_lag_in_frames_for_speed(const RunnerOptions *options)
     return "8";
 }
 
+static int probe_video_filter_dimensions(RunnerContext *ctx, int *width, int *height);
+
 static int setup_video_output(RunnerContext *ctx)
 {
     StreamContext *stream = &ctx->video;
@@ -518,6 +520,8 @@ static int setup_video_output(RunnerContext *ctx)
     int ret;
     int source_width;
     int source_height;
+    int filtered_width;
+    int filtered_height;
     int width;
     int height;
     char crf_text[16];
@@ -527,6 +531,14 @@ static int setup_video_output(RunnerContext *ctx)
         return AVERROR_ENCODER_NOT_FOUND;
     }
 
+    display_source_dimensions(stream, &source_width, &source_height);
+    ret = probe_video_filter_dimensions(ctx, &filtered_width, &filtered_height);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Could not negotiate Filter Builder video dimensions: %s\n", av_err2str(ret));
+        return ret;
+    }
+    compute_output_dimensions(&ctx->options, filtered_width, filtered_height, &width, &height);
+
     output_stream = avformat_new_stream(ctx->ofmt_ctx, NULL);
     if (!output_stream)
         return AVERROR(ENOMEM);
@@ -534,9 +546,6 @@ static int setup_video_output(RunnerContext *ctx)
     stream->enc_ctx = avcodec_alloc_context3(encoder);
     if (!stream->enc_ctx)
         return AVERROR(ENOMEM);
-
-    display_source_dimensions(stream, &source_width, &source_height);
-    compute_output_dimensions(&ctx->options, source_width, source_height, &width, &height);
 
     frame_rate = ctx->options.fps > 0.0
         ? av_d2q(ctx->options.fps, 1001000)
@@ -602,11 +611,11 @@ static int setup_video_output(RunnerContext *ctx)
     stream->output_index = output_stream->index;
 
     av_log(NULL, AV_LOG_INFO,
-           "video: %dx%d display=%dx%d rotation=%.0f -> %dx%d, %.3f fps, %s, %d kbit/s\n",
+           "video: %dx%d display=%dx%d rotation=%.0f filtered=%dx%d -> %dx%d, %.3f fps, %s, %d kbit/s\n",
            stream->dec_ctx->width, stream->dec_ctx->height,
            source_width, source_height, stream->display_rotation_degrees,
-           width, height, av_q2d(frame_rate), encoder_name,
-           ctx->options.video_bitrate_kbps);
+           filtered_width, filtered_height, width, height,
+           av_q2d(frame_rate), encoder_name, ctx->options.video_bitrate_kbps);
     return 0;
 }
 
@@ -711,9 +720,14 @@ static int init_filter(StreamContext *stream, const char *filter_spec)
          * FFmpeg 9 removed the deprecated pix_fmts binary alias. Use the
          * public array option so the WASM runner works with current FFmpeg.
          */
-        ret = av_opt_set_array(sink_ctx, "pixel_formats", AV_OPT_SEARCH_CHILDREN,
-                               0, 1, AV_OPT_TYPE_PIXEL_FMT,
-                               &stream->enc_ctx->pix_fmt);
+        {
+            enum AVPixelFormat sink_pix_fmt =
+                (stream->enc_ctx && stream->enc_ctx->pix_fmt != AV_PIX_FMT_NONE)
+                    ? stream->enc_ctx->pix_fmt : AV_PIX_FMT_YUV420P;
+            ret = av_opt_set_array(sink_ctx, "pixel_formats", AV_OPT_SEARCH_CHILDREN,
+                                   0, 1, AV_OPT_TYPE_PIXEL_FMT,
+                                   &sink_pix_fmt);
+        }
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR,
                    "Could not constrain video sink pixel_formats: %s\n",
@@ -913,36 +927,109 @@ static int append_timeline_audio_filters(const RunnerOptions *options, char *buf
     return append_filter(buffer, buffer_size, "asetpts=PTS-STARTPTS");
 }
 
-static int init_filters(RunnerContext *ctx)
+static int build_video_filter_spec(RunnerContext *ctx, char *video_filter,
+                                   size_t video_filter_size, int include_encoder_scale)
 {
-    char video_filter[1024] = {0};
     char part[256];
-    char audio_filter[512];
     int ret;
 
-    ret = append_timeline_video_filters(&ctx->options, video_filter, sizeof(video_filter));
+    if (!video_filter || video_filter_size == 0)
+        return AVERROR(EINVAL);
+    video_filter[0] = '\0';
+
+    ret = append_timeline_video_filters(&ctx->options, video_filter, video_filter_size);
     if (ret < 0)
         return ret;
-    ret = append_autorotate_filter(&ctx->video, video_filter, sizeof(video_filter));
+    ret = append_autorotate_filter(&ctx->video, video_filter, video_filter_size);
     if (ret < 0)
         return ret;
     if (ctx->options.video_filter && ctx->options.video_filter[0]) {
-        ret = append_filter(video_filter, sizeof(video_filter), ctx->options.video_filter);
-        if (ret < 0) return ret;
+        ret = append_filter(video_filter, video_filter_size, ctx->options.video_filter);
+        if (ret < 0)
+            return ret;
     }
 
     if (ctx->options.fps > 0.0) {
         snprintf(part, sizeof(part), "fps=fps=%.6f", ctx->options.fps);
-        ret = append_filter(video_filter, sizeof(video_filter), part);
-        if (ret < 0) return ret;
+        ret = append_filter(video_filter, video_filter_size, part);
+        if (ret < 0)
+            return ret;
     }
-    snprintf(part, sizeof(part), "scale=%d:%d:flags=bicubic", ctx->video.enc_ctx->width, ctx->video.enc_ctx->height);
-    ret = append_filter(video_filter, sizeof(video_filter), part);
-    if (ret < 0) return ret;
-    ret = append_filter(video_filter, sizeof(video_filter), "format=pix_fmts=yuv420p");
-    if (ret < 0) return ret;
-    ret = append_filter(video_filter, sizeof(video_filter), "setsar=1");
-    if (ret < 0) return ret;
+
+    /*
+     * Probe mode deliberately stops before the encoder-size scaler so the
+     * caller's dimension-changing graph (scale/crop/pad/transpose) can
+     * negotiate its true output geometry. The real graph adds one final scale
+     * to the encoder dimensions after those dimensions have been negotiated.
+     */
+    if (include_encoder_scale) {
+        if (!ctx->video.enc_ctx)
+            return AVERROR(EINVAL);
+        snprintf(part, sizeof(part), "scale=%d:%d:flags=bicubic",
+                 ctx->video.enc_ctx->width, ctx->video.enc_ctx->height);
+        ret = append_filter(video_filter, video_filter_size, part);
+        if (ret < 0)
+            return ret;
+    }
+
+    ret = append_filter(video_filter, video_filter_size, "format=pix_fmts=yuv420p");
+    if (ret < 0)
+        return ret;
+    return append_filter(video_filter, video_filter_size, "setsar=1");
+}
+
+static void reset_filter_graph(StreamContext *stream)
+{
+    if (!stream)
+        return;
+    avfilter_graph_free(&stream->filter_graph);
+    stream->buffersrc_ctx = NULL;
+    stream->buffersink_ctx = NULL;
+}
+
+static int probe_video_filter_dimensions(RunnerContext *ctx, int *width, int *height)
+{
+    char video_filter[1024];
+    int ret;
+    int negotiated_width;
+    int negotiated_height;
+
+    if (!ctx || !width || !height)
+        return AVERROR(EINVAL);
+
+    ret = build_video_filter_spec(ctx, video_filter, sizeof(video_filter), 0);
+    if (ret < 0)
+        return ret;
+
+    ret = init_filter(&ctx->video, video_filter);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Could not probe video filter geometry: %s\n", video_filter);
+        reset_filter_graph(&ctx->video);
+        return ret;
+    }
+
+    negotiated_width = av_buffersink_get_w(ctx->video.buffersink_ctx);
+    negotiated_height = av_buffersink_get_h(ctx->video.buffersink_ctx);
+    reset_filter_graph(&ctx->video);
+
+    if (negotiated_width <= 0 || negotiated_height <= 0)
+        return AVERROR(EINVAL);
+
+    *width = negotiated_width;
+    *height = negotiated_height;
+    return 0;
+}
+
+static int init_filters(RunnerContext *ctx)
+{
+    char video_filter[1024];
+    char part[256];
+    char audio_filter[512];
+    int ret;
+
+    ret = build_video_filter_spec(ctx, video_filter, sizeof(video_filter), 1);
+    if (ret < 0)
+        return ret;
 
     ret = init_filter(&ctx->video, video_filter);
     if (ret < 0) {
@@ -953,14 +1040,17 @@ static int init_filters(RunnerContext *ctx)
     if (ctx->have_audio) {
         audio_filter[0] = '\0';
         ret = append_timeline_audio_filters(&ctx->options, audio_filter, sizeof(audio_filter));
-        if (ret < 0) return ret;
+        if (ret < 0)
+            return ret;
         if (ctx->options.audio_filter && ctx->options.audio_filter[0]) {
             ret = append_filter(audio_filter, sizeof(audio_filter), ctx->options.audio_filter);
-            if (ret < 0) return ret;
+            if (ret < 0)
+                return ret;
         }
         snprintf(part, sizeof(part), "aresample=%d", ctx->audio.enc_ctx->sample_rate);
         ret = append_filter(audio_filter, sizeof(audio_filter), part);
-        if (ret < 0) return ret;
+        if (ret < 0)
+            return ret;
         ret = init_filter(&ctx->audio, audio_filter);
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR, "Could not initialize audio filter: %s\n", audio_filter);
@@ -1006,6 +1096,14 @@ static int filter_encode_write_frame(RunnerContext *ctx, StreamContext *stream, 
     int ret;
 
     ret = av_buffersrc_add_frame_flags(stream->buffersrc_ctx, frame, 0);
+    /*
+     * trim/atrim may finish the filter graph before demux reaches the decode
+     * guard. AVERROR_EOF from the source then means "this filtered stream is
+     * complete", not a failed transcode. Keep draining/flushing the encoder and
+     * let the other selected stream finish normally.
+     */
+    if (ret == AVERROR_EOF)
+        return 0;
     if (ret < 0)
         return ret;
 
