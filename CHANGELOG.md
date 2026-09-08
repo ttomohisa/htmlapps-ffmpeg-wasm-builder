@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.5 - 2026-09-08
+
+- Added the FFmpeg `trim` video filter to the `ffmpeg-filter-builder` ST/MT profile. The companion timeline/audio filters (`setpts`, `atrim`, `asetpts`, `volume`, and `aresample`) were already present in v1.9.4 and remain enabled.
+- Extended the Filter Builder public-libav runner to accept `--start-time` and `--duration`, automatically applying bounded video/audio timeline trimming and resetting output timestamps so short previews are actually bounded instead of transcoding the complete source.
+- Added an early decode stop with a one-second reorder guard after the requested range, while keeping the filter graph responsible for exact output bounds.
+- Extended `BrowserFFmpeg.ffmpegFilterBuilderArgs()` with `startTimeSeconds` / `durationSeconds` and advertised `timeRangeRender` in the runtime manifest capabilities.
+- Expanded the real ST/MT browser smoke test to render a 0.5-second H.264/AAC range, inspect the produced MP4, and verify its duration and audio stream.
+
 ## 1.9.4 - 2026-09-07
 
 - Fixed the FFmpeg Filter Builder multi-thread runtime worker budget so the H.264 decoder and libx264 encoder no longer contend for the same four-thread allocation.

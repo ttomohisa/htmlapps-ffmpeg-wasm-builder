@@ -5,15 +5,15 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.4.zip
-ffmpeg-wasm-video-speed-changer-v1.9.4.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.4.zip
-ffmpeg-wasm-media-inspector-v1.9.4.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.4.zip
-ffmpeg-wasm-video-to-gif-v1.9.4.zip
-ffmpeg-wasm-video-to-webp-v1.9.4.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.4.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.4.zip
+ffmpeg-wasm-video-compressor-v1.9.5.zip
+ffmpeg-wasm-video-speed-changer-v1.9.5.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.5.zip
+ffmpeg-wasm-media-inspector-v1.9.5.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.5.zip
+ffmpeg-wasm-video-to-gif-v1.9.5.zip
+ffmpeg-wasm-video-to-webp-v1.9.5.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.5.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.5.zip
 ```
 
 
@@ -181,17 +181,19 @@ const args = BrowserFFmpeg.ffmpegFilterBuilderArgs({
   input: "/workerfs/input.mp4",
   output: "/output.mp4",
   videoFilter: "scale=1280:-2",
-  audioFilter: "volume=-3dB"
+  audioFilter: "volume=-3dB",
+  startTimeSeconds: 30,
+  durationSeconds: 5
 });
 ```
 
-Do not silently fall back from MT to ST under the same artifact. Select the intended release asset at app build time and expose the resulting execution mode honestly.
+In v1.9.5, `startTimeSeconds` / `durationSeconds` are real runner bounds: the generated MP4 is trimmed, video timestamps restart at zero, and audio is kept aligned through `atrim + asetpts`. Do not silently fall back from MT to ST under the same artifact. Select the intended release asset at app build time and expose the resulting execution mode honestly.
 
 ## Release pinning
 
 For a production app, prefer a tagged profile ZIP from the Builder GitHub Release over an arbitrary local `dist/` directory. Pin all of the following in the consumer repository:
 
-- Builder tag (for example `v1.9.4`),
+- Builder tag (for example `v1.9.5`),
 - exact profile asset name,
 - SHA-256 of that asset.
 

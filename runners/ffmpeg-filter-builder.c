@@ -28,7 +28,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *
- * Scope for v0.1: one best video stream, optional one best audio stream, H.264/AAC MP4, and caller-supplied public-libav video/audio filter chains. This is the runtime PoC for the visual graph compiler and is deliberately not a drop-in replacement for the full ffmpeg CLI.
+ * Scope for runner v0.2: one best video stream, optional one best audio stream, H.264/AAC MP4, and caller-supplied public-libav video/audio filter chains. This is the runtime PoC for the visual graph compiler and is deliberately not a drop-in replacement for the full ffmpeg CLI.
  */
 
 #include <errno.h>
@@ -53,7 +53,7 @@
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "0.1.0"
+#define RUNNER_VERSION "0.2.0"
 #ifndef FFMPEG_WASM_PTHREADS
 #define FFMPEG_WASM_PTHREADS 0
 #endif
@@ -82,6 +82,8 @@ typedef struct RunnerOptions {
     int max_width;
     int max_height;
     double fps;
+    double start_time_seconds;
+    double duration_seconds;
     int no_audio;
     int allow_upscale;
     int faststart;
@@ -114,6 +116,9 @@ typedef struct RunnerContext {
     int have_video;
     int have_audio;
     int64_t duration_us;
+    int64_t range_start_us;
+    int64_t range_end_us;
+    int64_t progress_duration_us;
     double last_progress;
 } RunnerContext;
 
@@ -132,12 +137,14 @@ static void print_usage(const char *program)
         "  %s --input INPUT --output OUTPUT [options]\n"
         "  %s --input INPUT --inspect-output REPORT.json\n\n"
         "Options:\n"
-        "  --codec NAME           h264 (MP4), v0.1 runtime\n"
+        "  --codec NAME           h264 (MP4), Filter Builder runtime\n"
         "  --speed NAME           fastest, fast, balanced, quality (default fast)\n"
         "  --max-width N          Maximum display-oriented output width (0 = source)\n"
         "  --max-height N         Maximum display-oriented output height (0 = source)\n"
         "  --allow-upscale        Allow dimensions larger than the source\n"
         "  --fps N                Output FPS (0 = preserve source timing)\n"
+        "  --start-time N         Relative start time in seconds (default 0)\n"
+        "  --duration N           Render duration in seconds (0 = to end)\n"
         "  --crf N                Encoder quality fallback when bitrate is 0\n"
         "  --video-bitrate N      Video bitrate in kbit/s\n"
         "  --preset NAME          Legacy x264 preset (accepted for compatibility)\n"
@@ -241,6 +248,10 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
             if (parse_int(value, 0, 16384, &options->max_height) < 0) goto invalid;
         } else if (!strcmp(arg, "--fps")) {
             if (parse_double(value, 0.0, 240.0, &options->fps) < 0) goto invalid;
+        } else if (!strcmp(arg, "--start-time")) {
+            if (parse_double(value, 0.0, 2592000.0, &options->start_time_seconds) < 0) goto invalid;
+        } else if (!strcmp(arg, "--duration")) {
+            if (parse_double(value, 0.0, 2592000.0, &options->duration_seconds) < 0) goto invalid;
         } else {
             fprintf(stderr, "Unknown option: %s\n", arg);
             return -1;
@@ -261,7 +272,7 @@ invalid:
         return -1;
     }
     if (strcmp(options->codec, "h264")) {
-        fprintf(stderr, "--codec must be h264 in the v0.1 Filter Builder runtime.\n");
+        fprintf(stderr, "--codec must be h264 in the Filter Builder runtime.\n");
         return -1;
     }
     if (strcmp(options->speed, "fastest") && strcmp(options->speed, "fast") &&
@@ -856,13 +867,54 @@ static int append_autorotate_filter(const StreamContext *stream, char *buffer, s
     return 0;
 }
 
-static int init_filters(RunnerContext *ctx)
+static int append_timeline_video_filters(const RunnerOptions *options, char *buffer, size_t buffer_size)
 {
-    char video_filter[768] = {0};
-    char part[256];
-    char audio_filter[128];
+    char spec[160];
     int ret;
 
+    if (options->start_time_seconds <= 0.0 && options->duration_seconds <= 0.0)
+        return 0;
+
+    if (options->duration_seconds > 0.0)
+        snprintf(spec, sizeof(spec), "trim=start=%.6f:duration=%.6f",
+                 options->start_time_seconds, options->duration_seconds);
+    else
+        snprintf(spec, sizeof(spec), "trim=start=%.6f", options->start_time_seconds);
+    ret = append_filter(buffer, buffer_size, spec);
+    if (ret < 0) return ret;
+
+    return append_filter(buffer, buffer_size, "setpts=PTS-STARTPTS");
+}
+
+static int append_timeline_audio_filters(const RunnerOptions *options, char *buffer, size_t buffer_size)
+{
+    char spec[160];
+    int ret;
+
+    if (options->start_time_seconds <= 0.0 && options->duration_seconds <= 0.0)
+        return 0;
+
+    if (options->duration_seconds > 0.0)
+        snprintf(spec, sizeof(spec), "atrim=start=%.6f:duration=%.6f",
+                 options->start_time_seconds, options->duration_seconds);
+    else
+        snprintf(spec, sizeof(spec), "atrim=start=%.6f", options->start_time_seconds);
+    ret = append_filter(buffer, buffer_size, spec);
+    if (ret < 0) return ret;
+
+    return append_filter(buffer, buffer_size, "asetpts=PTS-STARTPTS");
+}
+
+static int init_filters(RunnerContext *ctx)
+{
+    char video_filter[1024] = {0};
+    char part[256];
+    char audio_filter[512];
+    int ret;
+
+    ret = append_timeline_video_filters(&ctx->options, video_filter, sizeof(video_filter));
+    if (ret < 0)
+        return ret;
     ret = append_autorotate_filter(&ctx->video, video_filter, sizeof(video_filter));
     if (ret < 0)
         return ret;
@@ -892,6 +944,8 @@ static int init_filters(RunnerContext *ctx)
 
     if (ctx->have_audio) {
         audio_filter[0] = '\0';
+        ret = append_timeline_audio_filters(&ctx->options, audio_filter, sizeof(audio_filter));
+        if (ret < 0) return ret;
         if (ctx->options.audio_filter && ctx->options.audio_filter[0]) {
             ret = append_filter(audio_filter, sizeof(audio_filter), ctx->options.audio_filter);
             if (ret < 0) return ret;
@@ -1016,23 +1070,43 @@ static int flush_stream(RunnerContext *ctx, StreamContext *stream)
     return encode_write_frame(ctx, stream, 1);
 }
 
+static int64_t packet_timestamp_us(const RunnerContext *ctx, const AVPacket *packet)
+{
+    const AVStream *stream;
+    int64_t timestamp;
+
+    if (!ctx || !ctx->ifmt_ctx || !packet || packet->stream_index < 0 ||
+        packet->stream_index >= (int)ctx->ifmt_ctx->nb_streams)
+        return AV_NOPTS_VALUE;
+    stream = ctx->ifmt_ctx->streams[packet->stream_index];
+    timestamp = packet->dts != AV_NOPTS_VALUE ? packet->dts : packet->pts;
+    if (timestamp == AV_NOPTS_VALUE)
+        return AV_NOPTS_VALUE;
+    return av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q);
+}
+
+static int packet_is_selected_media(const RunnerContext *ctx, const AVPacket *packet)
+{
+    if (!ctx || !packet)
+        return 0;
+    if (packet->stream_index == ctx->video.input_index)
+        return 1;
+    return ctx->have_audio && packet->stream_index == ctx->audio.input_index;
+}
+
 static void report_progress(RunnerContext *ctx, const AVPacket *packet)
 {
-    AVStream *stream;
-    int64_t timestamp;
+    int64_t timestamp_us;
     double progress;
 
-    if (ctx->duration_us <= 0 || packet->stream_index < 0 ||
-        packet->stream_index >= (int)ctx->ifmt_ctx->nb_streams)
+    if (ctx->progress_duration_us <= 0 || !packet_is_selected_media(ctx, packet))
+        return;
+    timestamp_us = packet_timestamp_us(ctx, packet);
+    if (timestamp_us == AV_NOPTS_VALUE)
         return;
 
-    timestamp = packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts;
-    if (timestamp == AV_NOPTS_VALUE)
-        return;
-
-    stream = ctx->ifmt_ctx->streams[packet->stream_index];
-    progress = (double)av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q) /
-               (double)ctx->duration_us;
+    progress = (double)(timestamp_us - ctx->range_start_us) /
+               (double)ctx->progress_duration_us;
     progress = FFMIN(1.0, FFMAX(0.0, progress));
     if (progress - ctx->last_progress >= 0.005) {
         printf(PROGRESS_PREFIX " %.6f\n", progress);
@@ -1040,14 +1114,6 @@ static void report_progress(RunnerContext *ctx, const AVPacket *packet)
         ctx->last_progress = progress;
     }
 }
-
-typedef struct PacketMeasure {
-    int stream_index;
-    int64_t bytes;
-    int64_t first_us;
-    int64_t last_us;
-    int seen_timestamp;
-} PacketMeasure;
 
 static void measure_packet(PacketMeasure *measure, const AVPacket *packet, const AVStream *stream)
 {
@@ -1212,6 +1278,22 @@ static int open_input(RunnerContext *ctx)
         return ret;
 
     ctx->duration_us = ctx->ifmt_ctx->duration;
+    {
+        int64_t origin_us = (ctx->ifmt_ctx->start_time != AV_NOPTS_VALUE) ? ctx->ifmt_ctx->start_time : 0;
+        int64_t requested_start_us = (int64_t)llround(ctx->options.start_time_seconds * AV_TIME_BASE);
+        int64_t requested_duration_us = (int64_t)llround(ctx->options.duration_seconds * AV_TIME_BASE);
+        ctx->range_start_us = origin_us + requested_start_us;
+        if (requested_duration_us > 0) {
+            ctx->range_end_us = ctx->range_start_us + requested_duration_us;
+            ctx->progress_duration_us = requested_duration_us;
+        } else {
+            ctx->range_end_us = 0;
+            if (ctx->duration_us > 0)
+                ctx->progress_duration_us = FFMAX(1, ctx->duration_us - requested_start_us);
+            else
+                ctx->progress_duration_us = 0;
+        }
+    }
 
     video_index = av_find_best_stream(ctx->ifmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
     if (video_index < 0) {
@@ -1290,6 +1372,15 @@ static int transcode(RunnerContext *ctx)
     fflush(stdout);
 
     while ((ret = av_read_frame(ctx->ifmt_ctx, packet)) >= 0) {
+        if (ctx->range_end_us > 0 && packet_is_selected_media(ctx, packet)) {
+            int64_t timestamp_us = packet_timestamp_us(ctx, packet);
+            /* Keep a one-second decode guard for reordering/keyframe dependencies; trim filters own exact output bounds. */
+            if (timestamp_us != AV_NOPTS_VALUE && timestamp_us > ctx->range_end_us + AV_TIME_BASE) {
+                av_packet_unref(packet);
+                ret = 0;
+                break;
+            }
+        }
         report_progress(ctx, packet);
 
         if (packet->stream_index == ctx->video.input_index)
@@ -1373,6 +1464,12 @@ int main(int argc, char **argv)
 
     av_log(NULL, AV_LOG_INFO, "ffmpeg-filter-builder-runner %s / FFmpeg %s / threading=%s\n",
            RUNNER_VERSION, av_version_info(), FFMPEG_WASM_PTHREADS ? "multi-thread" : "single-thread");
+    if (ctx.options.duration_seconds > 0.0)
+        av_log(NULL, AV_LOG_INFO, "time-range start=%.3fs duration=%.3fs\n",
+               ctx.options.start_time_seconds, ctx.options.duration_seconds);
+    else if (ctx.options.start_time_seconds > 0.0)
+        av_log(NULL, AV_LOG_INFO, "time-range start=%.3fs duration=to-end\n",
+               ctx.options.start_time_seconds);
 
     if (ctx.options.inspect_output_path) {
         ret = inspect_media(&ctx.options);

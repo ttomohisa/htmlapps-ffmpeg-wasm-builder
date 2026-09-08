@@ -458,6 +458,8 @@
     const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
     add("--video-filter", options.videoFilter);
     add("--audio-filter", options.audioFilter);
+    add("--start-time", options.startTimeSeconds);
+    add("--duration", options.durationSeconds);
     add("--max-width", options.maxWidth ?? 0);
     add("--max-height", options.maxHeight ?? 0);
     add("--fps", options.fps ?? 0);

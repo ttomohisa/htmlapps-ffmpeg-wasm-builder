@@ -432,14 +432,24 @@ Require-Text $filterProfileEnv 'PROFILE_USE_ZLIB=1' "FFmpeg Filter Builder must 
 Require-Text $filterProfile '--enable-zlib' "FFmpeg Filter Builder must enable FFmpeg zlib support for PNG decoding."
 Require-Text $filterProfileEnv 'CONFIG_ZLIB' "FFmpeg Filter Builder must assert zlib was enabled by configure."
 Require-Text $filterProfileEnv 'PROFILE_USE_WORKERFS=1' "FFmpeg Filter Builder must use WORKERFS input."
-foreach ($filterName in @("scale", "crop", "overlay", "amix", "loudnorm")) {
+foreach ($filterName in @("scale", "crop", "trim", "overlay", "amix", "loudnorm")) {
   Require-Text $filterProfile "--enable-filter=$filterName" "FFmpeg Filter Builder profile is missing a required filter."
 }
-Require-Text $filterRunner '#define RUNNER_VERSION "0.1.0"' "FFmpeg Filter Builder runner version must start at 0.1.0."
+Require-Text $filterRunner '#define RUNNER_VERSION "0.2.0"' "FFmpeg Filter Builder runner version must be 0.2.0 for time-range rendering."
 Require-Text $filterRunner "--video-filter" "FFmpeg Filter Builder runner must accept compiled video filter chains."
 Require-Text $filterRunner "--audio-filter" "FFmpeg Filter Builder runner must accept compiled audio filter chains."
+Require-Text $filterRunner "--start-time" "FFmpeg Filter Builder runner must accept a relative preview start time."
+Require-Text $filterRunner "--duration" "FFmpeg Filter Builder runner must accept a bounded preview duration."
+Require-Text $filterRunner "trim=start=" "FFmpeg Filter Builder runner must compile video time ranges through trim."
+Require-Text $filterRunner "atrim=start=" "FFmpeg Filter Builder runner must keep audio aligned with ranged video output."
 Require-Text $filterRunner "FFMPEG_WASM_PTHREADS" "FFmpeg Filter Builder runner must be threading-aware."
+Require-Text $browserRuntime "startTimeSeconds" "Filter Builder browser helper must expose ranged preview start time."
+Require-Text $browserRuntime "durationSeconds" "Filter Builder browser helper must expose bounded preview duration."
+Require-Text $filterProfileEnv '"timeRangeRender":true' "Filter Builder manifest capabilities must advertise time-range rendering."
 Require-Text $filterSmoke "scale=160:90" "FFmpeg Filter Builder smoke test must execute a real scale filter."
+Require-Text $filterSmoke "startTimeSeconds: 0.25" "FFmpeg Filter Builder smoke test must exercise a non-zero range start."
+Require-Text $filterSmoke "durationSeconds: 0.5" "FFmpeg Filter Builder smoke test must exercise bounded time-range rendering."
+Require-Text $filterSmoke "report.duration" "FFmpeg Filter Builder smoke test must inspect and verify trimmed output duration."
 Require-Text $filterSmoke "crossOriginIsolated" "FFmpeg Filter Builder MT smoke test must verify cross-origin isolation."
 Require-Text $filterLauncher "ffmpeg-filter-builder" "FFmpeg Filter Builder must have a Windows launcher."
 Require-Text $smokePacker 'line="${line//__THREADING_MODE__/$THREADING_MODE}"' "Smoke packer must replace inline threading placeholders, not only whole-line placeholders."
@@ -451,7 +461,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.4$') { throw "Builder version must be 1.9.4." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.5$') { throw "Builder version must be 1.9.5." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -504,7 +514,7 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.9.4" "Release documentation must include the v1.9.4 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.9.5" "Release documentation must include the v1.9.5 tag procedure."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."

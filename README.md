@@ -27,7 +27,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 
 初めて使う場合は [START-HERE.md](START-HERE.md) を先に読んでください。
 
-## v1.9.4 profiles
+## v1.9.5 profiles
 
 | profile | 用途 | decoder / encoder | x264 | 主な出力 |
 |---|---|---:|---:|---|
@@ -55,7 +55,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 
 `video-to-webp` は同じ動画前処理を共有し、FFmpegの `libwebp_anim` wrapperからAnimated WebPを生成します。libwebpはこのprofileだけにリンクされ、lossy/lossless、quality、compression levelを選べます。両profileとも入力File/BlobはWORKERFSを使います。
 
-`ffmpeg-filter-builder` は同一profileから `single-thread` と `multi-thread` の2 runtimeを生成します。MT初期設定はpthread pool 8に対して、video decoder 2 / libx264 encoder 4 / x264 lookahead 1を明示的に割り当てます。decodeとencodeを同じ4-thread設定にせず、ブラウザの有限なWorker poolを枯渇させない構成です。ST版は可搬性優先、MT版はBrowser Kitty等のcross-origin isolatedなHTTP(S)配信向けです。初期v0.1 runnerは1入力のvideo/audio filter chainを実行し、complex multi-input graphはFilter Builderアプリの後続段階で拡張します。
+`ffmpeg-filter-builder` は同一profileから `single-thread` と `multi-thread` の2 runtimeを生成します。MT設定はpthread pool 8に対して、video decoder 2 / libx264 encoder 4 / x264 lookahead 1を明示的に割り当てます。decodeとencodeを同じ4-thread設定にせず、ブラウザの有限なWorker poolを枯渇させない構成です。ST版は可搬性優先、MT版はBrowser Kitty等のcross-origin isolatedなHTTP(S)配信向けです。v1.9.5ではvideo `trim` を追加し、runnerの `--start-time` / `--duration` からvideo `trim + setpts` とaudio `atrim + asetpts` を自動構成します。`setpts` / `atrim` / `asetpts` / `volume` / `aresample` はv1.9.4時点ですでに含まれているため、不要な重複追加はしていません。complex multi-input graphはFilter Builderアプリの後続段階で拡張します。
 
 ## pin
 
@@ -310,14 +310,16 @@ Browser runtimeでは `BrowserFFmpeg.videoToWebpArgs()` を使います。`lossl
 
 ## FFmpeg Filter Builder runner API
 
-初期v0.1 profileは、Graph compilerが生成した1-stream filter chainをpublic libav runnerへ渡します。
+Filter Builder profileは、Graph compilerが生成した1-stream filter chainをpublic libav runnerへ渡します。v1.9.5では短いPreviewを実際の処理範囲にできる時間範囲指定も受け付けます。
 
 ```js
 const args = BrowserFFmpeg.ffmpegFilterBuilderArgs({
   input: "/workerfs/input.mp4",
   output: "/output.mp4",
   videoFilter: "crop=1080:1080,scale=720:720",
-  audioFilter: "volume=-3dB"
+  audioFilter: "volume=-3dB",
+  startTimeSeconds: 12.5,
+  durationSeconds: 5
 });
 ```
 
@@ -331,19 +333,19 @@ MT版をembedded assetから起動するときは `threading: "multi-thread"` �
 
 ## Public Release
 
-v1.9.4では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
+v1.9.5では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.4.zip
-ffmpeg-wasm-video-speed-changer-v1.9.4.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.4.zip
-ffmpeg-wasm-media-inspector-v1.9.4.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.4.zip
-ffmpeg-wasm-video-to-gif-v1.9.4.zip
-ffmpeg-wasm-video-to-webp-v1.9.4.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.4.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.4.zip
-ffmpeg-wasm-sources-v1.9.4.tar.gz
+ffmpeg-wasm-video-compressor-v1.9.5.zip
+ffmpeg-wasm-video-speed-changer-v1.9.5.zip
+ffmpeg-wasm-lossless-video-cutter-v1.9.5.zip
+ffmpeg-wasm-media-inspector-v1.9.5.zip
+ffmpeg-wasm-video-contact-sheet-v1.9.5.zip
+ffmpeg-wasm-video-to-gif-v1.9.5.zip
+ffmpeg-wasm-video-to-webp-v1.9.5.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.5.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.5.zip
+ffmpeg-wasm-sources-v1.9.5.tar.gz
 BUILDINFO-ffmpeg-filter-builder-single-thread.txt
 BUILDINFO-ffmpeg-filter-builder-multi-thread.txt
 SHA256SUMS.txt

@@ -39,6 +39,7 @@
 --enable-filter=vflip
 --enable-filter=setdar
 --enable-filter=setsar
+--enable-filter=trim
 --enable-filter=setpts
 --enable-filter=eq
 --enable-filter=hue

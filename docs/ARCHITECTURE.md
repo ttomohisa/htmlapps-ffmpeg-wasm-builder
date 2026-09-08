@@ -17,3 +17,7 @@ Legacy profiles remain at `dist/<profile>/`. Dual profiles use `dist/<profile>/<
 ## Profiles and manifests
 
 `profiles/<profile>/profile.env` defines optional libraries, linked FFmpeg archives, required config markers, catalog metadata, threading variants, and the pthread pool size. Manifest schema 8 records threading, pool size, SharedArrayBuffer/cross-origin-isolation requirements, catalog entries, dependencies, and generated worker hashes when present.
+
+## Filter Builder timeline ranges
+
+The v1.9.5 Filter Builder runner keeps range rendering inside the public-libav path. `--start-time` / `--duration` prepend `trim,setpts` to video and `atrim,asetpts` to audio. When a finite duration is requested, the demux loop stops after the requested end plus a one-second decode guard so preview renders do not continue through the full source. Exact bounds remain enforced by the filters.
