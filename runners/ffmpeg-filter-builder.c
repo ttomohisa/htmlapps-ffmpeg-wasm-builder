@@ -122,6 +122,14 @@ typedef struct RunnerContext {
     double last_progress;
 } RunnerContext;
 
+typedef struct PacketMeasure {
+    int stream_index;
+    int64_t bytes;
+    int64_t first_us;
+    int64_t last_us;
+    int seen_timestamp;
+} PacketMeasure;
+
 static void reset_stream(StreamContext *stream)
 {
     memset(stream, 0, sizeof(*stream));

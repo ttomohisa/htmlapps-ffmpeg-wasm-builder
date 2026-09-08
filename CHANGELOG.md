@@ -2,11 +2,14 @@
 
 ## 1.9.5 - 2026-09-08
 
+- Fixed the repository check to validate the Filter Builder range API against `runtime/browser-ffmpeg.js` via the existing `$runtime` path variable; this prevents StrictMode CI failure from an undefined `$browserRuntime` variable.
+
 - Added the FFmpeg `trim` video filter to the `ffmpeg-filter-builder` ST/MT profile. The companion timeline/audio filters (`setpts`, `atrim`, `asetpts`, `volume`, and `aresample`) were already present in v1.9.4 and remain enabled.
 - Extended the Filter Builder public-libav runner to accept `--start-time` and `--duration`, automatically applying bounded video/audio timeline trimming and resetting output timestamps so short previews are actually bounded instead of transcoding the complete source.
 - Added an early decode stop with a one-second reorder guard after the requested range, while keeping the filter graph responsible for exact output bounds.
 - Extended `BrowserFFmpeg.ffmpegFilterBuilderArgs()` with `startTimeSeconds` / `durationSeconds` and advertised `timeRangeRender` in the runtime manifest capabilities.
 - Expanded the real ST/MT browser smoke test to render a 0.5-second H.264/AAC range, inspect the produced MP4, and verify its duration and audio stream.
+- Restored the `PacketMeasure` helper type used by `--inspect-output`; the first v1.9.5 candidate accidentally dropped this typedef while refactoring progress/range handling, causing the runner C compile to fail before linking.
 
 ## 1.9.4 - 2026-09-07
 

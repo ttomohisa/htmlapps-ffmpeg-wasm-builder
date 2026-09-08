@@ -7,3 +7,11 @@ The speed runner also keeps the v1.7.1 timestamp fix, but now preserves the inpu
 For an exact 1.0x conversion, the speed-specific `setpts` and `atempo` filters are skipped. This makes the baseline path match the already-proven Video Compressor filtering path as closely as possible.
 
 Browser smoke-test diagnostics retain the playback-rate prefix and recent FFmpeg log tail so any remaining runtime failure identifies the exact rate and libav error.
+
+## v1.9.5 candidate compile fix
+
+The first v1.9.5 candidate accidentally removed the existing `PacketMeasure` typedef while refactoring the progress/range helpers. `--inspect-output` still referenced that type, so the public-libav runner failed at C compile time before linking. The typedef is restored near the other runner state structs, and `scripts/check-repository.ps1` now asserts that it remains present.
+## CI repository-check fix
+
+`check-repository.ps1` already registers `runtime/browser-ffmpeg.js` as `$runtime`. The v1.9.5 assertions accidentally referenced an undeclared `$browserRuntime` variable under `Set-StrictMode -Version Latest`, causing CI to stop before the actual literal checks. The assertions now use `$runtime` consistently.
+
