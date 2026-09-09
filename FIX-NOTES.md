@@ -1,3 +1,9 @@
+## v1.9.8 Filter Builder drawtext support
+
+The Browser Kitty v0.7 text milestone needs `drawtext`, which FFmpeg 9 requires together with FreeType and HarfBuzz. The Filter Builder profile now opts into Emscripten's pinned `freetype` and `harfbuzz` ports and enables `drawtext`. The Builder runtime still contains no font asset; applications pass a local font file into the virtual filesystem and reference it with `fontfile=/...`, preserving fully-local runtime behavior and keeping font licensing/application choice outside the shared core.
+
+The smoke test intentionally references a missing font and requires a font-loading error rather than `No such filter`; this proves the drawtext code path is linked without adding a font binary to Builder release assets.
+
 ## v1.9.7 Filter Builder speed PTS fix
 
 Speed-up filters compress presentation timestamps. In v1.9.6 the Filter Builder H.264 encoder used `time_base = 1 / frame_rate`; for a 30 fps input, `setpts=PTS/1.5` produces frame spacing smaller than one 1/30-second encoder tick. Rescaling therefore collapsed adjacent frames onto identical PTS values, x264 reported `non-strictly-monotonic PTS`, and the MP4 muxer rejected duplicate DTS values.

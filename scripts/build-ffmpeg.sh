@@ -16,6 +16,17 @@ export PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig"
 export EM_PKG_CONFIG_PATH="$PKG_CONFIG_PATH"
 profile_compile_flags=()
 profile_link_flags=()
+if [[ "$PROFILE_USE_FREETYPE" == "1" ]]; then
+  embuilder build freetype
+  profile_compile_flags+=("-sUSE_FREETYPE=1")
+  profile_link_flags+=("-sUSE_FREETYPE=1")
+fi
+if [[ "$PROFILE_USE_HARFBUZZ" == "1" ]]; then
+  embuilder build harfbuzz
+  profile_compile_flags+=("-sUSE_HARFBUZZ=1")
+  profile_link_flags+=("-sUSE_HARFBUZZ=1")
+fi
+
 if [[ "$PROFILE_USE_ZLIB" == "1" ]]; then
   # FFmpeg's native PNG decoder selects inflate_wrapper, which requires zlib.
   # Emscripten provides zlib as a system port; enable it for configure tests,
@@ -102,6 +113,14 @@ else
   if grep -q '^CONFIG_ZLIB=yes$' ffbuild/config.mak; then
     fail "Profile $PROFILE unexpectedly enabled zlib"
   fi
+fi
+if [[ "$PROFILE_USE_FREETYPE" == "1" ]]; then
+  grep -q '^CONFIG_LIBFREETYPE=yes$' ffbuild/config.mak \
+    || fail "Profile $PROFILE requires libfreetype, but FFmpeg configure did not enable it"
+fi
+if [[ "$PROFILE_USE_HARFBUZZ" == "1" ]]; then
+  grep -q '^CONFIG_LIBHARFBUZZ=yes$' ffbuild/config.mak \
+    || fail "Profile $PROFILE requires libharfbuzz, but FFmpeg configure did not enable it"
 fi
 
 log "Building FFmpeg static libraries"
@@ -219,6 +238,8 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
     "x264Commit": "$X264_COMMIT",
     "x264Linked": $([[ "$PROFILE_USE_X264" == "1" ]] && echo true || echo false),
     "zlibLinked": $([[ "$PROFILE_USE_ZLIB" == "1" ]] && echo true || echo false),
+    "freetypePortLinked": $([[ "$PROFILE_USE_FREETYPE" == "1" ]] && echo true || echo false),
+    "harfbuzzPortLinked": $([[ "$PROFILE_USE_HARFBUZZ" == "1" ]] && echo true || echo false),
     "libwebpRef": "$LIBWEBP_REF",
     "libwebpCommit": "$LIBWEBP_COMMIT",
     "libwebpLinked": $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo true || echo false),

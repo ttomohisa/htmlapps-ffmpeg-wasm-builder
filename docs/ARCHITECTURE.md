@@ -28,3 +28,7 @@ The v1.9.6 Filter Builder runner keeps range rendering inside the public-libav p
 Filter Builder v1.9.6 performs a configuration-only probe of the video filter graph before opening the encoder. The probe uses the same caller chain but omits the final encoder-size scaler, then reads the negotiated sink width/height. The real graph is rebuilt with one final no-op-or-constraining scale to the negotiated encoder geometry. This keeps arbitrary supported dimension-changing filters authoritative while preserving explicit max-width/max-height limits.
 
 When `trim` / `atrim` causes a filter source to report `AVERROR_EOF` before the demux guard is reached, v1.9.6 treats that as successful completion of that filtered stream and continues normal encoder flush/trailer finalization.
+
+## v1.9.8 drawtext dependency boundary
+
+The Filter Builder profile links Emscripten FreeType/HarfBuzz ports and enables FFmpeg `drawtext`. Font bytes are intentionally app-owned virtual filesystem inputs rather than Builder runtime assets.

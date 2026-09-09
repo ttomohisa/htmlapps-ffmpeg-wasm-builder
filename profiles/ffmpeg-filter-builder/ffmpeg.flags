@@ -27,6 +27,8 @@
 --enable-decoder=flac
 --enable-gpl
 --enable-libx264
+--enable-libfreetype
+--enable-libharfbuzz
 --enable-encoder=libx264
 --enable-encoder=aac
 --enable-muxer=mp4
@@ -47,6 +49,7 @@
 --enable-filter=gblur
 --enable-filter=unsharp
 --enable-filter=fade
+--enable-filter=drawtext
 --enable-filter=split
 --enable-filter=overlay
 --enable-filter=format

@@ -143,6 +143,12 @@ Require-Text $buildScript "--disable-programs" "WASM build must not link the ups
 Require-Text $buildScript "-sEXPORT_NAME=createFFmpegCore" "WASM factory name must stay stable."
 Require-Text $buildScript "mainScriptUrlOrBlob" "WASM build must allow Blob-hosted main script URLs for pthread workers."
 Require-Text $buildScript "-sUSE_ZLIB=1" "Profiles that request zlib must use the pinned Emscripten zlib system port."
+Require-Text $buildScript "-sUSE_FREETYPE=1" "Profiles that request drawtext must link the pinned Emscripten FreeType port."
+Require-Text $buildScript "-sUSE_HARFBUZZ=1" "Profiles that request drawtext must link the pinned Emscripten HarfBuzz port."
+Require-Text $buildScript "embuilder build freetype" "FreeType must be prepared before FFmpeg pkg-config checks."
+Require-Text $buildScript "embuilder build harfbuzz" "HarfBuzz must be prepared before FFmpeg pkg-config checks."
+Require-Text $releaseScript "FreeType system port linked into this profile" "Release BUILDINFO must record FreeType linkage."
+Require-Text $releaseScript "HarfBuzz system port linked into this profile" "Release BUILDINFO must record HarfBuzz linkage."
 Require-Text $buildScript '"schemaVersion": 8' "Manifest schema must include threading-aware metadata."
 Require-Text $buildScript '"requiresSharedArrayBuffer":' "Manifest must describe SharedArrayBuffer requirements."
 Require-Text $buildScript '"requiresCrossOriginIsolation":' "Manifest must describe cross-origin isolation requirements."
@@ -429,10 +435,14 @@ Require-Text $filterProfileEnv 'PROFILE_ENCODER_THREAD_COUNT=4' "FFmpeg Filter B
 Require-Text $filterProfileEnv 'PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1' "FFmpeg Filter Builder must explicitly budget the x264 lookahead worker."
 Require-Text $filterProfileEnv 'PROFILE_USE_X264=1' "FFmpeg Filter Builder must provide H.264 output."
 Require-Text $filterProfileEnv 'PROFILE_USE_ZLIB=1' "FFmpeg Filter Builder must explicitly enable the zlib system port for PNG input."
+Require-Text $filterProfileEnv 'PROFILE_USE_FREETYPE=1' "FFmpeg Filter Builder must enable the Emscripten FreeType port for drawtext."
+Require-Text $filterProfileEnv 'PROFILE_USE_HARFBUZZ=1' "FFmpeg Filter Builder must enable the Emscripten HarfBuzz port for drawtext."
+Require-Text $filterProfile '--enable-libfreetype' "FFmpeg Filter Builder must enable FFmpeg libfreetype integration."
+Require-Text $filterProfile '--enable-libharfbuzz' "FFmpeg Filter Builder must enable FFmpeg libharfbuzz integration."
 Require-Text $filterProfile '--enable-zlib' "FFmpeg Filter Builder must enable FFmpeg zlib support for PNG decoding."
 Require-Text $filterProfileEnv 'CONFIG_ZLIB' "FFmpeg Filter Builder must assert zlib was enabled by configure."
 Require-Text $filterProfileEnv 'PROFILE_USE_WORKERFS=1' "FFmpeg Filter Builder must use WORKERFS input."
-foreach ($filterName in @("scale", "crop", "trim", "overlay", "amix", "loudnorm")) {
+foreach ($filterName in @("scale", "crop", "trim", "overlay", "amix", "loudnorm", "drawtext")) {
   Require-Text $filterProfile "--enable-filter=$filterName" "FFmpeg Filter Builder profile is missing a required filter."
 }
 Require-Text $filterRunner '#define RUNNER_VERSION "0.2.2"' "FFmpeg Filter Builder runner version must be 0.2.2 for fine-grained Filter Builder video timestamps."
@@ -447,6 +457,8 @@ Require-Text $filterRunner "FFMPEG_WASM_PTHREADS" "FFmpeg Filter Builder runner 
 Require-Text $runtime "startTimeSeconds" "Filter Builder browser helper must expose ranged preview start time."
 Require-Text $runtime "durationSeconds" "Filter Builder browser helper must expose bounded preview duration."
 Require-Text $filterProfileEnv '"timeRangeRender":true' "Filter Builder manifest capabilities must advertise time-range rendering."
+Require-Text $filterProfileEnv '"drawText":true' "Filter Builder manifest capabilities must advertise drawtext support."
+Require-Text $filterSmoke 'drawtext=fontfile=/fonts/missing.ttf' "FFmpeg Filter Builder smoke test must probe the compiled drawtext path."
 Require-Text $filterSmoke "scale=160:90" "FFmpeg Filter Builder smoke test must execute a real scale filter."
 Require-Text $filterSmoke "durationSeconds: 0.1" "FFmpeg Filter Builder smoke test must exercise an early bounded range that finishes well before source EOF."
 Require-Text $filterSmoke "report.duration" "FFmpeg Filter Builder smoke test must inspect and verify trimmed output duration."
@@ -468,7 +480,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.7$') { throw "Builder version must be 1.9.7." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.8$') { throw "Builder version must be 1.9.8." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -521,7 +533,7 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.9.7" "Release documentation must include the v1.9.7 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.9.8" "Release documentation must include the v1.9.8 tag procedure."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."

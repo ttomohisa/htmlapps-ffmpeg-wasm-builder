@@ -84,5 +84,35 @@ if (!speedReport.video || speedReport.video.width !== 160 || speedReport.video.h
   throw new Error("Speed setpts output geometry was unexpected");
 }
 
+// drawtext must be compiled into the profile. The Builder intentionally does
+// not ship a font asset; app packages provide one through the virtual FS. Probe
+// with a missing font and require a font-loading failure rather than a missing
+// filter error.
+let drawTextProbeConfirmed = false;
+try {
+  await runner.run({
+    files: [{ name: "/workerfs/drawtext-input.mp4", data: new File([input], "smoke-input.mp4", { type: "video/mp4" }), workerfs: true }],
+    outputs: ["/drawtext-probe.mp4"],
+    args: BrowserFFmpeg.ffmpegFilterBuilderArgs({
+      input: "/workerfs/drawtext-input.mp4",
+      output: "/drawtext-probe.mp4",
+      videoFilter: "drawtext=fontfile=/fonts/missing.ttf:text=Hello:fontsize=24:fontcolor=white:x=10:y=10",
+      startTimeSeconds: 0,
+      durationSeconds: 0.05,
+      crf: 34,
+      noAudio: true
+    }),
+    onLog: ({ message }) => append(message)
+  });
+  throw new Error("drawtext probe unexpectedly succeeded without a font asset");
+} catch (error) {
+  const message = String(error?.message || error);
+  if (/No such filter|Filter not found|drawtext.*not found/i.test(message)) {
+    throw new Error("drawtext is not compiled into the Filter Builder runtime: " + message);
+  }
+  if (/font|freetype|cannot open resource|No such file/i.test(message)) drawTextProbeConfirmed = true;
+}
+if (!drawTextProbeConfirmed) throw new Error("drawtext probe did not reach the font-loading path");
+
 runner.dispose();
-pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3) + ";speedDuration=" + speedReport.duration.toFixed(3));
+pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3) + ";speedDuration=" + speedReport.duration.toFixed(3) + ";drawtext=compiled");

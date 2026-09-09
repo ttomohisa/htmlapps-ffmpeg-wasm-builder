@@ -85,7 +85,7 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/fetch-ffmpeg.sh
 
 # Common profile build inputs. This stage deliberately does not copy x264.
 FROM toolchain-base AS wasm-common
-ARG BUILDER_VERSION=1.9.7
+ARG BUILDER_VERSION=1.9.8
 ARG FFMPEG_REPOSITORY
 ARG FFMPEG_REF
 ARG FFMPEG_COMMIT

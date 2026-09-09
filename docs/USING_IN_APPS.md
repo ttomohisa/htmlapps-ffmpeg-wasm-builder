@@ -209,3 +209,7 @@ The Filter Builder runner now uses a minimum 90 kHz video filter/encoder time ba
 ### v1.9.6 Filter Builder range hardening
 
 v1.9.6 treats filter-source `AVERROR_EOF` after `trim` / `atrim` as normal bounded completion instead of a failed transcode. It also probes the compiled video chain before opening the encoder, so dimension-changing filters such as `scale`, `crop`, `pad`, and `transpose` determine the encoded frame size instead of being silently scaled back to the source geometry.
+
+### v1.9.8 Filter Builder drawtext
+
+Apps can pass a TTF/OTF as a normal non-WORKERFS file (for example `/fonts/app.ttf`) and reference it from `drawtext=fontfile=/fonts/app.ttf:...`. No runtime network request is needed.

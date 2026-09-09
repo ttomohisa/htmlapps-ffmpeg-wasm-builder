@@ -108,7 +108,7 @@ write_buildinfo() {
   local profile="$1"
   local variant="$2"
   local output="$3"
-  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
+  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_FREETYPE=0 PROFILE_USE_HARFBUZZ=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
   local -a PROFILE_REQUIRED_CONFIG=() PROFILE_LINK_LIBS=()
   # shellcheck disable=SC1090
   source "$ROOT/profiles/$profile/profile.env"
@@ -134,6 +134,8 @@ write_buildinfo() {
     echo "Output: $PROFILE_OUTPUT_DESCRIPTION"
     echo "x264 linked into this profile: $([[ "$PROFILE_USE_X264" == "1" ]] && echo yes || echo no)"
     echo "zlib system port linked into this profile: $([[ "$PROFILE_USE_ZLIB" == "1" ]] && echo yes || echo no)"
+    echo "FreeType system port linked into this profile: $([[ "$PROFILE_USE_FREETYPE" == "1" ]] && echo yes || echo no)"
+    echo "HarfBuzz system port linked into this profile: $([[ "$PROFILE_USE_HARFBUZZ" == "1" ]] && echo yes || echo no)"
     echo "libvpx linked into this profile: $([[ "$PROFILE_USE_LIBVPX" == "1" ]] && echo yes || echo no)"
     echo "Opus linked into this profile: $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo yes || echo no)"
     echo "libwebp linked into this profile: $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo yes || echo no)"
@@ -207,6 +209,13 @@ ARGS
       echo
       echo "Emscripten zlib system port: -sUSE_ZLIB=1 (used by FFmpeg configure/build and final link)"
     fi
+    if [[ "$PROFILE_USE_FREETYPE" == "1" ]]; then
+      echo
+      echo "Emscripten FreeType port: -sUSE_FREETYPE=1 (drawtext font rasterization)"
+    fi
+    if [[ "$PROFILE_USE_HARFBUZZ" == "1" ]]; then
+      echo "Emscripten HarfBuzz port: -sUSE_HARFBUZZ=1 (drawtext shaping)"
+    fi
     if [[ "$PROFILE_USE_X264" == "1" ]]; then
       echo
       echo "x264 configure arguments:"
@@ -260,7 +269,7 @@ make_binary_zip() {
   local buildinfo="$3"
   local DIST
   DIST="$(profile_dist "$profile" "$variant")"
-  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
+  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_FREETYPE=0 PROFILE_USE_HARFBUZZ=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
   local -a PROFILE_REQUIRED_CONFIG=() PROFILE_LINK_LIBS=()
   local suffix=""
   [[ -d "$ROOT/dist/$profile/$variant" ]] && suffix="-$variant"

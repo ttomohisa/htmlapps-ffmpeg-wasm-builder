@@ -1,5 +1,9 @@
 # FFmpeg WASM Builder
 
+## v1.9.8 Filter Builder drawtext
+
+`ffmpeg-filter-builder` now includes FFmpeg `drawtext` with Emscripten FreeType/HarfBuzz support. Fonts are supplied by the consuming app as local virtual-filesystem assets; the shared runtime does not fetch or bundle a font.
+
 Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg and Emscripten sources. Prebuilt `@ffmpeg/ffmpeg` / `@ffmpeg/core` binaries are not consumed, and the upstream `ffmpeg` CLI is not linked. Each profile uses a public `libav*` runner.
 
 ## v1.9.7 profiles

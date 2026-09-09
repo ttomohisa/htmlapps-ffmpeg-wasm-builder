@@ -13,11 +13,15 @@ Both variants are generated from the same FFmpeg/x264 pins, profile flags and pu
 
 ## Current scope
 
-The profile supports a caller-supplied video/audio filter chain, H.264/AAC MP4 output, common input decoders, and the built-in filter catalog that does not require additional font libraries. v1.9.5 adds video `trim` and bounded time-range rendering through `--start-time` / `--duration`. The runner normalizes timestamps with `setpts` / `asetpts` and keeps audio aligned with `atrim`; these companion filters were already present in v1.9.4.
+The profile supports a caller-supplied video/audio filter chain, H.264/AAC MP4 output, common input decoders, and the Browser Kitty filter catalog including `drawtext`. v1.9.5 adds video `trim` and bounded time-range rendering through `--start-time` / `--duration`. The runner normalizes timestamps with `setpts` / `asetpts` and keeps audio aligned with `atrim`; these companion filters were already present in v1.9.4.
 
-`drawtext` is deliberately not enabled yet. It will be added together with the embedded-font/freetype dependency work instead of exposing a filter that cannot render the Browser Kitty v1.0 text node correctly.
+`drawtext` is enabled in v1.9.8 with the pinned Emscripten FreeType and HarfBuzz ports. The runtime does not bundle a font by itself; the app passes an embedded/local font file through the existing virtual filesystem input contract and refers to that absolute path from `drawtext=fontfile=...`.
 
 The public-libav runner is not the upstream `ffmpeg` CLI and does not accept arbitrary shell arguments.
+
+## v1.9.8 drawtext / font libraries
+
+The Filter Builder profile enables `libfreetype`, `libharfbuzz`, and the `drawtext` filter. Both ST and MT builds link Emscripten's pinned ports via `-sUSE_FREETYPE=1` and `-sUSE_HARFBUZZ=1`. Font bytes remain an app asset, not a Builder runtime asset, so different Browser Kitty apps can choose their own licensed local font without adding runtime network access.
 
 ## PNG / zlib
 

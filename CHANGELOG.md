@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.8 - 2026-09-09
+
+- Added `drawtext` to the `ffmpeg-filter-builder` ST/MT profile.
+- Linked Emscripten FreeType and HarfBuzz ports only for profiles that opt in, keeping unrelated runtime profiles unchanged.
+- Advertised `drawText: true` in the Filter Builder runtime manifest.
+- Added a browser smoke probe that proves `drawtext` reaches the font-loading path without bundling a font inside the Builder runtime.
+- Kept font ownership at the app layer: the app supplies a licensed local font through the existing in-memory virtual filesystem contract.
+
 ## 1.9.7 - 2026-09-08
 
 - Fixed Filter Builder speed-up graphs such as `setpts=PTS/1.5` failing with `non-strictly-monotonic PTS` / `non monotonically increasing dts` in the MP4 muxer.

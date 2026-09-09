@@ -116,6 +116,8 @@ load_profile_config() {
   : "${PROFILE_DISPLAY_NAME:?}"
   : "${PROFILE_USE_X264:?}"
   PROFILE_USE_ZLIB="${PROFILE_USE_ZLIB:-0}"
+  PROFILE_USE_FREETYPE="${PROFILE_USE_FREETYPE:-0}"
+  PROFILE_USE_HARFBUZZ="${PROFILE_USE_HARFBUZZ:-0}"
   : "${PROFILE_USE_LIBWEBP:?}"
   PROFILE_USE_LIBVPX="${PROFILE_USE_LIBVPX:-0}"
   PROFILE_USE_LIBOPUS="${PROFILE_USE_LIBOPUS:-0}"
@@ -137,6 +139,10 @@ load_profile_config() {
     || fail "PROFILE_USE_X264 must be 0 or 1"
   [[ "$PROFILE_USE_ZLIB" == "0" || "$PROFILE_USE_ZLIB" == "1" ]] \
     || fail "PROFILE_USE_ZLIB must be 0 or 1"
+  [[ "$PROFILE_USE_FREETYPE" == "0" || "$PROFILE_USE_FREETYPE" == "1" ]] \
+    || fail "PROFILE_USE_FREETYPE must be 0 or 1"
+  [[ "$PROFILE_USE_HARFBUZZ" == "0" || "$PROFILE_USE_HARFBUZZ" == "1" ]] \
+    || fail "PROFILE_USE_HARFBUZZ must be 0 or 1"
   [[ "$PROFILE_USE_LIBWEBP" == "0" || "$PROFILE_USE_LIBWEBP" == "1" ]] \
     || fail "PROFILE_USE_LIBWEBP must be 0 or 1"
   [[ "$PROFILE_USE_LIBVPX" == "0" || "$PROFILE_USE_LIBVPX" == "1" ]] \
