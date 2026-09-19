@@ -1,5 +1,8 @@
 # FFmpeg WASM Builder
 
+## v1.9.9 Filter Builder multiple input
+
+`ffmpeg-filter-builder` now supports a dedicated 2-8 input complex-graph runner contract. Existing one-input Graphs continue to use the proven single-input path; multiple inputs use named libavfilter sources and explicit graph output labels. Both ST and MT variants are covered by the same real-browser smoke test.
 ## v1.9.8 Filter Builder drawtext
 
 `ffmpeg-filter-builder` now includes FFmpeg `drawtext` with Emscripten FreeType/HarfBuzz support. Fonts are supplied by the consuming app as local virtual-filesystem assets; the shared runtime does not fetch or bundle a font.

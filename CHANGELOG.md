@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.9 - 2026-09-19
+
+- Added a dedicated multi-input complex-filtergraph execution path to the FFmpeg Filter Builder public-libav runner while preserving the existing single-input path.
+- Added 2-8 repeated `--input` arguments, input kind metadata, `--filter-complex`, explicit video/audio output labels, and a main-input index for progress reporting.
+- Added `null` / `anull` pass-through filters so app compilers can normalize raw multi-input output branches into named filtergraph outputs.
+- `BrowserFFmpeg.ffmpegFilterBuilderArgs()` now emits the multi-input runner contract.
+- Filter Builder runtime manifests now advertise `complexGraph` and `multipleInputs`.
+- Added a real-browser two-input smoke test covering video overlay and audio mix in both ST and MT variants.
+- Keep multi-input decoders single-threaded in the MT runtime so simultaneous input decoders do not exhaust the bounded pthread pool before libx264 opens.
 ## 1.9.8 - 2026-09-09
 
 - Added `drawtext` to the `ffmpeg-filter-builder` ST/MT profile.

@@ -53,7 +53,8 @@
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "0.2.2"
+#define RUNNER_VERSION "0.3.0"
+#define FILTER_BUILDER_MAX_INPUTS 8
 #ifndef FFMPEG_WASM_PTHREADS
 #define FFMPEG_WASM_PTHREADS 0
 #endif
@@ -76,6 +77,13 @@ typedef struct RunnerOptions {
     const char *preset;
     const char *video_filter;
     const char *audio_filter;
+    const char *filter_complex;
+    const char *video_map;
+    const char *audio_map;
+    const char *input_paths[FILTER_BUILDER_MAX_INPUTS];
+    const char *input_kinds[FILTER_BUILDER_MAX_INPUTS];
+    int input_count;
+    int main_input_index;
     int crf;
     int video_bitrate_kbps;
     int audio_bitrate_kbps;
@@ -181,6 +189,11 @@ static void print_usage(const char *program)
         "  --audio-bitrate N      AAC bitrate in kbit/s (default 128)\n"
         "  --video-filter EXPR    Filter chain compiled from the visual graph\n"
         "  --audio-filter EXPR    Audio filter chain compiled from the visual graph\n"
+        "  --filter-complex EXPR  Multi-input complex filter graph\n"
+        "  --video-map LABEL      Complex-graph video output label\n"
+        "  --audio-map LABEL      Complex-graph audio output label\n"
+        "  --input-kind KIND      Kind for the preceding input: video, audio, image, media\n"
+        "  --main-input-index N   Input index used for progress/duration (default 0)\n"
         "  --no-audio             Drop audio\n"
         "  --no-faststart         Do not move MP4 metadata to the front\n"
         "  --inspect-output PATH  Measure source stream information and write JSON\n"
@@ -226,6 +239,7 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
     options->crf = 28;
     options->audio_bitrate_kbps = 128;
     options->faststart = 1;
+    options->main_input_index = 0;
 
     for (i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -258,7 +272,14 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
         }
         value = argv[++i];
 
-        if (!strcmp(arg, "--input")) options->input_path = value;
+        if (!strcmp(arg, "--input")) {
+            if (options->input_count >= FILTER_BUILDER_MAX_INPUTS) {
+                fprintf(stderr, "Too many inputs (max %d)\n", FILTER_BUILDER_MAX_INPUTS);
+                return -1;
+            }
+            options->input_paths[options->input_count++] = value;
+            if (!options->input_path) options->input_path = value;
+        }
         else if (!strcmp(arg, "--output")) options->output_path = value;
         else if (!strcmp(arg, "--inspect-output")) options->inspect_output_path = value;
         else if (!strcmp(arg, "--codec")) options->codec = value;
@@ -266,6 +287,23 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
         else if (!strcmp(arg, "--preset")) options->preset = value;
         else if (!strcmp(arg, "--video-filter")) options->video_filter = value;
         else if (!strcmp(arg, "--audio-filter")) options->audio_filter = value;
+        else if (!strcmp(arg, "--filter-complex")) options->filter_complex = value;
+        else if (!strcmp(arg, "--video-map")) options->video_map = value;
+        else if (!strcmp(arg, "--audio-map")) options->audio_map = value;
+        else if (!strcmp(arg, "--input-kind")) {
+            if (options->input_count <= 0) {
+                fprintf(stderr, "--input-kind must follow --input\n");
+                return -1;
+            }
+            if (strcmp(value, "video") && strcmp(value, "audio") && strcmp(value, "image") && strcmp(value, "media")) {
+                fprintf(stderr, "Unsupported --input-kind: %s\n", value);
+                return -1;
+            }
+            options->input_kinds[options->input_count - 1] = value;
+        }
+        else if (!strcmp(arg, "--main-input-index")) {
+            if (parse_int(value, 0, FILTER_BUILDER_MAX_INPUTS - 1, &options->main_input_index) < 0) goto invalid;
+        }
         else if (!strcmp(arg, "--crf")) {
             if (parse_int(value, 0, 51, &options->crf) < 0) goto invalid;
         } else if (!strcmp(arg, "--video-bitrate")) {
@@ -293,8 +331,16 @@ invalid:
         return -1;
     }
 
-    if (!options->input_path || (!options->output_path && !options->inspect_output_path)) {
+    if (!options->input_path || options->input_count <= 0 || (!options->output_path && !options->inspect_output_path)) {
         fprintf(stderr, "--input and either --output or --inspect-output are required.\n");
+        return -1;
+    }
+    if (options->filter_complex && options->input_count < 2) {
+        fprintf(stderr, "--filter-complex runtime mode requires at least two inputs.\n");
+        return -1;
+    }
+    if (options->input_count > 1 && (!options->filter_complex || !options->video_map)) {
+        fprintf(stderr, "Multiple inputs require --filter-complex and --video-map.\n");
         return -1;
     }
     if (options->output_path && options->inspect_output_path) {
@@ -1580,6 +1626,9 @@ static void cleanup(RunnerContext *ctx)
     ctx->ofmt_ctx = NULL;
 }
 
+
+#include "ffmpeg-filter-builder-multi.inc"
+
 int main(int argc, char **argv)
 {
     RunnerContext ctx;
@@ -1609,9 +1658,18 @@ int main(int argc, char **argv)
                ctx.options.start_time_seconds);
 
     if (ctx.options.inspect_output_path) {
+        if (ctx.options.input_count != 1) {
+            av_log(NULL, AV_LOG_ERROR, "Media inspection accepts exactly one input.\n");
+            return 2;
+        }
         ret = inspect_media(&ctx.options);
         if (ret < 0)
             av_log(NULL, AV_LOG_ERROR, "Media inspection failed: %s\n", av_err2str(ret));
+        return ret < 0 ? 1 : 0;
+    }
+
+    if (ctx.options.input_count > 1 || ctx.options.filter_complex) {
+        ret = run_multi_input(&ctx.options);
         return ret < 0 ? 1 : 0;
     }
 

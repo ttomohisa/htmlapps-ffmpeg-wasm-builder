@@ -450,6 +450,42 @@
 
 
   const ffmpegFilterBuilderArgs = (options = {}) => {
+    const addCommon = (args) => {
+      const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
+      add("--start-time", options.startTimeSeconds);
+      add("--duration", options.durationSeconds);
+      add("--max-width", options.maxWidth ?? 0);
+      add("--max-height", options.maxHeight ?? 0);
+      add("--fps", options.fps ?? 0);
+      add("--crf", options.crf ?? 28);
+      add("--audio-bitrate", options.audioBitrateKbps ?? 128);
+      if (options.noAudio) args.push("--no-audio");
+      if (options.allowUpscale) args.push("--allow-upscale");
+      return args;
+    };
+
+    if (options.mode === "multi-input") {
+      const inputs = Array.isArray(options.inputs) ? options.inputs : [];
+      if (inputs.length < 2 || inputs.length > 8) throw new RangeError("Filter Builder multi-input mode requires 2 to 8 inputs.");
+      if (!options.filterComplex) throw new Error("filterComplex is required in multi-input mode.");
+      if (!options.videoMap) throw new Error("videoMap is required in multi-input mode.");
+      const args = [];
+      for (const input of inputs) {
+        if (!input?.path) throw new Error("Every multi-input entry needs a virtual path.");
+        args.push("--input", String(input.path));
+        if (input.kind) args.push("--input-kind", String(input.kind));
+      }
+      args.push(
+        "--output", options.output || "/output.mp4",
+        "--codec", "h264",
+        "--filter-complex", String(options.filterComplex),
+        "--video-map", String(options.videoMap),
+        "--main-input-index", String(Number.isInteger(options.mainInputIndex) ? options.mainInputIndex : 0)
+      );
+      if (options.audioMap) args.push("--audio-map", String(options.audioMap));
+      return addCommon(args);
+    }
+
     const args = [
       "--input", options.input || "/workerfs/input.mp4",
       "--output", options.output || "/output.mp4",
@@ -458,18 +494,8 @@
     const add = (name, value) => { if (value !== undefined && value !== null && value !== "") args.push(name, String(value)); };
     add("--video-filter", options.videoFilter);
     add("--audio-filter", options.audioFilter);
-    add("--start-time", options.startTimeSeconds);
-    add("--duration", options.durationSeconds);
-    add("--max-width", options.maxWidth ?? 0);
-    add("--max-height", options.maxHeight ?? 0);
-    add("--fps", options.fps ?? 0);
-    add("--crf", options.crf ?? 28);
-    add("--audio-bitrate", options.audioBitrateKbps ?? 128);
-    if (options.noAudio) args.push("--no-audio");
-    if (options.allowUpscale) args.push("--allow-upscale");
-    return args;
+    return addCommon(args);
   };
-
   window.BrowserFFmpeg = Object.freeze({
     loadHosted,
     loadEmbedded,

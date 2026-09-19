@@ -445,8 +445,18 @@ Require-Text $filterProfileEnv 'PROFILE_USE_WORKERFS=1' "FFmpeg Filter Builder m
 foreach ($filterName in @("scale", "crop", "trim", "overlay", "amix", "loudnorm", "drawtext")) {
   Require-Text $filterProfile "--enable-filter=$filterName" "FFmpeg Filter Builder profile is missing a required filter."
 }
-Require-Text $filterRunner '#define RUNNER_VERSION "0.2.2"' "FFmpeg Filter Builder runner version must be 0.2.2 for fine-grained Filter Builder video timestamps."
-Require-Text $filterRunner "--video-filter" "FFmpeg Filter Builder runner must accept compiled video filter chains."
+Require-Text $filterRunner '#define RUNNER_VERSION "0.3.0"' "FFmpeg Filter Builder runner version must be 0.3.0 for multi-input complex graphs."
+Require-Text $filterRunner "ffmpeg-filter-builder-multi.inc" "FFmpeg Filter Builder runner must include the multi-input execution path."
+Require-Text $filterRunner "--filter-complex" "FFmpeg Filter Builder runner must accept complex filter graphs."
+Require-Text $filterRunner "--video-map" "FFmpeg Filter Builder runner must accept a complex video output label."
+Require-Text $filterRunner "--audio-map" "FFmpeg Filter Builder runner must accept a complex audio output label."
+Require-Text $filterProfile "--enable-filter=null" "FFmpeg Filter Builder must enable video pass-through for complex graphs."
+Require-Text $filterProfile "--enable-filter=anull" "FFmpeg Filter Builder must enable audio pass-through for complex graphs."
+Require-Text $filterProfileEnv '"complexGraph":true' "Filter Builder manifest must advertise complex graph support."
+Require-Text $filterProfileEnv '"multipleInputs":true' "Filter Builder manifest must advertise multiple input support."
+Require-Text $runtime 'options.mode === "multi-input"' "Filter Builder browser helper must expose multi-input arguments."
+Require-Text $filterSmoke 'mode: "multi-input"' "Filter Builder smoke test must execute a real multi-input graph."
+Require-Text $filterSmoke 'amix=inputs=2' "Filter Builder smoke test must exercise multi-input audio mixing."Require-Text $filterRunner "--video-filter" "FFmpeg Filter Builder runner must accept compiled video filter chains."
 Require-Text $filterRunner "--audio-filter" "FFmpeg Filter Builder runner must accept compiled audio filter chains."
 Require-Text $filterRunner "--start-time" "FFmpeg Filter Builder runner must accept a relative preview start time."
 Require-Text $filterRunner "--duration" "FFmpeg Filter Builder runner must accept a bounded preview duration."
@@ -480,7 +490,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.8$') { throw "Builder version must be 1.9.8." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.9$') { throw "Builder version must be 1.9.9." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -533,7 +543,7 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.9.8" "Release documentation must include the v1.9.8 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.9.9" "Release documentation must include the v1.9.9 tag procedure."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."

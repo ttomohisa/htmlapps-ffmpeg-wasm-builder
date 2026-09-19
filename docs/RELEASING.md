@@ -5,7 +5,7 @@
 For v1.9.8:
 
 ```text
-git tag -a v1.9.8 -m "FFmpeg WASM Builder v1.9.8"
+git tag -a v1.9.9 -m "FFmpeg WASM Builder v1.9.8"
 git push origin v1.9.8
 ```
 

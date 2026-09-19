@@ -114,5 +114,41 @@ try {
 }
 if (!drawTextProbeConfirmed) throw new Error("drawtext probe did not reach the font-loading path");
 
-runner.dispose();
+
+// Multi-input complex graph: use the same fixture as two independent inputs,
+// overlay a scaled second video, and mix both audio streams. This proves that
+// the public-libav runner, not only the JS argument helper, executes two inputs.
+const multiOutputPath = "/multi-output.mp4";
+let multiProgress = 0;
+const multiResult = await runner.run({
+  files: [
+    { name: "/workerfs/multi-a.mp4", data: new File([input], "multi-a.mp4", { type: "video/mp4" }), workerfs: true },
+    { name: "/workerfs/multi-b.mp4", data: new File([input], "multi-b.mp4", { type: "video/mp4" }), workerfs: true }
+  ],
+  outputs: [multiOutputPath],
+  args: BrowserFFmpeg.ffmpegFilterBuilderArgs({
+    mode: "multi-input",
+    inputs: [
+      { path: "/workerfs/multi-a.mp4", kind: "video" },
+      { path: "/workerfs/multi-b.mp4", kind: "video" }
+    ],
+    output: multiOutputPath,
+    filterComplex: "[1:v]scale=80:45[n2v];[0:v][n2v]overlay=x=0:y=0:shortest=1[n3v];[0:a][1:a]amix=inputs=2:duration=shortest:normalize=0[n4a]",
+    videoMap: "[n3v]",
+    audioMap: "[n4a]",
+    mainInputIndex: 0,
+    durationSeconds: 0.15,
+    crf: 34,
+    audioBitrateKbps: 96
+  }),
+  onProgress: (value) => { multiProgress = value; append("multi-progress=" + value.toFixed(3)); },
+  onLog: ({ message }) => append(message)
+});
+if (multiResult.exitCode !== 0) throw new Error("Multi-input runner exit code was " + multiResult.exitCode);
+const multiOutput = multiResult.files?.find((item) => item.name === multiOutputPath)?.data;
+if (!multiOutput || multiOutput.byteLength < 1024) throw new Error("Multi-input MP4 is unexpectedly small");
+if (String.fromCharCode(...multiOutput.slice(4, 8)) !== "ftyp") throw new Error("Multi-input output is not MP4");
+if (!containsAscii(multiOutput, "avc1")) throw new Error("Multi-input H.264 marker missing");
+if (!containsAscii(multiOutput, "mp4a")) throw new Error("Multi-input AAC marker missing");
+if (multiProgress < 0.99) throw new Error("Multi-input progress did not reach completion");runner.dispose();
 pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3) + ";speedDuration=" + speedReport.duration.toFixed(3) + ";drawtext=compiled");

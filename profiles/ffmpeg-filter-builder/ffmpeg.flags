@@ -65,3 +65,5 @@
 --enable-filter=amix
 --enable-filter=asplit
 --enable-filter=aresample
+--enable-filter=null
+--enable-filter=anull

@@ -11,6 +11,11 @@ This is the first dual-runtime profile. A normal build produces both:
 
 Both variants are generated from the same FFmpeg/x264 pins, profile flags and public-libav runner. The initial MT contract prewarms 8 pthread workers while bounding codec decode/encode work to 4 threads; filtergraph slice-threading is kept at 1 until the real Filter Builder workloads are benchmarked.
 
+## v1.9.9 multiple input / complex graph
+
+The Filter Builder runner now has a second execution path for 2-8 local inputs. `BrowserFFmpeg.ffmpegFilterBuilderArgs()` accepts `mode: "multi-input"`, repeated virtual input paths, a compiled `filterComplex`, and explicit video/audio output labels. The existing single-input public-libav path remains unchanged.
+
+The multi-input path keeps all File/Blob data in WORKERFS, builds one libavfilter graph with named sources such as `0:v`, `1:v`, and `1:a`, and encodes the selected graph outputs to H.264/AAC MP4. In the MT variant, multi-input decoders intentionally stay single-threaded so the bounded pthread pool remains available to the H.264 encoder. This is still not an arbitrary ffmpeg CLI runtime.
 ## Current scope
 
 The profile supports a caller-supplied video/audio filter chain, H.264/AAC MP4 output, common input decoders, and the Browser Kitty filter catalog including `drawtext`. v1.9.5 adds video `trim` and bounded time-range rendering through `--start-time` / `--duration`. The runner normalizes timestamps with `setpts` / `asetpts` and keeps audio aligned with `atrim`; these companion filters were already present in v1.9.4.
