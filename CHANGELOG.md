@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added the development `video-audio-extractor` profile with WORKERFS input, compact audio-stream inventory JSON, and validated single-track stream copy without decoding or re-encoding.
+- Added the `aac_adtstoasc` path for MPEG-TS/raw ADTS AAC -> M4A remuxing.
+- Added `BrowserFFmpeg.videoAudioExtractorInspectArgs()` / `videoAudioExtractorCopyArgs()` and a real-browser smoke test covering MP4/AAC, WebM/Opus, MKV multi-audio selection, MPEG-TS/AAC, and video-only input.
+- Kept the profile out of tagged release packaging until its planned release scope is complete.
+
 ## 1.9.9 - 2026-09-19
 
 - Added a dedicated multi-input complex-filtergraph execution path to the FFmpeg Filter Builder public-libav runner while preserving the existing single-input path.

@@ -322,6 +322,29 @@
     "--output", options.output || "/report.json"
   ];
 
+  const videoAudioExtractorInspectArgs = (options = {}) => [
+    "--input", options.input || "/workerfs/input.bin",
+    "--inspect-output", options.output || "/inspect.json"
+  ];
+
+  const videoAudioExtractorCopyArgs = (options = {}) => {
+    const streamIndex = Number(options.streamIndex);
+    if (!Number.isInteger(streamIndex) || streamIndex < 0) {
+      throw new RangeError("Video Audio Extractor streamIndex must be a non-negative integer.");
+    }
+    const format = String(options.format || "").toLowerCase();
+    const supported = ["m4a", "opus"];
+    if (!supported.includes(format)) {
+      throw new RangeError("Video Audio Extractor copy format is not supported.");
+    }
+    return [
+      "--input", options.input || "/workerfs/input.bin",
+      "--audio-stream", String(streamIndex),
+      "--copy-format", format,
+      "--output", options.output || ("/output." + format)
+    ];
+  };
+
   const videoContactSheetArgs = (options = {}) => {
     const count = Number(options.count ?? 12);
     const thumbSize = Number(options.thumbSize ?? 320);
@@ -506,6 +529,8 @@
     videoCompressorInspectArgs,
     losslessVideoCutterArgs,
     mediaInspectorArgs,
+    videoAudioExtractorInspectArgs,
+    videoAudioExtractorCopyArgs,
     videoContactSheetArgs,
     videoToGifArgs,
     videoToWebpArgs,

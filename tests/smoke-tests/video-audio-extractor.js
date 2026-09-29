@@ -1,0 +1,93 @@
+const fromBase64 = (text) => {
+  const raw = atob(text);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+};
+
+const fixtures = {
+  mp4: input,
+  webm: fromBase64("GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwEAAAAAAAMlEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggGJTbuMU6uEHFO7a1OsggMP7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjEuNy4xMDNXQYxMYXZmNjEuNy4xMDNEiYhAj0AAAAAAABZUrmtAra4BAAAAAAAAP9eBAXPFiLTfVso4XBpsnIEAIrWcg3VuZIiBAIaFVl9WUDmDgQEj44OEO5rKAOCQsIEQuoEQmoECVbCEVbmBAa4BAAAAAAAAXNeBAnPFiG4s9iqXqhXTnIEAIrWcg3VuZIiBAIaGQV9PUFVTVqqDYy6gVruEBMS0AIOBAuGRn4EBtYhAv0AAAAAAAGJkgRBjopNPcHVzSGVhZAEBOAFAHwAAAAAAElTDZ0DZc3OfY8CAZ8iZRaOHRU5DT0RFUkSHjExhdmY2MS43LjEwM3Nz2mPAi2PFiLTfVso4XBpsZ8ilRaOHRU5DT0RFUkSHmExhdmM2MS4xOS4xMDEgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAHNz12PAi2PFiG4s9iqXqhXTZ8iiRaOHRU5DT0RFUkSHlUxhdmM2MS4xOS4xMDEgbGlib3B1c2fIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDAuMTI4MDAwMDAwAB9DtnVAoeeBAKOLggAAgAgL5jsjq2CjvoEAAICCSYNCAADwAPYGOCQcGEIAACBAACKb//+lE/uClN6PFUq3bSf9VP0Z7ZRS03HSbMj+pvdlTLwmDIAAo4qCABWACAissw7Go4qCACmACAissw7Go4qCAD2ACAissw7Go4qCAFGACAissw7Go4qCAGWACAissw7GoJOhioIAeQAICKyzDsZ1ooQAzf5gHFO7a5G7j7OBALeK94EB8YICaPCBEA=="),
+  mkv: fromBase64("GkXfo6NChoEBQveBAULygQRC84EIQoKIbWF0cm9za2FCh4EEQoWBAhhTgGcBAAAAAAAHgBFNm3TAv4SGGS5fTbuLU6uEFUmpZlOsgaFNu4tTq4QWVK5rU6yB7027jFOrhBJUw2dTrIICtE27jFOrhBxTu2tTrIIHZOwBAAAAAAAAUwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFUmpZsm/hCD4PA8q17GDD0JATYCMTGF2ZjYxLjcuMTAzV0GMTGF2ZjYxLjcuMTAzc6SQb+7FYxS3zxF73EQ8QLHmcUSJiECPQAAAAAAAFlSua0G/v4QPEtTGrgEAAAAAAACA14EBc8WIDmOGRQmRX9acgQAitZyDdW5kiIEAho9WX01QRUc0L0lTTy9BVkODgQEj44OEO5rKAOCQsIEQuoEQmoECVbCEVbmBAVXugQDsAQAAAAAAAAIAAGOipQFCwAr/4QAVZ0LACtp7ARAAAAMAEAAAAwAg8SJqAQAFaM4BlyCuAQAAAAAAAFPXgQJzxYhS7Gont6NrlZyBAFNuiEphcGFuZXNlIrWcg2pwboaFQV9BQUNWqoQHoSAAg4EC4ZGfgQG1iEC/QAAAAAAAYmSBIFXugQBjooUViFblAK4BAAAAAAAAateBA3PFiE7a2jT0LK/bnIEAU26HRW5nbGlzaCK1nINlbmeIgQCGhkFfT1BVU1aqg2MuoFa7hATEtACDgQLhkZ+BAbWIQL9AAAAAAABiZIEQVe6BAGOik09wdXNIZWFkAQE4AUAfAAAAAACuAQAAAAAAAFjXgQRzxYj6jaXEQIUyT5yBAFNuikNvbW1lbnRhcnkitZyDanBuiIEAhoVBX0FBQ1aqhAehIACDgQLhkZ+BAbWIQL9AAAAAAABiZIEgVe6BAGOihRWIVuUAElTDZ0GIv4TDk1AKc3OfY8CAZ8iZRaOHRU5DT0RFUkSHjExhdmY2MS43LjEwM3Nz12PAi2PFiA5jhkUJkV/WZ8iiRaOHRU5DT0RFUkSHlUxhdmM2MS4xOS4xMDEgbGlieDI2NGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAHNz02PAi2PFiFLsaie3o2uVZ8ieRaOHRU5DT0RFUkSHkUxhdmM2MS4xOS4xMDEgYWFjZ8ihRaOIRFVSQVRJT05Eh5MwMDowMDowMC4yNDgwMDAwMDAAc3PXY8CLY8WITtraNPQsr9tnyKJFo4dFTkNPREVSRIeVTGF2YzYxLjE5LjEwMSBsaWJvcHVzZ8ihRaOIRFVSQVRJT05Eh5MwMDowMDowMC4xMjgwMDAwMDAAc3PTY8CLY8WI+o2lxECFMk9nyJ5Fo4dFTkNPREVSRIeRTGF2YzYxLjE5LjEwMSBhYWNnyKFFo4hEVVJBVElPTkSHkzAwOjAwOjAwLjI0ODAwMDAwMAAfQ7Z1Qxy/hNl6MErngQCjmYIAAIDeAgBMYXZjNjEuMTkuMTAxAAIwQA6jmYQAAIDeAgBMYXZjNjEuMTkuMTAxAAIwQA6ji4MAAIAIC+Y7I6tgo0JogQAAgAAAAlMGBf//T9xF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjQgcjMxMDggMzFlMTlmOSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjMgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0xIGRlYmxvY2s9MDowOjAgYW5hbHlzZT0wOjAgbWU9ZGlhIHN1Ym1lPTAgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MCBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTAgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9MCB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0wIHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MSBzY2VuZWN1dD0wIGludHJhX3JlZnJlc2g9MCByYz1jcmYgbWJ0cmVlPTAgY3JmPTUxLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MACAAAAACWWIhDomKAAVwKOIggCAgAEYIAejiIQAgIABGCAHo4qDABWACAissw7Go4qDACmACAissw7Go4qDAD2ACAissw7Go4qDAFGACAissw7Go4qDAGWACAissw7GoJOhioMAeQAICKyzDsZ1ooQAzf5gHFO7a5e/hCoB28e7j7OBALeK94EB8YIEQvCBTA=="),
+  // Complete 0.3 s MPEG-TS AAC fixture (3572 bytes, SHA-256 95220ce6232b6633d82e5469b4b29e4aa6e1a12324018405cd81ccd450bcfb54).
+  // Kept intact so TS sync detection, PES timestamps, and ADTS framing remain valid.
+  ts: fromBase64("R0AREABC8CUAAcEAAP8B/wAB/IAUSBIBBkZGbXBlZwlTZXJ2aWNlMDF3fEPK//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9HQAAQAACwDQABwQAAAAHwACqxBLL//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////0dQABAAArASAAHBAADhAPAAD+EA8AC2m8DZ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////R0EAMAdQAAB7DH4AAAABwAsYgIAFIQAH2GH/8UxAIB/83gIATGF2YzYxLjE5LjEwMQACYKpSLLSmKi9CQdCrj59lVOe/rzLLxJNySTcQgdkgbNWzXKs5NGcVYcVjbNjbNlOYtw2V0znIgAf6GM9w2t+NR3UOvta4t1XhuB17jvDbTt2NxWNxVxnqzHYnHWGtTtaatlLZSqUqlKpSqUqlKpSqUqlKpSaUmlKpSqMqjJqSaRpGdnaSZ5nZ2dpHAQARRpGdnZ2dpGkZ2dnZ2eZ2dnZ2dnbSwMDAwMillllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllliiiiiiii4P/xTEAdf/wBGpja2j3WYiYTZiJhN1MJf9P864jy1etR//F/3/Wya1rP4//i/7/rZNa1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dEIQDIQEYQDIgC4V+NV7c4/8f+P//3tplcVcnu9buJH6fj3a5DPNIg0VUVR/SD7jSN6QzntAOJuuXjHi5Ydfz7Y03mzN96bT1Bm+9M/yzL7xV4SHhF6xesq8JDwkPCL1i9YvWL1i+y/TIXrF6xesXrF6xesXrKKKRwEAHCiYmJib/zfcZdn+dZACIAAZ/1/SgekgAAGv9JsAAAA8thz/8UxAFd/8AOg1GJaoMxKDo5DohCAVCAlCAXEAXC8U/Gb3P+3/b//x8J3z7Tr3vz3HtJV1+eJ3wGGLs7O0809GNPRjT0Y09pHjY23QatIFAkKoozZYWrjXY2kcxYjbVOz18vddzwmWmWgiCJlplplplplplqpqsm759U7Ozs7Ozs7YY4Y4Y4Yuzs7OzsCECECECd23kzRHAQAdfqkACIAAPbwANfuAAAAZ/cgAAADwNIOA//FMQBk//AEKVS3UViILVIQQsHQqTIze/+n/rwrUpu43H1JJJK1+q39v/MOyNiUw6EM38b/c/W/qf5Pm91flCACkFwSC4BCNNIRJhCthOnMgkkdrJ5LCE7M8nHgE1EJoBqb0z/gQAD/w++c0VgWz7X9/9/1vK39JZNo2jKLBGEDt5+fn25tDszzzzlGLssssoRbM885VCIuDz7gAAYcPD0cBAB5YAxaHh7dgAAK4SMPW4AAMWh4e3YAADDh4e2/F4AM85VCMsssog1sz4P/xTEAcP/wBGJmmzDZFRN+h6Hr/t/z5mpNa1n2//i/7/XXHQBAZQDGXuqrjv1gdmTav00MZnQX5cFUzeftPF6kIyPF2epBSef6fSKI4+n0iKcD6fT6RRAAc/0+hRCdQ+n0+kURQAQHPtQSSMeUSm246EUTrnQfHZdc6hZw/3MLnGPj2aPGzh7eiSw4Cezi1RwEAP1kA/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////yihLebqkSgBx627l2alRUlFFUx6xLRRKBGhRIUSEaZhSqGVgeY9RdWimCjCmcC6N8i6B/R/QNMNMNDd+7N35szfmwUw0wCgC87wvO8Lzqiq6o7/8UxAAZ/8ARiBtHA="),
+  noAudio: fromBase64("AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMNbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjh0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAAAAABAAAAAAGwbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABW21pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAARtzdGJsAAAAt3N0c2QAAAAAAAAAAQAAAKdhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2MS4xOS4xMDEgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALWF2Y0MBQsAK/+EAFWdCwAraewEQAAADABAAAAMAIPEiagEABWjOAZcgAAAAEHBhc3AAAAABAAAAAQAAABRidHJ0AAAAAAAAEyAAAAAAAAAAGHN0dHMAAAAAAAAAAQAAAAEAAEAAAAAAHHN0c2MAAAAAAAAAAQAAAAEAAAABAAAAAQAAABRzdHN6AAAAAAAAAmQAAAABAAAAFHN0Y28AAAAAAAAAAQAAAz0AAABhdWR0YQAAAFltZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAACxpbHN0AAAAJKl0b28AAAAcZGF0YQAAAAEAAAAATGF2ZjYxLjcuMTAzAAAACGZyZWUAAAJsbWRhdAAAAlMGBf//T9xF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjQgcjMxMDggMzFlMTlmOSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjMgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0xIGRlYmxvY2s9MDowOjAgYW5hbHlzZT0wOjAgbWU9ZGlhIHN1Ym1lPTAgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MCBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTAgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9MCB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0wIHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MSBzY2VuZWN1dD0wIGludHJhX3JlZnJlc2g9MCByYz1jcmYgbWJ0cmVlPTAgY3JmPTUxLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MACAAAAACWWIhDomKAAVwA==")
+};
+
+const runner = await BrowserFFmpeg.loadEmbedded({ coreJsText, wasmBytes });
+const inspect = async (label, bytes, extension) => {
+  append("inspect=" + label);
+  const inputPath = "/workerfs/" + label + "." + extension;
+  const reportPath = "/report-" + label + ".json";
+  const result = await runner.run({
+    files: [{ name: inputPath, data: new Blob([bytes]), workerfs: true }],
+    outputs: [reportPath],
+    args: BrowserFFmpeg.videoAudioExtractorInspectArgs({ input: inputPath, output: reportPath }),
+    onLog: ({ message }) => append(message)
+  });
+  return BrowserFFmpeg.decodeJsonOutput(result, reportPath);
+};
+const copy = async (label, bytes, extension, stream, format, outputPath) => {
+  append("copy=" + label + " stream=" + stream + " format=" + format);
+  const inputPath = "/workerfs/" + label + "." + extension;
+  return await runner.run({
+    files: [{ name: inputPath, data: new Blob([bytes]), workerfs: true }],
+    outputs: [outputPath],
+    args: BrowserFFmpeg.videoAudioExtractorCopyArgs({
+      input: inputPath, streamIndex: stream, format, output: outputPath
+    }),
+    onLog: ({ message }) => append(message)
+  });
+};
+try {
+  const mp4 = await inspect("mp4-aac", fixtures.mp4, "mp4");
+  if (mp4.format.videoStreamCount < 1 || mp4.format.audioStreamCount !== 1) throw new Error("MP4 stream counts are wrong.");
+  const mp4Audio = mp4.audioStreams[0];
+  if (mp4Audio.codec.name !== "aac" || mp4Audio.copy.format !== "m4a") throw new Error("MP4 AAC copy mapping is wrong.");
+  const m4a = await copy("mp4-aac", fixtures.mp4, "mp4", mp4Audio.index, "m4a", "/mp4-aac.m4a");
+  const m4aBytes = m4a.files[0].data;
+  if (!containsAscii(m4aBytes, "ftyp") || !containsAscii(m4aBytes, "mp4a")) throw new Error("AAC -> M4A output is invalid.");
+
+  const webmReport = await inspect("webm-opus", fixtures.webm, "webm");
+  const opus = webmReport.audioStreams[0];
+  if (webmReport.format.videoStreamCount !== 1 || opus?.codec?.name !== "opus" || opus?.copy?.format !== "opus") {
+    throw new Error("WebM Opus inspection failed.");
+  }
+  const opusResult = await copy("webm-opus", fixtures.webm, "webm", opus.index, "opus", "/webm-opus.opus");
+  const opusBytes = opusResult.files[0].data;
+  if (!containsAscii(opusBytes, "OggS") || !containsAscii(opusBytes, "OpusHead")) throw new Error("Opus output is invalid.");
+
+  const multi = await inspect("multi-audio", fixtures.mkv, "mkv");
+  if (multi.format.videoStreamCount !== 1 || multi.format.audioStreamCount !== 3 || multi.audioStreams.length !== 3) {
+    throw new Error("MKV audio stream inventory is incomplete.");
+  }
+  const japanese = multi.audioStreams.find((s) => s.language === "jpn" && s.title === "Japanese");
+  const english = multi.audioStreams.find((s) => s.language === "eng" && s.title === "English");
+  const commentary = multi.audioStreams.find((s) => s.title === "Commentary");
+  if (!japanese?.default || english?.codec?.name !== "opus" || commentary?.codec?.name !== "aac") {
+    throw new Error("MKV language/title/default metadata was not preserved.");
+  }
+  const englishResult = await copy("multi-audio", fixtures.mkv, "mkv", english.index, "opus", "/english.opus");
+  if (!containsAscii(englishResult.files[0].data, "OpusHead")) throw new Error("Selected MKV Opus track was not copied.");
+
+  const tsReport = await inspect("mpegts-aac", fixtures.ts, "ts");
+  const tsAudio = tsReport.audioStreams.find((s) => s.codec?.name === "aac");
+  if (!tsAudio || tsAudio.copy?.format !== "m4a" || tsAudio.sampleRate !== 48000 || tsAudio.channels !== 1) {
+    throw new Error("MPEG-TS AAC mapping failed.");
+  }
+  const tsM4a = await copy("mpegts-aac", fixtures.ts, "ts", tsAudio.index, "m4a", "/mpegts-aac.m4a");
+  if (!containsAscii(tsM4a.files[0].data, "ftyp") || !containsAscii(tsM4a.files[0].data, "mp4a")) {
+    throw new Error("MPEG-TS AAC -> M4A failed.");
+  }
+
+  const noAudioReport = await inspect("video-only", fixtures.noAudio, "mp4");
+  if (noAudioReport.format.videoStreamCount !== 1 || noAudioReport.format.audioStreamCount !== 0 ||
+      noAudioReport.audioStreams.length !== 0) {
+    throw new Error("Video-only input was not reported correctly.");
+  }
+
+  pass("mp4_aac_webm_opus_mkv_multi_mpegts_aac_no_audio");
+} finally {
+  runner.dispose();
+}
