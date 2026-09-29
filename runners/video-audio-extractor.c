@@ -346,8 +346,7 @@ static int inspect_media(const RunnerOptions *options)
         goto end;
     }
     out = NULL;
-    printf("video-audio-extractor: inspect video=%u audio=%u\n",
-           format->nb_streams, format->nb_streams);
+    printf("video-audio-extractor: inspect streams=%u\n", format->nb_streams);
     fflush(stdout);
     ret = 0;
 
