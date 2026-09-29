@@ -357,6 +357,53 @@ static int needs_aac_adtstoasc(const AVFormatContext *input,
     return name && (strstr(name, "mpegts") || !strcmp(name, "aac"));
 }
 
+static int64_t audio_packet_step(const AVPacket *packet, const AVStream *stream)
+{
+    int64_t step;
+    if (packet->duration > 0) return packet->duration;
+    if (stream->codecpar->codec_id == AV_CODEC_ID_AAC &&
+        stream->codecpar->sample_rate > 0) {
+        step = av_rescale_q(1024,
+                            (AVRational){1, stream->codecpar->sample_rate},
+                            stream->time_base);
+        if (step > 0) return step;
+    }
+    return 1;
+}
+
+static void repair_mpegts_aac_timestamps(const AVFormatContext *input,
+                                         const AVStream *stream,
+                                         AVPacket *packet,
+                                         int64_t *last_dts,
+                                         int64_t *next_dts)
+{
+    int64_t step;
+    int repair = needs_aac_adtstoasc(input, stream, "m4a");
+    if (!repair) return;
+
+    step = audio_packet_step(packet, stream);
+    if (packet->dts == AV_NOPTS_VALUE && packet->pts != AV_NOPTS_VALUE)
+        packet->dts = packet->pts;
+    if (packet->pts == AV_NOPTS_VALUE && packet->dts != AV_NOPTS_VALUE)
+        packet->pts = packet->dts;
+
+    if (packet->dts == AV_NOPTS_VALUE) {
+        packet->dts = *next_dts != AV_NOPTS_VALUE ? *next_dts : 0;
+        packet->pts = packet->dts;
+    } else if (*last_dts != AV_NOPTS_VALUE && packet->dts <= *last_dts) {
+        packet->dts = *last_dts + step;
+        packet->pts = packet->dts;
+    }
+
+    if (packet->pts == AV_NOPTS_VALUE || packet->pts < packet->dts)
+        packet->pts = packet->dts;
+    if (packet->duration <= 0)
+        packet->duration = step;
+
+    *last_dts = packet->dts;
+    *next_dts = packet->dts + step;
+}
+
 static int fill_missing_adts_parameters(const char *input_path,
                                         int stream_index,
                                         AVCodecParameters *parameters)
@@ -524,6 +571,8 @@ static int copy_audio(const RunnerOptions *options)
     AVBSFContext *bsf = NULL;
     CopyTarget target = {0};
     double last_progress = -1;
+    int64_t last_input_dts = AV_NOPTS_VALUE;
+    int64_t next_input_dts = AV_NOPTS_VALUE;
     int header_written = 0;
     int packets_written = 0;
     int ret;
@@ -611,6 +660,8 @@ static int copy_audio(const RunnerOptions *options)
             continue;
         }
         emit_progress(packet, in_stream, input->duration, &last_progress);
+        repair_mpegts_aac_timestamps(input, in_stream, packet,
+                                     &last_input_dts, &next_input_dts);
         if (bsf) {
             ret = write_bsf_packets(output, bsf, out_stream, packet, &packets_written);
             av_packet_unref(packet);
