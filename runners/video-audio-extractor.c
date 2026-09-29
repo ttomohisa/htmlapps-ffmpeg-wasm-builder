@@ -538,16 +538,59 @@ static void emit_progress(const AVPacket *packet,
     }
 }
 
+static void repair_output_aac_timestamps(AVStream *stream,
+                                         AVPacket *packet,
+                                         int64_t *last_dts)
+{
+    int64_t step = 1;
+
+    if (stream->codecpar->codec_id == AV_CODEC_ID_AAC &&
+        stream->codecpar->sample_rate > 0) {
+        step = av_rescale_q(1024,
+                            (AVRational){1, stream->codecpar->sample_rate},
+                            stream->time_base);
+        if (step < 1) step = 1;
+    }
+
+    if (packet->dts == AV_NOPTS_VALUE && packet->pts != AV_NOPTS_VALUE)
+        packet->dts = packet->pts;
+    if (packet->pts == AV_NOPTS_VALUE && packet->dts != AV_NOPTS_VALUE)
+        packet->pts = packet->dts;
+
+    if (packet->dts == AV_NOPTS_VALUE) {
+        packet->dts = *last_dts == AV_NOPTS_VALUE ? 0 : *last_dts + step;
+        packet->pts = packet->dts;
+    } else if (*last_dts != AV_NOPTS_VALUE && packet->dts <= *last_dts) {
+        /*
+         * aac_adtstoasc can emit more than one packet for one MPEG-TS packet.
+         * Those packets may inherit an identical DTS.  Repair after the BSF
+         * and after time-base rescaling, where the muxer's monotonicity
+         * requirement actually applies.
+         */
+        packet->dts = *last_dts + step;
+        packet->pts = packet->dts;
+    }
+
+    if (packet->pts == AV_NOPTS_VALUE || packet->pts < packet->dts)
+        packet->pts = packet->dts;
+    if (packet->duration <= 0)
+        packet->duration = step;
+
+    *last_dts = packet->dts;
+}
+
 static int write_bsf_packets(AVFormatContext *output,
                              AVBSFContext *bsf,
                              AVStream *out_stream,
                              AVPacket *packet,
+                             int64_t *last_output_dts,
                              int *count)
 {
     int ret = av_bsf_send_packet(bsf, packet);
     if (ret < 0) return ret;
     while ((ret = av_bsf_receive_packet(bsf, packet)) >= 0) {
         av_packet_rescale_ts(packet, bsf->time_base_out, out_stream->time_base);
+        repair_output_aac_timestamps(out_stream, packet, last_output_dts);
         packet->stream_index = out_stream->index;
         packet->pos = -1;
         ret = av_interleaved_write_frame(output, packet);
@@ -562,12 +605,14 @@ static int flush_bsf(AVFormatContext *output,
                      AVBSFContext *bsf,
                      AVStream *out_stream,
                      AVPacket *packet,
+                     int64_t *last_output_dts,
                      int *count)
 {
     int ret = av_bsf_send_packet(bsf, NULL);
     if (ret < 0 && ret != AVERROR_EOF) return ret;
     while ((ret = av_bsf_receive_packet(bsf, packet)) >= 0) {
         av_packet_rescale_ts(packet, bsf->time_base_out, out_stream->time_base);
+        repair_output_aac_timestamps(out_stream, packet, last_output_dts);
         packet->stream_index = out_stream->index;
         packet->pos = -1;
         ret = av_interleaved_write_frame(output, packet);
@@ -590,6 +635,7 @@ static int copy_audio(const RunnerOptions *options)
     double last_progress = -1;
     int64_t last_input_dts = AV_NOPTS_VALUE;
     int64_t next_input_dts = AV_NOPTS_VALUE;
+    int64_t last_output_dts = AV_NOPTS_VALUE;
     int header_written = 0;
     int packets_written = 0;
     int ret;
@@ -680,7 +726,8 @@ static int copy_audio(const RunnerOptions *options)
         repair_mpegts_aac_timestamps(input, in_stream, packet,
                                      &last_input_dts, &next_input_dts);
         if (bsf) {
-            ret = write_bsf_packets(output, bsf, out_stream, packet, &packets_written);
+            ret = write_bsf_packets(output, bsf, out_stream, packet,
+                                    &last_output_dts, &packets_written);
             av_packet_unref(packet);
             if (ret < 0) goto end;
         } else {
@@ -696,7 +743,8 @@ static int copy_audio(const RunnerOptions *options)
     if (ret == AVERROR_EOF) ret = 0;
     if (ret < 0) goto end;
     if (bsf) {
-        ret = flush_bsf(output, bsf, out_stream, packet, &packets_written);
+        ret = flush_bsf(output, bsf, out_stream, packet,
+                        &last_output_dts, &packets_written);
         if (ret < 0) goto end;
     }
     if (packets_written <= 0) {
