@@ -176,51 +176,17 @@ static const char *metadata_value(const AVDictionary *metadata, const char *key)
     return entry ? entry->value : NULL;
 }
 
-static int supported_pcm(enum AVCodecID id)
-{
-    switch (id) {
-    case AV_CODEC_ID_PCM_S16LE:
-    case AV_CODEC_ID_PCM_S24LE:
-    case AV_CODEC_ID_PCM_S32LE:
-    case AV_CODEC_ID_PCM_F32LE:
-    case AV_CODEC_ID_PCM_F64LE:
-    case AV_CODEC_ID_PCM_U8:
-    case AV_CODEC_ID_PCM_S8:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
 static int copy_target(enum AVCodecID id, CopyTarget *target)
 {
     CopyTarget selected = {0};
     switch (id) {
     case AV_CODEC_ID_AAC:
-    case AV_CODEC_ID_ALAC:
         selected = (CopyTarget){"m4a", "m4a", "ipod"};
-        break;
-    case AV_CODEC_ID_MP3:
-        selected = (CopyTarget){"mp3", "mp3", "mp3"};
         break;
     case AV_CODEC_ID_OPUS:
         selected = (CopyTarget){"opus", "opus", "ogg"};
         break;
-    case AV_CODEC_ID_VORBIS:
-        selected = (CopyTarget){"ogg", "ogg", "ogg"};
-        break;
-    case AV_CODEC_ID_FLAC:
-        selected = (CopyTarget){"flac", "flac", "flac"};
-        break;
-    case AV_CODEC_ID_AC3:
-        selected = (CopyTarget){"ac3", "ac3", "ac3"};
-        break;
-    case AV_CODEC_ID_EAC3:
-        selected = (CopyTarget){"eac3", "eac3", "eac3"};
-        break;
     default:
-        if (supported_pcm(id))
-            selected = (CopyTarget){"wav", "wav", "wav"};
         break;
     }
     if (!selected.format) return AVERROR(ENOSYS);
