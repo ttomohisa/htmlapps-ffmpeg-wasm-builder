@@ -14,14 +14,9 @@ Input `File` / `Blob` data is mounted with WORKERFS, so the browser does not cop
 | source codec | output |
 |---|---|
 | AAC | M4A |
-| ALAC | M4A |
-| MP3 | MP3 |
 | Opus | OPUS |
-| Vorbis | OGG |
-| FLAC | FLAC |
-| supported PCM | WAV |
-| AC-3 | AC3 |
-| E-AC-3 | EAC3 |
+
+This Phase 1 matrix intentionally includes only combinations covered by the real-browser smoke test. ALAC, MP3, Vorbis, FLAC, PCM, AC-3 and E-AC-3 are deferred until their compatibility tests are added in the later compatibility phase.
 
 The runner rejects codecs outside this matrix instead of guessing a container. MPEG-TS/raw ADTS AAC -> M4A uses FFmpeg's `aac_adtstoasc` bitstream filter.
 
