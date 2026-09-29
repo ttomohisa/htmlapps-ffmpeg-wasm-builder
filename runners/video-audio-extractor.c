@@ -359,16 +359,28 @@ static int needs_aac_adtstoasc(const AVFormatContext *input,
 
 static int64_t audio_packet_step(const AVPacket *packet, const AVStream *stream)
 {
-    int64_t step;
-    if (packet->duration > 0) return packet->duration;
+    int64_t expected = 0;
+
+    /*
+     * MPEG-TS may expose a placeholder packet duration of 1 tick when this
+     * decoder-free profile cannot derive AAC timing through a decoder.  That
+     * is far too small: rescaling 1/90000 to an M4A 48 kHz time base can map
+     * adjacent packets to the same DTS.  Prefer one AAC-LC frame (1024
+     * samples) and only trust a demuxer duration when it is in the same order
+     * of magnitude.
+     */
     if (stream->codecpar->codec_id == AV_CODEC_ID_AAC &&
         stream->codecpar->sample_rate > 0) {
-        step = av_rescale_q(1024,
-                            (AVRational){1, stream->codecpar->sample_rate},
-                            stream->time_base);
-        if (step > 0) return step;
+        expected = av_rescale_q(1024,
+                                (AVRational){1, stream->codecpar->sample_rate},
+                                stream->time_base);
+        if (expected < 1) expected = 1;
+        if (packet->duration >= FFMAX(INT64_C(1), expected / 2))
+            return packet->duration;
+        return expected;
     }
-    return 1;
+
+    return packet->duration > 0 ? packet->duration : 1;
 }
 
 static void repair_mpegts_aac_timestamps(const AVFormatContext *input,
@@ -390,7 +402,12 @@ static void repair_mpegts_aac_timestamps(const AVFormatContext *input,
     if (packet->dts == AV_NOPTS_VALUE) {
         packet->dts = *next_dts != AV_NOPTS_VALUE ? *next_dts : 0;
         packet->pts = packet->dts;
-    } else if (*last_dts != AV_NOPTS_VALUE && packet->dts <= *last_dts) {
+    } else if (*last_dts != AV_NOPTS_VALUE &&
+               packet->dts < *last_dts + FFMAX(INT64_C(1), step / 2)) {
+        /*
+         * A merely increasing MPEG-TS DTS can still collapse after rescaling
+         * to the output time base.  Reject implausibly small AAC spacing here.
+         */
         packet->dts = *last_dts + step;
         packet->pts = packet->dts;
     }
