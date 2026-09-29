@@ -288,6 +288,10 @@ static int write_report(FILE *out, AVFormatContext *format)
     return ferror(out) ? AVERROR(EIO) : 0;
 }
 
+static int fill_missing_adts_parameters(const char *input_path,
+                                        int stream_index,
+                                        AVCodecParameters *parameters);
+
 static int inspect_media(const RunnerOptions *options)
 {
     AVFormatContext *format = NULL;
@@ -298,6 +302,25 @@ static int inspect_media(const RunnerOptions *options)
     if (ret < 0) goto end;
     ret = avformat_find_stream_info(format, NULL);
     if (ret < 0) goto end;
+
+    /*
+     * A decoder-free MPEG-TS probe can identify AAC while leaving sample
+     * rate/channel layout unset. Recover those fields from the ADTS header so
+     * inspection and later M4A stream copy report the same usable metadata.
+     */
+    if (format->iformat && strstr(format->iformat->name, "mpegts")) {
+        unsigned int i;
+        for (i = 0; i < format->nb_streams; i++) {
+            AVStream *stream = format->streams[i];
+            AVCodecParameters *par = stream->codecpar;
+            if (par->codec_type != AVMEDIA_TYPE_AUDIO ||
+                par->codec_id != AV_CODEC_ID_AAC ||
+                (par->sample_rate > 0 && par->ch_layout.nb_channels > 0))
+                continue;
+            ret = fill_missing_adts_parameters(options->input_path, stream->index, par);
+            if (ret < 0) goto end;
+        }
+    }
 
     out = fopen(options->output_path, "wb");
     if (!out) {
