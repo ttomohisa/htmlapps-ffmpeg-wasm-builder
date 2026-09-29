@@ -42,6 +42,7 @@ $videoRunner = Require-File "runners/video-compressor.c"
 $speedRunner = Require-File "runners/video-speed-changer.c"
 $cutterRunner = Require-File "runners/lossless-video-cutter.c"
 $inspectorRunner = Require-File "runners/media-inspector.c"
+$extractorRunner = Require-File "runners/video-audio-extractor.c"
 $contactRunner = Require-File "runners/video-contact-sheet.c"
 $videoProfile = Require-File "profiles/video-compressor/ffmpeg.flags"
 $videoProfileEnv = Require-File "profiles/video-compressor/profile.env"
@@ -57,6 +58,10 @@ $inspectorProfile = Require-File "profiles/media-inspector/ffmpeg.flags"
 $inspectorProfileEnv = Require-File "profiles/media-inspector/profile.env"
 $inspectorReadme = Require-File "profiles/media-inspector/README.md"
 $inspectorTemplate = Require-File "profiles/media-inspector/single-html/template.html"
+$extractorProfile = Require-File "profiles/video-audio-extractor/ffmpeg.flags"
+$extractorProfileEnv = Require-File "profiles/video-audio-extractor/profile.env"
+$extractorReadme = Require-File "profiles/video-audio-extractor/README.md"
+$extractorTemplate = Require-File "profiles/video-audio-extractor/single-html/template.html"
 $contactProfile = Require-File "profiles/video-contact-sheet/ffmpeg.flags"
 $contactProfileEnv = Require-File "profiles/video-contact-sheet/profile.env"
 $contactReadme = Require-File "profiles/video-contact-sheet/README.md"
@@ -80,6 +85,8 @@ $videoSmoke = Require-File "tests/smoke-tests/video-compressor.js"
 $speedSmoke = Require-File "tests/smoke-tests/video-speed-changer.js"
 $cutterSmoke = Require-File "tests/smoke-tests/lossless-video-cutter.js"
 $inspectorSmoke = Require-File "tests/smoke-tests/media-inspector.js"
+$extractorSmoke = Require-File "tests/smoke-tests/video-audio-extractor.js"
+$extractorFixtures = Require-File "tests/fixtures/video-audio-extractor-fixtures.json"
 $contactSmoke = Require-File "tests/smoke-tests/video-contact-sheet.js"
 $gifSmoke = Require-File "tests/smoke-tests/video-to-gif.js"
 $webpSmoke = Require-File "tests/smoke-tests/video-to-webp.js"
@@ -89,6 +96,7 @@ $filterProfileEnv = Require-File "profiles/ffmpeg-filter-builder/profile.env"
 $filterReadme = Require-File "profiles/ffmpeg-filter-builder/README.md"
 $filterSmoke = Require-File "tests/smoke-tests/ffmpeg-filter-builder.js"
 $filterLauncher = Require-File "build-ffmpeg-filter-builder.bat"
+$extractorLauncher = Require-File "build-video-audio-extractor.bat"
 $libwebpBuild = Require-File "scripts/build-libwebp.sh"
 $libvpxBuild = Require-File "scripts/build-libvpx.sh"
 $libopusBuild = Require-File "scripts/build-libopus.sh"
@@ -324,6 +332,32 @@ Require-Text $inspectorProfile "--enable-parser=h264" "Media Inspector must pars
 Require-Text $inspectorProfile "--enable-parser=hevc" "Media Inspector must parse HEVC stream headers."
 Require-Text $inspectorReadme "Media Doctor" "Media Inspector docs must explain the browser-diagnosis layer."
 
+
+Require-Text $extractorProfileEnv "PROFILE_USE_X264=0" "Video Audio Extractor must not link x264."
+Require-Text $extractorProfileEnv "PROFILE_USE_WORKERFS=1" "Video Audio Extractor must use WORKERFS for large File/Blob inputs."
+Require-Text $extractorProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Video Audio Extractor should remain LGPL in the stream-copy phase."
+Require-Text $extractorProfileEnv "libavformat/libavformat.a" "Video Audio Extractor must link libavformat."
+Require-Text $extractorProfileEnv "libavcodec/libavcodec.a" "Video Audio Extractor must link libavcodec packet/BSF APIs."
+Require-Text $extractorProfileEnv "libavutil/libavutil.a" "Video Audio Extractor must link libavutil."
+$extractorFlagsText = [IO.File]::ReadAllText($extractorProfile)
+foreach ($forbiddenFlag in @("--enable-decoder=", "--enable-encoder=", "--enable-filter=", "--enable-libx264", "--enable-gpl")) {
+  if ($extractorFlagsText.Contains($forbiddenFlag)) { throw "Video Audio Extractor Phase 1 flags must stay inspect/stream-copy only: $forbiddenFlag" }
+}
+Require-Text $extractorProfile "--enable-demuxer=mpegts" "Video Audio Extractor must read MPEG-TS."
+Require-Text $extractorProfile "--enable-muxer=ipod" "Video Audio Extractor must write M4A."
+Require-Text $extractorProfile "--enable-bsf=aac_adtstoasc" "Video Audio Extractor must handle ADTS AAC when remuxing into M4A."
+Require-Text $extractorRunner '#define RUNNER_VERSION "1.0.0"' "Video Audio Extractor runner version must be 1.0.0."
+Require-Text $extractorRunner "copy_target_for_codec" "Video Audio Extractor must validate stream-copy compatibility."
+Require-Text $extractorRunner "aac_adtstoasc" "Video Audio Extractor must apply the AAC ADTS-to-ASC bitstream filter where needed."
+Require-Text $runtime "videoAudioExtractorInspectArgs" "Browser runtime must expose Video Audio Extractor inspection."
+Require-Text $runtime "videoAudioExtractorCopyArgs" "Browser runtime must expose Video Audio Extractor stream copy."
+Require-Text $extractorSmoke 'case=mpegts-aac start' "Video Audio Extractor smoke test must cover MPEG-TS AAC."
+Require-Text $extractorSmoke 'case=mkv-multi-audio start' "Video Audio Extractor smoke test must cover multiple audio tracks."
+Require-Text $smokePacker "video-audio-extractor-fixtures.json" "Smoke packer must embed Video Audio Extractor fixtures."
+Require-Text $readme "video-audio-extractor" "Japanese README must document Video Audio Extractor."
+Require-Text $readmeEn "video-audio-extractor" "English README must document Video Audio Extractor."
+Require-Text $thirdParty "video-audio-extractor" "Third-party notice must explain Video Audio Extractor licensing."
+
 Require-Text $contactProfileEnv "PROFILE_USE_X264=0" "Video Contact Sheet must not link x264."
 Require-Text $contactProfileEnv "PROFILE_USE_WORKERFS=1" "Video Contact Sheet must use WORKERFS for large File/Blob inputs."
 Require-Text $contactProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Video Contact Sheet should remain LGPL without GPL-only components."
@@ -490,7 +524,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.9$') { throw "Builder version must be 1.9.9." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.0$') { throw "Builder version must be 1.9.9." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -543,9 +577,9 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.9.9" "Release documentation must include the v1.9.9 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.10.0" "Release documentation must include the v1.9.9 tag procedure."
 
-Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-audio-extractor video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
 Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
 Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
@@ -567,6 +601,7 @@ Require-Text $buildWorkflow "lossless-video-cutter" "Main CI must build and smok
 Require-Text $buildWorkflow "video-compressor" "Main CI must keep testing video compressor."
 Require-Text $buildWorkflow "video-speed-changer" "Main CI must build and smoke-test Video Speed Changer."
 Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test Media Inspector."
+Require-Text $buildWorkflow "video-audio-extractor" "Main CI must build and smoke-test Video Audio Extractor."
 Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
 Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
 Require-Text $buildWorkflow "video-to-webp" "Main CI must build and smoke-test WebP output."
@@ -577,12 +612,14 @@ Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workfl
 Require-Text $releaseWorkflow "./build.sh video-compressor" "Release workflow must smoke-test video compressor before publishing."
 Require-Text $releaseWorkflow "./build.sh video-speed-changer" "Release workflow must smoke-test Video Speed Changer before publishing."
 Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow must smoke-test Media Inspector before publishing."
+Require-Text $releaseWorkflow "./build.sh video-audio-extractor" "Release workflow must smoke-test Video Audio Extractor before publishing."
 Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-webp" "Release workflow must smoke-test WebP before publishing."
 Require-Text $releaseWorkflow "./build.sh ffmpeg-filter-builder" "Release workflow must smoke-test both FFmpeg Filter Builder variants before publishing."
 Require-Text $releaseWorkflow "ffmpeg-wasm-lossless-video-cutter" "Release workflow must publish the cutter binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-media-inspector" "Release workflow must publish the Media Inspector binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-audio-extractor" "Release workflow must publish the Video Audio Extractor binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-contact-sheet" "Release workflow must publish the Video Contact Sheet binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-gif" "Release workflow must publish the GIF binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-webp" "Release workflow must publish the WebP binary bundle."
@@ -595,7 +632,7 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
-  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
+  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $extractorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
     $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
     [IO.File]::WriteAllText($temp, $wrapped)

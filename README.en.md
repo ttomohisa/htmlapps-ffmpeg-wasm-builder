@@ -1,5 +1,9 @@
 # FFmpeg WASM Builder
 
+## v1.10.0 Video Audio Extractor foundation
+
+`video-audio-extractor` adds WORKERFS-backed audio-stream inventory and validated single-stream copy without decoding or encoding. It supports the approved copy targets used by the Browser Kitty app contract and applies `aac_adtstoasc` for MPEG-TS/raw AAC moved into M4A. Transcoding and LAME/MP3 encoding are intentionally left for follow-up phases before the release is tagged.
+
 ## v1.9.8 Filter Builder drawtext
 
 `ffmpeg-filter-builder` now includes FFmpeg `drawtext` with Emscripten FreeType/HarfBuzz support. Fonts are supplied by the consuming app as local virtual-filesystem assets; the shared runtime does not fetch or bundle a font.
@@ -8,7 +12,7 @@ Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg a
 
 ## v1.9.7 profiles
 
-Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
+Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-audio-extractor`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
 
 `ffmpeg-filter-builder` is the first dual-runtime profile. Its initial MT contract prewarms an 8-worker pthread pool and limits codec work to 4 threads. One build produces:
 

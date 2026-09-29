@@ -17,6 +17,7 @@ __FFMPEG_WASM_GZIP_BASE64__
   <script id="smoke-input" type="application/octet-stream">
 __SMOKE_INPUT_BASE64__
   </script>
+  <script id="smoke-fixtures" type="application/json">__SMOKE_FIXTURES_JSON__</script>
   <script>
 __FFMPEG_RUNTIME__
   </script>
@@ -39,6 +40,15 @@ __FFMPEG_RUNTIME__
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
       const response = new Response(stream);
       return asText ? await response.text() : await response.arrayBuffer();
+    };
+    const fixtureMap = JSON.parse(document.getElementById("smoke-fixtures").textContent || "{}");
+    const decodeFixture = (name) => {
+      const encoded = fixtureMap[name];
+      if (!encoded) throw new Error("Smoke fixture is missing: " + name);
+      const raw = atob(encoded);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      return bytes;
     };
     const threadingMode = "__THREADING_MODE__";
     const containsAscii = (bytes, text) => {

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="${1:-v$(grep '^BUILDER_VERSION=' "$ROOT/versions.env" | cut -d= -f2-)}"
-RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)
+RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-audio-extractor video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)
 
 # shellcheck disable=SC1091
 source "$ROOT/versions.env"
@@ -378,6 +378,7 @@ Published binary profiles:
 - video-speed-changer
 - lossless-video-cutter
 - media-inspector
+- video-audio-extractor
 - video-contact-sheet
 - video-to-gif
 - video-to-webp

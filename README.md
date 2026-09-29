@@ -1,5 +1,9 @@
 # FFmpeg WASM Builder
 
+## v1.10.0 Video Audio Extractor foundation
+
+`video-audio-extractor` adds the Phase 1 runtime required by Browser Kitty's Video Audio Extractor: WORKERFS-backed stream inspection plus validated single-audio-stream copy. This phase deliberately includes no decoder or encoder. MPEG-TS/raw AAC to M4A uses `aac_adtstoasc`; unsupported copy combinations are rejected rather than guessed. Transcoding and LAME/MP3 encoding are planned as follow-up work before the v1.10.0 release is tagged.
+
 ## v1.9.9 Filter Builder multiple input
 
 `ffmpeg-filter-builder` now supports a dedicated 2-8 input complex-graph runner contract. Existing one-input Graphs continue to use the proven single-input path; multiple inputs use named libavfilter sources and explicit graph output labels. Both ST and MT variants are covered by the same real-browser smoke test.
@@ -42,6 +46,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 | `video-speed-changer` | 動画速度変更 | あり | あり | H.264 + AAC MP4 / H.264-only MP4 |
 | `lossless-video-cutter` | 無劣化カット | **なし** | **なし** | 元codecのstream copy |
 | `media-inspector` | codec / fps / bitrate / metadata解析 | **なし** | **なし** | structured JSON report |
+| `video-audio-extractor` | 音声track解析 / stream copy | **なし** | **なし** | M4A / MP3 / Opus / OGG / FLAC / WAV / AC3 / EAC3 |
 | `video-contact-sheet` | 動画全体から12/24/48枚を均等抽出 | decoderのみ | **なし** | RGB PPM + sample JSON |
 | `video-to-gif` | 動画の一部をAnimated GIF化 | decode + GIF encode | **なし** | GIF89a animation |
 | `video-to-webp` | 動画の一部をAnimated WebP化 | decode + libwebp_anim | **なし** | Animated WebP |
@@ -117,6 +122,18 @@ build-media-inspector.bat
 
 ```text
 build.bat media-inspector
+```
+
+Video Audio Extractor:
+
+```text
+build-video-audio-extractor.bat
+```
+
+または：
+
+```text
+build.bat video-audio-extractor
 ```
 
 Video Contact Sheet:
@@ -332,6 +349,26 @@ const args = BrowserFFmpeg.ffmpegFilterBuilderArgs({
 
 MT版をembedded assetから起動するときは `threading: "multi-thread"` を指定します。Emscripten 6系では `ffmpeg.js` 自身をpthread Workerとして再利用し、runtimeが `mainScriptUrlOrBlob` に埋め込みJSのBlobを渡します。cross-origin isolationがない環境では明示的に失敗します。ST版は従来どおり`file://`利用を維持します。
 
+### Video Audio Extractor のrunner API
+
+Inspection:
+
+```text
+--input /workerfs/input.bin
+--inspect-output /report.json
+```
+
+Stream copy:
+
+```text
+--input /workerfs/input.bin
+--audio-stream 1
+--copy-format m4a
+--output /output.m4a
+```
+
+Browser runtimeでは `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` と `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)` を使います。アプリ側が任意のFFmpeg CLIを組み立てるcontractにはしていません。
+
 ## アプリへ組み込む場合
 
 ブラウザー実行時にGitHub Releaseへアクセスするのではなく、**アプリの更新・ビルド時に特定Builder Releaseを取得し、そのアプリへ固定して埋め込む**方式を推奨します。
@@ -376,7 +413,7 @@ check-updates.bat
 
 **ルートのMIT LicenseはBuilder自身のソースに対するものです。生成された `ffmpeg.wasm` をMITとして配布するものではありません。**
 
-`video-compressor` と `video-speed-changer` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter`、`media-inspector`、`video-contact-sheet`、`video-to-gif`、`video-to-webp` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。`video-to-webp` がリンクするlibwebpは別途upstream noticeをRelease bundleへ同梱します。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
+`video-compressor` と `video-speed-changer` は `--enable-gpl` + libx264 のため生成coreをGPL-2.0-or-laterとして扱います。`lossless-video-cutter`、`media-inspector`、`video-audio-extractor`、`video-contact-sheet`、`video-to-gif`、`video-to-webp` はGPL-only componentやx264を使わないため、生成coreはLGPL-2.1-or-laterです。`video-to-webp` がリンクするlibwebpは別途upstream noticeをRelease bundleへ同梱します。ルートMITはBuilder自身のコードに適用され、生成coreを再ライセンスするものではありません。
 
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - [docs/LICENSES.md](docs/LICENSES.md)
