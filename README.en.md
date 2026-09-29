@@ -1,5 +1,9 @@
 # FFmpeg WASM Builder
 
+## Development profile: Video Audio Extractor
+
+`video-audio-extractor` is a development profile for Browser Kitty. Phase 1 inventories audio tracks and stream-copies one selected compressed audio stream into an approved container without decoding or re-encoding. Large browser `File`/`Blob` inputs use WORKERFS. The profile runs in main/PR browser CI but is not yet included in the v1.9.9 tagged release asset set.
+
 ## v1.9.8 Filter Builder drawtext
 
 `ffmpeg-filter-builder` now includes FFmpeg `drawtext` with Emscripten FreeType/HarfBuzz support. Fonts are supplied by the consuming app as local virtual-filesystem assets; the shared runtime does not fetch or bundle a font.
