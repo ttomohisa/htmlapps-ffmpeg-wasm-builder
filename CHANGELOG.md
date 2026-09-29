@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.10.0 - 2026-09-29
+
+- Added the Phase 1 `video-audio-extractor` profile for WORKERFS-backed media inspection and validated single-audio-stream copy without decoding or encoding.
+- Added copy compatibility for AAC/ALAC to M4A, MP3, Ogg Opus/Vorbis, FLAC, supported PCM to WAV, AC-3, and E-AC-3; unverified codec/container combinations are rejected.
+- Added `aac_adtstoasc` handling for MPEG-TS/raw AAC remuxed into M4A.
+- Added browser runtime helpers for inspection and stream copy plus a five-case real-browser smoke suite covering MP4/AAC, WebM/Opus, MKV multi-audio metadata, MPEG-TS/AAC, and video-only input.
+- Added the new profile to CI and tagged-release packaging. Audio transcoding and LAME/MP3 encoding remain follow-up phases before the Builder v1.10.0 release is tagged.
+
 ## 1.9.9 - 2026-09-19
 
 - Added a dedicated multi-input complex-filtergraph execution path to the FFmpeg Filter Builder public-libav runner while preserving the existing single-input path.

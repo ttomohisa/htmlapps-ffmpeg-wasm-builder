@@ -322,6 +322,37 @@
     "--output", options.output || "/report.json"
   ];
 
+  const videoAudioExtractorInspectArgs = (options = {}) => [
+    "--input", options.input || "/workerfs/input.bin",
+    "--inspect-output", options.output || "/report.json"
+  ];
+
+  const videoAudioExtractorCopyArgs = (options = {}) => {
+    const streamIndex = Number(options.streamIndex);
+    if (!Number.isInteger(streamIndex) || streamIndex < 0) {
+      throw new RangeError("Video Audio Extractor streamIndex must be a non-negative integer.");
+    }
+    const format = String(options.format || "");
+    const extensions = Object.freeze({
+      m4a: "m4a",
+      mp3: "mp3",
+      opus: "opus",
+      ogg: "ogg",
+      flac: "flac",
+      wav: "wav",
+      ac3: "ac3",
+      eac3: "eac3"
+    });
+    const extension = extensions[format];
+    if (!extension) throw new RangeError("Unsupported Video Audio Extractor copy format.");
+    return [
+      "--input", options.input || "/workerfs/input.bin",
+      "--audio-stream", String(streamIndex),
+      "--copy-format", format,
+      "--output", options.output || `/output.${extension}`
+    ];
+  };
+
   const videoContactSheetArgs = (options = {}) => {
     const count = Number(options.count ?? 12);
     const thumbSize = Number(options.thumbSize ?? 320);
@@ -506,6 +537,8 @@
     videoCompressorInspectArgs,
     losslessVideoCutterArgs,
     mediaInspectorArgs,
+    videoAudioExtractorInspectArgs,
+    videoAudioExtractorCopyArgs,
     videoContactSheetArgs,
     videoToGifArgs,
     videoToWebpArgs,

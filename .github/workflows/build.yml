@@ -40,6 +40,7 @@ jobs:
           - video-speed-changer
           - lossless-video-cutter
           - media-inspector
+          - video-audio-extractor
           - video-contact-sheet
           - video-to-gif
           - video-to-webp

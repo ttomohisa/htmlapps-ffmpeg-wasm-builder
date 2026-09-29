@@ -8,10 +8,14 @@ THREADING_MODE="${THREADING_MODE:-single-thread}"
 MODE_OUT="$OUT_DIR"
 TEMPLATE="/workspace/tests/smoke-test.template.html"
 RUNTIME="/workspace/runtime/browser-ffmpeg.js"
+FIXTURES_JSON=""
 if [[ "$PROFILE" == "video-compressor" ]]; then
   FIXTURE="/workspace/tests/fixtures/smoke-rotated.mp4"
 else
   FIXTURE="/workspace/tests/fixtures/smoke-input.mp4"
+fi
+if [[ "$PROFILE" == "video-audio-extractor" ]]; then
+  FIXTURES_JSON="/workspace/tests/fixtures/video-audio-extractor-fixtures.json"
 fi
 SMOKE_BODY="/workspace/tests/smoke-tests/${PROFILE}.js"
 OUTPUT="$MODE_OUT/smoke-test.html"
@@ -20,6 +24,9 @@ for path in "$TEMPLATE" "$RUNTIME" "$FIXTURE" "$SMOKE_BODY" \
   "$MODE_OUT/ffmpeg.js.gz" "$MODE_OUT/ffmpeg.wasm.gz"; do
   [[ -s "$path" ]] || fail "Smoke-test packaging input is missing: $path"
 done
+if [[ -n "$FIXTURES_JSON" && ! -s "$FIXTURES_JSON" ]]; then
+  fail "Smoke-test fixture bundle is missing: $FIXTURES_JSON"
+fi
 
 base64_one_line() { base64 -w 0 "$1"; }
 
@@ -37,6 +44,15 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     __SMOKE_INPUT_BASE64__)
       base64_one_line "$FIXTURE" >> "$OUTPUT"
       printf '\n' >> "$OUTPUT"
+      ;;
+    *"__SMOKE_FIXTURES_JSON__"*)
+      if [[ -n "$FIXTURES_JSON" ]]; then
+        fixtures_json="$(cat "$FIXTURES_JSON")"
+      else
+        fixtures_json='{}'
+      fi
+      line="${line//__SMOKE_FIXTURES_JSON__/$fixtures_json}"
+      printf '%s\n' "$line" >> "$OUTPUT"
       ;;
     __FFMPEG_RUNTIME__)
       cat "$RUNTIME" >> "$OUTPUT"
@@ -56,7 +72,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done < "$TEMPLATE"
 
-if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|TEST_BODY)__' "$OUTPUT"; then
+if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|FIXTURES_JSON|TEST_BODY)__' "$OUTPUT"; then
   fail "A smoke-test packaging placeholder remains in $OUTPUT"
 fi
 [[ -s "$OUTPUT" ]] || fail "Smoke-test HTML was not produced"
