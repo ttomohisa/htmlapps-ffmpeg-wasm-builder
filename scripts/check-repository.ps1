@@ -42,6 +42,7 @@ $videoRunner = Require-File "runners/video-compressor.c"
 $speedRunner = Require-File "runners/video-speed-changer.c"
 $cutterRunner = Require-File "runners/lossless-video-cutter.c"
 $inspectorRunner = Require-File "runners/media-inspector.c"
+$extractorRunner = Require-File "runners/video-audio-extractor.c"
 $contactRunner = Require-File "runners/video-contact-sheet.c"
 $videoProfile = Require-File "profiles/video-compressor/ffmpeg.flags"
 $videoProfileEnv = Require-File "profiles/video-compressor/profile.env"
@@ -57,6 +58,9 @@ $inspectorProfile = Require-File "profiles/media-inspector/ffmpeg.flags"
 $inspectorProfileEnv = Require-File "profiles/media-inspector/profile.env"
 $inspectorReadme = Require-File "profiles/media-inspector/README.md"
 $inspectorTemplate = Require-File "profiles/media-inspector/single-html/template.html"
+$extractorProfile = Require-File "profiles/video-audio-extractor/ffmpeg.flags"
+$extractorProfileEnv = Require-File "profiles/video-audio-extractor/profile.env"
+$extractorReadme = Require-File "profiles/video-audio-extractor/README.md"
 $contactProfile = Require-File "profiles/video-contact-sheet/ffmpeg.flags"
 $contactProfileEnv = Require-File "profiles/video-contact-sheet/profile.env"
 $contactReadme = Require-File "profiles/video-contact-sheet/README.md"
@@ -80,6 +84,7 @@ $videoSmoke = Require-File "tests/smoke-tests/video-compressor.js"
 $speedSmoke = Require-File "tests/smoke-tests/video-speed-changer.js"
 $cutterSmoke = Require-File "tests/smoke-tests/lossless-video-cutter.js"
 $inspectorSmoke = Require-File "tests/smoke-tests/media-inspector.js"
+$extractorSmoke = Require-File "tests/smoke-tests/video-audio-extractor.js"
 $contactSmoke = Require-File "tests/smoke-tests/video-contact-sheet.js"
 $gifSmoke = Require-File "tests/smoke-tests/video-to-gif.js"
 $webpSmoke = Require-File "tests/smoke-tests/video-to-webp.js"
@@ -324,6 +329,28 @@ Require-Text $inspectorProfile "--enable-parser=h264" "Media Inspector must pars
 Require-Text $inspectorProfile "--enable-parser=hevc" "Media Inspector must parse HEVC stream headers."
 Require-Text $inspectorReadme "Media Doctor" "Media Inspector docs must explain the browser-diagnosis layer."
 
+Require-Text $extractorProfileEnv "PROFILE_USE_X264=0" "Video Audio Extractor must not link x264."
+Require-Text $extractorProfileEnv "PROFILE_USE_WORKERFS=1" "Video Audio Extractor must use WORKERFS for large File/Blob inputs."
+Require-Text $extractorProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Video Audio Extractor Phase 1 must remain LGPL."
+Require-Text $extractorProfileEnv "libavformat/libavformat.a" "Video Audio Extractor must link libavformat."
+Require-Text $extractorProfileEnv "libavcodec/libavcodec.a" "Video Audio Extractor must link libavcodec packet/BSF APIs."
+Require-Text $extractorProfileEnv "libavutil/libavutil.a" "Video Audio Extractor must link libavutil."
+$extractorFlagsText = [IO.File]::ReadAllText($extractorProfile)
+foreach ($forbiddenFlag in @("--enable-decoder=", "--enable-encoder=", "--enable-filter=", "--enable-libx264", "--enable-gpl")) {
+  if ($extractorFlagsText.Contains($forbiddenFlag)) { throw "Video Audio Extractor Phase 1 must stay inspect/stream-copy only: $forbiddenFlag" }
+}
+Require-Text $extractorProfile "--disable-avfilter" "Video Audio Extractor should disable libavfilter in Phase 1."
+Require-Text $extractorProfile "--disable-swscale" "Video Audio Extractor should disable libswscale in Phase 1."
+Require-Text $extractorProfile "--disable-swresample" "Video Audio Extractor should disable libswresample in Phase 1."
+Require-Text $extractorProfile "--enable-bsf=aac_adtstoasc" "Video Audio Extractor must support MPEG-TS/ADTS AAC -> M4A."
+Require-Text $extractorRunner '#define RUNNER_VERSION "1.0.0"' "Video Audio Extractor runner version must be 1.0.0 for Phase 1."
+Require-Text $extractorRunner "av_bsf_get_by_name" "Video Audio Extractor must apply a bitstream filter when needed."
+Require-Text $extractorRunner "av_interleaved_write_frame" "Video Audio Extractor stream copy must mux compressed packets."
+Require-Text $runtime "videoAudioExtractorInspectArgs" "Browser runtime must expose Video Audio Extractor inspection."
+Require-Text $runtime "videoAudioExtractorCopyArgs" "Browser runtime must expose Video Audio Extractor stream copy."
+Require-Text $extractorSmoke "mp4_aac_webm_opus_mkv_multi_mpegts_aac_no_audio" "Video Audio Extractor smoke test must cover all Phase 1 cases."
+Require-Text $extractorReadme "WORKERFS" "Video Audio Extractor profile docs must explain large-file input."
+
 Require-Text $contactProfileEnv "PROFILE_USE_X264=0" "Video Contact Sheet must not link x264."
 Require-Text $contactProfileEnv "PROFILE_USE_WORKERFS=1" "Video Contact Sheet must use WORKERFS for large File/Blob inputs."
 Require-Text $contactProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Video Contact Sheet should remain LGPL without GPL-only components."
@@ -567,6 +594,7 @@ Require-Text $buildWorkflow "lossless-video-cutter" "Main CI must build and smok
 Require-Text $buildWorkflow "video-compressor" "Main CI must keep testing video compressor."
 Require-Text $buildWorkflow "video-speed-changer" "Main CI must build and smoke-test Video Speed Changer."
 Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test Media Inspector."
+Require-Text $buildWorkflow "video-audio-extractor" "Main CI must build and smoke-test Video Audio Extractor."
 Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
 Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
 Require-Text $buildWorkflow "video-to-webp" "Main CI must build and smoke-test WebP output."
@@ -595,7 +623,7 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
-  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
+  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $extractorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
     $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
     [IO.File]::WriteAllText($temp, $wrapped)
