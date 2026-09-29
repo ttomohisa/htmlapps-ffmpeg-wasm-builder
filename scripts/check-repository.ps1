@@ -345,6 +345,7 @@ Require-Text $extractorProfile "--disable-swresample" "Video Audio Extractor sho
 Require-Text $extractorProfile "--enable-bsf=aac_adtstoasc" "Video Audio Extractor must support MPEG-TS/ADTS AAC -> M4A."
 Require-Text $extractorRunner '#define RUNNER_VERSION "1.0.0"' "Video Audio Extractor runner version must be 1.0.0 for Phase 1."
 Require-Text $extractorRunner "av_bsf_get_by_name" "Video Audio Extractor must apply a bitstream filter when needed."
+Require-Text $extractorRunner "fill_missing_adts_parameters" "Video Audio Extractor must derive missing MPEG-TS AAC parameters without adding an audio decoder."
 Require-Text $extractorRunner "av_interleaved_write_frame" "Video Audio Extractor stream copy must mux compressed packets."
 Require-Text $runtime "videoAudioExtractorInspectArgs" "Browser runtime must expose Video Audio Extractor inspection."
 Require-Text $runtime "videoAudioExtractorCopyArgs" "Browser runtime must expose Video Audio Extractor stream copy."
