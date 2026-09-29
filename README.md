@@ -1,5 +1,11 @@
 # FFmpeg WASM Builder
 
+## Development profile: Video Audio Extractor
+
+`video-audio-extractor` is being developed for Browser Kitty's Video Audio Extractor. Phase 1 combines the lightweight inspection and stream-copy patterns already used by this Builder: it inventories audio tracks and can copy one selected compressed audio stream into an approved audio container without decoding or re-encoding. Input uses WORKERFS. The profile is included in main/PR browser CI but is not part of the v1.9.9 tagged release asset set.
+
+Browser apps use `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` and `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)`. The Phase 1 smoke test covers MP4/AAC -> M4A, WebM/Opus, MKV multi-audio metadata/selection, MPEG-TS AAC -> M4A, and video-only input.
+
 ## v1.9.9 Filter Builder multiple input
 
 `ffmpeg-filter-builder` now supports a dedicated 2-8 input complex-graph runner contract. Existing one-input Graphs continue to use the proven single-input path; multiple inputs use named libavfilter sources and explicit graph output labels. Both ST and MT variants are covered by the same real-browser smoke test.
