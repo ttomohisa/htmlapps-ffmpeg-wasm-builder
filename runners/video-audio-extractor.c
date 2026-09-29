@@ -334,6 +334,73 @@ static int needs_aac_adtstoasc(const AVFormatContext *input,
     return name && (strstr(name, "mpegts") || !strcmp(name, "aac"));
 }
 
+static int fill_missing_adts_parameters(const char *input_path,
+                                        int stream_index,
+                                        AVCodecParameters *parameters)
+{
+    static const int sample_rates[13] = {
+        96000, 88200, 64000, 48000, 44100, 32000, 24000,
+        22050, 16000, 12000, 11025, 8000, 7350
+    };
+    AVFormatContext *probe = NULL;
+    AVPacket *packet = NULL;
+    int ret;
+    int packets_seen = 0;
+
+    if (!parameters || parameters->codec_id != AV_CODEC_ID_AAC)
+        return 0;
+    if (parameters->sample_rate > 0 && parameters->ch_layout.nb_channels > 0)
+        return 0;
+
+    ret = avformat_open_input(&probe, input_path, NULL, NULL);
+    if (ret < 0) return ret;
+
+    packet = av_packet_alloc();
+    if (!packet) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
+
+    while (packets_seen++ < 512 && (ret = av_read_frame(probe, packet)) >= 0) {
+        int offset;
+        if (packet->stream_index != stream_index || packet->size < 7) {
+            av_packet_unref(packet);
+            continue;
+        }
+        for (offset = 0; offset + 7 <= packet->size; offset++) {
+            const uint8_t *data = packet->data + offset;
+            int sample_index;
+            int channels;
+
+            if (data[0] != 0xff || (data[1] & 0xf6) != 0xf0)
+                continue;
+            sample_index = (data[2] >> 2) & 0x0f;
+            channels = ((data[2] & 0x01) << 2) | ((data[3] >> 6) & 0x03);
+            if (sample_index >= 13 || channels <= 0)
+                continue;
+
+            if (parameters->sample_rate <= 0)
+                parameters->sample_rate = sample_rates[sample_index];
+            if (parameters->ch_layout.nb_channels <= 0) {
+                av_channel_layout_uninit(&parameters->ch_layout);
+                av_channel_layout_default(&parameters->ch_layout, channels);
+            }
+            ret = 0;
+            av_packet_unref(packet);
+            goto end;
+        }
+        av_packet_unref(packet);
+    }
+
+    if (ret == AVERROR_EOF) ret = AVERROR_INVALIDDATA;
+    if (ret >= 0) ret = AVERROR_INVALIDDATA;
+
+end:
+    av_packet_free(&packet);
+    avformat_close_input(&probe);
+    return ret;
+}
+
 static int create_bsf(AVBSFContext **result,
                       const AVFormatContext *input,
                       const AVStream *stream,
@@ -457,6 +524,20 @@ static int copy_audio(const RunnerOptions *options)
     if (strcmp(options->copy_format, target.format)) {
         ret = AVERROR(EINVAL);
         goto end;
+    }
+
+    if (needs_aac_adtstoasc(input, in_stream, target.format) &&
+        (in_stream->codecpar->sample_rate <= 0 ||
+         in_stream->codecpar->ch_layout.nb_channels <= 0)) {
+        ret = fill_missing_adts_parameters(options->input_path,
+                                           options->audio_stream_index,
+                                           in_stream->codecpar);
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_ERROR,
+                   "Could not read AAC parameters from ADTS packets: %s\n",
+                   av_err2str(ret));
+            goto end;
+        }
     }
 
     ret = create_bsf(&bsf, input, in_stream, target.format);
