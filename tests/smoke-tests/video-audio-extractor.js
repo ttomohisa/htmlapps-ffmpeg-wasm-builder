@@ -48,14 +48,14 @@ const copy = async (label, bytes, extension, stream, format, outputPath) => {
     onLog: ({ message }) => append(message)
   });
 };
-const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps) => {
+const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps, channels) => {
   append("transcode=" + label + " stream=" + stream + " format=" + format);
   const inputPath = "/workerfs/" + label + "." + extension;
   return await runner.run({
     files: [{ name: inputPath, data: new Blob([bytes]), workerfs: true }],
     outputs: [outputPath],
     args: BrowserFFmpeg.videoAudioExtractorTranscodeArgs({
-      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps
+      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps, channels
     }),
     onLog: ({ message }) => append(message)
   });
@@ -111,6 +111,41 @@ try {
     throw new Error("Transcoded WAV is not PCM signed 16-bit little-endian.");
   }
 
+
+  const mp3Stereo = await transcode(
+    "multi-opus-to-mp3-stereo", fixtures.mkv, "mkv", english.index,
+    "mp3", "/english-128-stereo.mp3", 128, 2
+  );
+  const mp3StereoBytes = mp3Stereo.files[0].data;
+  if (!mp3StereoBytes || mp3StereoBytes.length < 128) {
+    throw new Error("LAME stereo MP3 output is empty.");
+  }
+  const mp3StereoReport = await inspect("transcoded-mp3-stereo", mp3StereoBytes, "mp3");
+  const mp3StereoAudio = mp3StereoReport.audioStreams[0];
+  if (mp3StereoAudio?.codec?.name !== "mp3" || mp3StereoAudio?.channels !== 2) {
+    throw new Error("LAME 128 kbps stereo MP3 verification failed.");
+  }
+
+  const mp3Mono = await transcode(
+    "multi-aac-to-mp3-mono", fixtures.mkv, "mkv", commentary.index,
+    "mp3", "/commentary-320-mono.mp3", 320, 1
+  );
+  const mp3MonoBytes = mp3Mono.files[0].data;
+  if (!mp3MonoBytes || mp3MonoBytes.length < 128) {
+    throw new Error("LAME mono MP3 output is empty.");
+  }
+  const mp3MonoReport = await inspect("transcoded-mp3-mono", mp3MonoBytes, "mp3");
+  const mp3MonoAudio = mp3MonoReport.audioStreams[0];
+  if (mp3MonoAudio?.codec?.name !== "mp3" || mp3MonoAudio?.channels !== 1) {
+    throw new Error("LAME 320 kbps mono MP3 verification failed.");
+  }
+
+  for (const bitrateKbps of [128, 192, 256, 320]) {
+    BrowserFFmpeg.videoAudioExtractorTranscodeArgs({
+      streamIndex: english.index, format: "mp3", bitrateKbps, channels: 2
+    });
+  }
+
   const tsReport = await inspect("mpegts-aac", fixtures.ts, "ts");
   const tsAudio = tsReport.audioStreams.find((s) => s.codec?.name === "aac");
   if (!tsAudio || tsAudio.copy?.format !== "m4a" || tsAudio.sampleRate !== 48000 || tsAudio.channels !== 1) {
@@ -152,7 +187,7 @@ try {
     throw new Error("Video-only input was not reported correctly.");
   }
 
-  pass("phase3_copy_and_transcode");
+  pass("phase4_copy_m4a_wav_mp3");
 } finally {
   runner.dispose();
 }
