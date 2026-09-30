@@ -1,8 +1,8 @@
 # FFmpeg WASM Builder
 
-## Video Audio Extractor Phase 2 compatibility
+## Video Audio Extractor Phase 3 transcoding
 
-`video-audio-extractor` is a development profile for Browser Kitty. Phase 2 keeps the decoder-free stream-copy design and expands the real-browser-tested matrix to AAC -> M4A, ALAC -> M4A, MP3 -> MP3, Opus -> OPUS, Vorbis -> OGG, and FLAC -> FLAC. Large browser `File`/`Blob` inputs use WORKERFS. The profile runs in main/PR browser CI but is not yet included in the v1.9.9 tagged release asset set. AC-3, E-AC-3, and PCM/WAV remain deferred until dedicated browser compatibility cases are added.
+`video-audio-extractor` keeps the Phase 2 stream-copy matrix and adds Phase 3 audio-only transcoding: native AAC/M4A at 128 / 192 / 256 kbps and PCM16/WAV. Decoding is limited to AAC, ALAC, MP3, Opus, Vorbis and FLAC; libswresample handles sample conversion. Large browser `File`/`Blob` inputs continue to use WORKERFS. The profile runs in PR browser CI but is not yet included in the v1.9.9 tagged release asset set. AC-3 and E-AC-3 remain deferred.
 
 ## v1.9.8 Filter Builder drawtext
 
