@@ -13,6 +13,7 @@
 --enable-demuxer=asf
 --enable-demuxer=ogg
 --enable-demuxer=wav
+--enable-demuxer=mp3
 --enable-parser=h264
 --enable-parser=aac
 --enable-parser=aac_latm
