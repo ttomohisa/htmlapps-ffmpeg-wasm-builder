@@ -196,15 +196,6 @@ static int copy_target(enum AVCodecID id, CopyTarget *target)
     case AV_CODEC_ID_FLAC:
         selected = (CopyTarget){"flac", "flac", "flac"};
         break;
-    case AV_CODEC_ID_AC3:
-        selected = (CopyTarget){"ac3", "ac3", "ac3"};
-        break;
-    case AV_CODEC_ID_EAC3:
-        selected = (CopyTarget){"eac3", "eac3", "eac3"};
-        break;
-    case AV_CODEC_ID_PCM_S16LE:
-        selected = (CopyTarget){"wav", "wav", "wav"};
-        break;
     default:
         break;
     }
