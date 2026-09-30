@@ -97,6 +97,7 @@ $filterLauncher = Require-File "build-ffmpeg-filter-builder.bat"
 $libwebpBuild = Require-File "scripts/build-libwebp.sh"
 $libvpxBuild = Require-File "scripts/build-libvpx.sh"
 $libopusBuild = Require-File "scripts/build-libopus.sh"
+$libmp3lameBuild = Require-File "scripts/build-libmp3lame.sh"
 $smokeFixture = Require-File "tests/fixtures/smoke-input.mp4"
 $rotatedSmokeFixture = Require-File "tests/fixtures/smoke-rotated.mp4"
 $smokeWindows = Require-File "scripts/smoke-test.ps1"
@@ -131,11 +132,16 @@ Require-Text $buildScript '"${PROFILE_LINK_LIBS[@]}"' "Build must link profile-s
 Require-Text $buildScript 'PROFILE_USE_X264' "Build must make x264 profile-specific."
 Require-Text $buildScript 'PROFILE_USE_LIBVPX' "Build must make libvpx profile-specific."
 Require-Text $buildScript 'PROFILE_USE_LIBOPUS' "Build must make Opus profile-specific."
+Require-Text $buildScript 'PROFILE_USE_LIBMP3LAME' "Build must make LAME profile-specific."
 Require-Text $libvpxBuild "--enable-vp9-encoder" "libvpx build must keep the VP9 encoder."
 Require-Text $libvpxBuild "--disable-vp9-decoder" "libvpx build must stay encoder-only."
 Require-Text $libvpxBuild "--enable-small" "libvpx build must favor compact output."
 Require-Text $libopusBuild "OPUS_DRED=OFF" "Opus build must keep DRED out of the compact profile."
 Require-Text $libopusBuild "OPUS_OSCE=OFF" "Opus build must keep OSCE out of the compact profile."
+Require-Text $libmp3lameBuild "--disable-frontend" "LAME build must exclude the CLI frontend."
+Require-Text $libmp3lameBuild "--disable-decoder" "LAME build must exclude the mpg123 decoder."
+Require-Text $libmp3lameBuild 'sha256sum -c' "LAME source tarball must be SHA-256 verified."
+Require-Text $libmp3lameBuild "libmp3lame.a" "LAME build must produce a static libmp3lame archive."
 Require-Text $buildScript 'PROFILE_USE_LIBWEBP' "Build must make libwebp profile-specific."
 Require-Text $buildScript 'PROFILE_USE_WORKERFS' "Build must make WORKERFS profile-specific."
 Require-Text $buildScript '-lworkerfs.js' "WORKERFS profiles must explicitly link Emscripten WORKERFS."
@@ -165,6 +171,8 @@ Require-Text $buildScript 'Unexpected legacy pthread worker asset' "Build must r
 Require-Text $buildScript '"x264Linked":' "Manifest must state whether x264 is linked."
 Require-Text $buildScript '"libvpxLinked":' "Manifest must state whether libvpx is linked."
 Require-Text $buildScript '"libopusLinked":' "Manifest must state whether Opus is linked."
+Require-Text $buildScript '"libmp3lameLinked":' "Manifest must state whether LAME is linked."
+Require-Text $buildScript '"libmp3lameSha256":' "Manifest must record the pinned LAME source checksum."
 Require-Text $buildScript '"libwebpLinked":' "Manifest must state whether libwebp is linked."
 
 Require-Text $runtime "instantiateWasm" "Browser runtime must instantiate transferred Wasm bytes directly."
@@ -330,6 +338,7 @@ Require-Text $inspectorProfile "--enable-parser=hevc" "Media Inspector must pars
 Require-Text $inspectorReadme "Media Doctor" "Media Inspector docs must explain the browser-diagnosis layer."
 
 Require-Text $extractorProfileEnv "PROFILE_USE_X264=0" "Video Audio Extractor must not link x264."
+Require-Text $extractorProfileEnv "PROFILE_USE_LIBMP3LAME=1" "Video Audio Extractor Phase 4 must link LAME."
 Require-Text $extractorProfileEnv "PROFILE_USE_WORKERFS=1" "Video Audio Extractor must use WORKERFS for large File/Blob inputs."
 Require-Text $extractorProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Video Audio Extractor Phase 1 must remain LGPL."
 Require-Text $extractorProfileEnv "libavformat/libavformat.a" "Video Audio Extractor must link libavformat."
@@ -356,7 +365,7 @@ Require-Text $extractorRunner "AV_CODEC_ID_MP3" "Video Audio Extractor Phase 2 m
 Require-Text $extractorRunner "AV_CODEC_ID_VORBIS" "Video Audio Extractor Phase 2 must map Vorbis to OGG."
 Require-Text $extractorRunner "AV_CODEC_ID_FLAC" "Video Audio Extractor Phase 2 must map FLAC."
 Require-Text $runtime '["m4a", "opus", "mp3", "ogg", "flac"]' "Browser runtime must expose only tested Video Audio Extractor Phase 2 copy formats."
-Require-Text $extractorRunner '#define RUNNER_VERSION "1.2.0"' "Video Audio Extractor runner version must be 1.2.0 for Phase 3."
+Require-Text $extractorRunner '#define RUNNER_VERSION "1.3.0"' "Video Audio Extractor runner version must be 1.3.0 for Phase 4."
 Require-Text $extractorRunner "av_bsf_get_by_name" "Video Audio Extractor must apply a bitstream filter when needed."
 Require-Text $extractorRunner "fill_missing_adts_parameters" "Video Audio Extractor must derive missing MPEG-TS AAC parameters without adding an audio decoder."
 Require-Text $extractorRunner "av_interleaved_write_frame" "Video Audio Extractor stream copy must mux compressed packets."
@@ -364,10 +373,19 @@ Require-Text $runtime "videoAudioExtractorInspectArgs" "Browser runtime must exp
 Require-Text $runtime "videoAudioExtractorCopyArgs" "Browser runtime must expose Video Audio Extractor stream copy."
 Require-Text $runtime "videoAudioExtractorTranscodeArgs" "Browser runtime must expose Video Audio Extractor transcoding."
 Require-Text $extractorProfileEnv '"transcode":true' "Video Audio Extractor manifest must advertise transcoding."
-Require-Text $extractorProfileEnv '"transcodeFormats":["m4a","wav"]' "Video Audio Extractor manifest must advertise M4A and WAV transcoding."
+Require-Text $extractorProfileEnv '"transcodeFormats":["m4a","wav","mp3"]' "Video Audio Extractor manifest must advertise M4A, WAV, and MP3 transcoding."
+Require-Text $extractorProfileEnv '"mp3BitratesKbps":[128,192,256,320]' "Video Audio Extractor must advertise tested MP3 CBR bitrates."
+Require-Text $extractorProfileEnv '"mp3Channels":[1,2]' "Video Audio Extractor must advertise mono/stereo MP3 output."
+Require-Text $extractorProfile "--enable-libmp3lame" "Video Audio Extractor Phase 4 must enable external LAME."
+Require-Text $extractorProfile "--enable-encoder=libmp3lame" "Video Audio Extractor Phase 4 must enable the libmp3lame encoder."
+Require-Text $extractorRunner 'avcodec_find_encoder_by_name("libmp3lame")' "Video Audio Extractor must explicitly select LAME for MP3."
+Require-Text $runtime "MP3 bitrate must be 128, 192, 256, or 320 kbps" "Browser runtime must validate MP3 bitrate choices."
+Require-Text $runtime "MP3 channels must be 1 or 2" "Browser runtime must validate mono/stereo MP3 output."
 Require-Text $extractorRunner "swr_alloc_set_opts2" "Video Audio Extractor Phase 3 must use libswresample directly."
 Require-Text $extractorRunner "AVAudioFifo" "Video Audio Extractor Phase 3 must buffer audio frames for fixed-size encoders."
-Require-Text $extractorSmoke "phase3_copy_and_transcode" "Video Audio Extractor smoke test must cover copy plus M4A/WAV transcoding."
+Require-Text $extractorSmoke "phase4_copy_m4a_wav_mp3" "Video Audio Extractor smoke test must cover copy plus M4A/WAV/MP3 transcoding."
+Require-Text $extractorSmoke "LAME 128 kbps stereo MP3 verification failed." "Video Audio Extractor smoke test must verify stereo MP3."
+Require-Text $extractorSmoke "LAME 320 kbps mono MP3 verification failed." "Video Audio Extractor smoke test must verify mono MP3."
 Require-Text $extractorReadme "WORKERFS" "Video Audio Extractor profile docs must explain large-file input."
 
 Require-Text $contactProfileEnv "PROFILE_USE_X264=0" "Video Contact Sheet must not link x264."
@@ -543,11 +561,233 @@ foreach ($requiredPin in @(
   'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT',
   'LIBWEBP_REPOSITORY', 'LIBWEBP_FALLBACK_REPOSITORY', 'LIBWEBP_REF', 'LIBWEBP_COMMIT',
   'LIBVPX_REPOSITORY', 'LIBVPX_FALLBACK_REPOSITORY', 'LIBVPX_REF', 'LIBVPX_COMMIT',
-  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT'
+  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT',
+  'LIBMP3LAME_VERSION', 'LIBMP3LAME_URL', 'LIBMP3LAME_SHA256'
 )) {
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
 }
+if ($versionsText -notmatch '(?m)^LIBMP3LAME_VERSION=4\.0
+  $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
+  $match = [regex]::Match($versionsText, $commitPattern)
+  if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
+}
+
+$dockerText = [IO.File]::ReadAllText($dockerfile)
+if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
+Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expose a no-x264 export target."
+Require-Text $dockerfile "FROM scratch AS export-with-video-codecs" "Dockerfile must expose a combined video-codec export target."
+Require-Text $dockerfile "FROM scratch AS export-with-x264" "Dockerfile must expose an x264 export target."
+Require-Text $dockerfile "FROM scratch AS export-with-libwebp" "Dockerfile must expose a libwebp export target."
+Require-Text $dockerfile "FROM scratch AS export-with-libmp3lame" "Dockerfile must expose a libmp3lame export target."
+Require-Text $unixBuild 'EXPORT_TARGET="export-no-x264"' "Unix build must skip optional codec libraries when unused."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-video-codecs"' "Unix build must select the combined video codec target."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-x264"' "Unix build must select x264 only when required."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-libwebp"' "Unix build must select libwebp only when required."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-libmp3lame"' "Unix build must select libmp3lame only when required."
+Require-Text $windowsBuild '"export-no-x264"' "Windows build must support the no-x264 Docker target."
+Require-Text $windowsBuild '"export-with-video-codecs"' "Windows build must support the combined video codec target."
+Require-Text $windowsBuild '"export-with-x264"' "Windows build must support the x264 Docker target."
+Require-Text $windowsBuild '"export-with-libwebp"' "Windows build must support the libwebp Docker target."
+Require-Text $windowsBuild '"export-with-libmp3lame"' "Windows build must support the libmp3lame Docker target."
+
+Require-Text $thirdParty 'generated `ffmpeg.wasm`' "Third-party notice must distinguish generated Wasm from the MIT builder source."
+Require-Text $thirdParty "lossless-video-cutter" "Third-party notice must explain cutter x264 usage."
+Require-Text $thirdParty "media-inspector" "Third-party notice must explain Media Inspector licensing."
+Require-Text $thirdParty "video-contact-sheet" "Third-party notice must explain Video Contact Sheet licensing."
+Require-Text $thirdParty "GPL-2.0-or-later" "Third-party notice must state video-compressor core licensing."
+Require-Text $thirdParty "LGPL-2.1-or-later" "Third-party notice must state cutter core licensing."
+Require-Text $licenseIndex "FFmpeg-COPYING.GPLv2" "License index must document FFmpeg GPL license packaging."
+Require-Text $licenseIndex "FFmpeg-COPYING.LGPLv2.1" "License index must document FFmpeg LGPL license packaging."
+Require-Text $licenseDoc "same GitHub Release" "Licensing docs must keep binaries and corresponding source together."
+Require-Text $readme "lossless-video-cutter" "Japanese README must document the cutter profile."
+Require-Text $readme "BrowserFFmpeg.losslessVideoCutterArgs" "Japanese README must document the cutter browser helper."
+Require-Text $readme "media-inspector" "Japanese README must document the Media Inspector profile."
+Require-Text $readme "BrowserFFmpeg.mediaInspectorArgs" "Japanese README must document the Media Inspector browser helper."
+Require-Text $readme "video-contact-sheet" "Japanese README must document the Video Contact Sheet profile."
+Require-Text $readme "BrowserFFmpeg.videoContactSheetArgs" "Japanese README must document the Video Contact Sheet browser helper."
+Require-Text $readme "video-to-gif" "Japanese README must document the GIF profile."
+Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must document the GIF browser helper."
+Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
+Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
+Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
+Require-Text $releaseDoc "git tag -a v1.9.9" "Release documentation must include the v1.9.9 tag procedure."
+
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
+Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
+Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
+Require-Text $releaseScript 'fetch_exact "libvpx"' "Release packer must fetch exact libvpx source."
+Require-Text $releaseScript 'fetch_exact "Opus"' "Release packer must fetch exact Opus source."
+Require-Text $releaseScript 'fetch_exact "libwebp"' "Release packer must fetch exact libwebp source."
+Require-Text $releaseScript 'PROFILE_USE_LIBVPX' "Release bundle must make libvpx notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_LIBOPUS' "Release bundle must make Opus notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_LIBVPX=0' "Release bundle must default missing libvpx profile flags to disabled."
+Require-Text $releaseScript 'PROFILE_USE_LIBOPUS=0' "Release bundle must default missing Opus profile flags to disabled."
+Require-Text $releaseScript 'PROFILE_USE_LIBWEBP' "Release bundle must make libwebp notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_X264' "Release bundle must make x264 notices profile-specific."
+Require-Text $releaseScript 'PROFILE_BINARY_LICENSE' "Release bundle must choose the FFmpeg license text per profile."
+Require-Text $releaseScript 'COPYING.LGPLv2.1' "Release bundle must support LGPL profile licensing."
+Require-Text $releaseScript "ffmpeg-wasm-sources-v" "Release packer must create a corresponding-source archive."
+Require-Text $releaseScript "sha256sum" "Release packer must generate SHA-256 checksums."
+
+Require-Text $buildWorkflow "lossless-video-cutter" "Main CI must build and smoke-test the cutter."
+Require-Text $buildWorkflow "video-compressor" "Main CI must keep testing video compressor."
+Require-Text $buildWorkflow "video-speed-changer" "Main CI must build and smoke-test Video Speed Changer."
+Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test Media Inspector."
+Require-Text $buildWorkflow "video-audio-extractor" "Main CI must build and smoke-test Video Audio Extractor."
+Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
+Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
+Require-Text $buildWorkflow "video-to-webp" "Main CI must build and smoke-test WebP output."
+Require-Text $buildWorkflow "ffmpeg-filter-builder" "Main CI must build and smoke-test both FFmpeg Filter Builder variants."
+Require-Text $releaseWorkflow 'tags:' "Release workflow must be tag-driven."
+Require-Text $releaseWorkflow 'test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"' "Release workflow must verify tag/version equality."
+Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workflow must smoke-test cutter before publishing."
+Require-Text $releaseWorkflow "./build.sh video-compressor" "Release workflow must smoke-test video compressor before publishing."
+Require-Text $releaseWorkflow "./build.sh video-speed-changer" "Release workflow must smoke-test Video Speed Changer before publishing."
+Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow must smoke-test Media Inspector before publishing."
+Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
+Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
+Require-Text $releaseWorkflow "./build.sh video-to-webp" "Release workflow must smoke-test WebP before publishing."
+Require-Text $releaseWorkflow "./build.sh ffmpeg-filter-builder" "Release workflow must smoke-test both FFmpeg Filter Builder variants before publishing."
+Require-Text $releaseWorkflow "ffmpeg-wasm-lossless-video-cutter" "Release workflow must publish the cutter binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-media-inspector" "Release workflow must publish the Media Inspector binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-contact-sheet" "Release workflow must publish the Video Contact Sheet binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-gif" "Release workflow must publish the GIF binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-webp" "Release workflow must publish the WebP binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-ffmpeg-filter-builder-single-thread" "Release workflow must publish the FFmpeg Filter Builder ST bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-ffmpeg-filter-builder-multi-thread" "Release workflow must publish the FFmpeg Filter Builder MT bundle."
+Require-Text $releaseWorkflow "--verify-tag" "Release creation must refuse an unpushed/missing tag."
+Require-Text $releaseWorkflow "contents: write" "Release workflow needs explicit contents:write permission."
+
+$node = Get-Command node -ErrorAction SilentlyContinue
+if ($node) {
+  & node --check $runtime
+  if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
+  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $extractorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
+    $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
+    $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
+    [IO.File]::WriteAllText($temp, $wrapped)
+    try {
+      & node --check $temp
+      if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $smokeBody" }
+    } finally {
+      Remove-Item -Force $temp -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+Write-Host "[OK] Repository checks passed." -ForegroundColor Green
+) { throw "LAME must be pinned to 4.0 for Video Audio Extractor Phase 4." }
+if ($versionsText -notmatch '(?m)^LIBMP3LAME_SHA256=([0-9a-f]{64})
+  $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
+  $match = [regex]::Match($versionsText, $commitPattern)
+  if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
+}
+
+$dockerText = [IO.File]::ReadAllText($dockerfile)
+if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
+Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expose a no-x264 export target."
+Require-Text $dockerfile "FROM scratch AS export-with-video-codecs" "Dockerfile must expose a combined video-codec export target."
+Require-Text $dockerfile "FROM scratch AS export-with-x264" "Dockerfile must expose an x264 export target."
+Require-Text $dockerfile "FROM scratch AS export-with-libwebp" "Dockerfile must expose a libwebp export target."
+Require-Text $unixBuild 'EXPORT_TARGET="export-no-x264"' "Unix build must skip optional codec libraries when unused."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-video-codecs"' "Unix build must select the combined video codec target."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-x264"' "Unix build must select x264 only when required."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-libwebp"' "Unix build must select libwebp only when required."
+Require-Text $windowsBuild '"export-no-x264"' "Windows build must support the no-x264 Docker target."
+Require-Text $windowsBuild '"export-with-video-codecs"' "Windows build must support the combined video codec target."
+Require-Text $windowsBuild '"export-with-x264"' "Windows build must support the x264 Docker target."
+Require-Text $windowsBuild '"export-with-libwebp"' "Windows build must support the libwebp Docker target."
+
+Require-Text $thirdParty 'generated `ffmpeg.wasm`' "Third-party notice must distinguish generated Wasm from the MIT builder source."
+Require-Text $thirdParty "lossless-video-cutter" "Third-party notice must explain cutter x264 usage."
+Require-Text $thirdParty "media-inspector" "Third-party notice must explain Media Inspector licensing."
+Require-Text $thirdParty "video-contact-sheet" "Third-party notice must explain Video Contact Sheet licensing."
+Require-Text $thirdParty "GPL-2.0-or-later" "Third-party notice must state video-compressor core licensing."
+Require-Text $thirdParty "LGPL-2.1-or-later" "Third-party notice must state cutter core licensing."
+Require-Text $licenseIndex "FFmpeg-COPYING.GPLv2" "License index must document FFmpeg GPL license packaging."
+Require-Text $licenseIndex "FFmpeg-COPYING.LGPLv2.1" "License index must document FFmpeg LGPL license packaging."
+Require-Text $licenseDoc "same GitHub Release" "Licensing docs must keep binaries and corresponding source together."
+Require-Text $readme "lossless-video-cutter" "Japanese README must document the cutter profile."
+Require-Text $readme "BrowserFFmpeg.losslessVideoCutterArgs" "Japanese README must document the cutter browser helper."
+Require-Text $readme "media-inspector" "Japanese README must document the Media Inspector profile."
+Require-Text $readme "BrowserFFmpeg.mediaInspectorArgs" "Japanese README must document the Media Inspector browser helper."
+Require-Text $readme "video-contact-sheet" "Japanese README must document the Video Contact Sheet profile."
+Require-Text $readme "BrowserFFmpeg.videoContactSheetArgs" "Japanese README must document the Video Contact Sheet browser helper."
+Require-Text $readme "video-to-gif" "Japanese README must document the GIF profile."
+Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must document the GIF browser helper."
+Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
+Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
+Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
+Require-Text $releaseDoc "git tag -a v1.9.9" "Release documentation must include the v1.9.9 tag procedure."
+
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
+Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
+Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
+Require-Text $releaseScript 'fetch_exact "libvpx"' "Release packer must fetch exact libvpx source."
+Require-Text $releaseScript 'fetch_exact "Opus"' "Release packer must fetch exact Opus source."
+Require-Text $releaseScript 'fetch_exact "libwebp"' "Release packer must fetch exact libwebp source."
+Require-Text $releaseScript 'PROFILE_USE_LIBVPX' "Release bundle must make libvpx notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_LIBOPUS' "Release bundle must make Opus notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_LIBVPX=0' "Release bundle must default missing libvpx profile flags to disabled."
+Require-Text $releaseScript 'PROFILE_USE_LIBOPUS=0' "Release bundle must default missing Opus profile flags to disabled."
+Require-Text $releaseScript 'PROFILE_USE_LIBWEBP' "Release bundle must make libwebp notices profile-specific."
+Require-Text $releaseScript 'PROFILE_USE_X264' "Release bundle must make x264 notices profile-specific."
+Require-Text $releaseScript 'PROFILE_BINARY_LICENSE' "Release bundle must choose the FFmpeg license text per profile."
+Require-Text $releaseScript 'COPYING.LGPLv2.1' "Release bundle must support LGPL profile licensing."
+Require-Text $releaseScript "ffmpeg-wasm-sources-v" "Release packer must create a corresponding-source archive."
+Require-Text $releaseScript "sha256sum" "Release packer must generate SHA-256 checksums."
+
+Require-Text $buildWorkflow "lossless-video-cutter" "Main CI must build and smoke-test the cutter."
+Require-Text $buildWorkflow "video-compressor" "Main CI must keep testing video compressor."
+Require-Text $buildWorkflow "video-speed-changer" "Main CI must build and smoke-test Video Speed Changer."
+Require-Text $buildWorkflow "media-inspector" "Main CI must build and smoke-test Media Inspector."
+Require-Text $buildWorkflow "video-audio-extractor" "Main CI must build and smoke-test Video Audio Extractor."
+Require-Text $buildWorkflow "video-contact-sheet" "Main CI must build and smoke-test Video Contact Sheet."
+Require-Text $buildWorkflow "video-to-gif" "Main CI must build and smoke-test GIF output."
+Require-Text $buildWorkflow "video-to-webp" "Main CI must build and smoke-test WebP output."
+Require-Text $buildWorkflow "ffmpeg-filter-builder" "Main CI must build and smoke-test both FFmpeg Filter Builder variants."
+Require-Text $releaseWorkflow 'tags:' "Release workflow must be tag-driven."
+Require-Text $releaseWorkflow 'test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"' "Release workflow must verify tag/version equality."
+Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workflow must smoke-test cutter before publishing."
+Require-Text $releaseWorkflow "./build.sh video-compressor" "Release workflow must smoke-test video compressor before publishing."
+Require-Text $releaseWorkflow "./build.sh video-speed-changer" "Release workflow must smoke-test Video Speed Changer before publishing."
+Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow must smoke-test Media Inspector before publishing."
+Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
+Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
+Require-Text $releaseWorkflow "./build.sh video-to-webp" "Release workflow must smoke-test WebP before publishing."
+Require-Text $releaseWorkflow "./build.sh ffmpeg-filter-builder" "Release workflow must smoke-test both FFmpeg Filter Builder variants before publishing."
+Require-Text $releaseWorkflow "ffmpeg-wasm-lossless-video-cutter" "Release workflow must publish the cutter binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-media-inspector" "Release workflow must publish the Media Inspector binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-contact-sheet" "Release workflow must publish the Video Contact Sheet binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-gif" "Release workflow must publish the GIF binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-webp" "Release workflow must publish the WebP binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-ffmpeg-filter-builder-single-thread" "Release workflow must publish the FFmpeg Filter Builder ST bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-ffmpeg-filter-builder-multi-thread" "Release workflow must publish the FFmpeg Filter Builder MT bundle."
+Require-Text $releaseWorkflow "--verify-tag" "Release creation must refuse an unpushed/missing tag."
+Require-Text $releaseWorkflow "contents: write" "Release workflow needs explicit contents:write permission."
+
+$node = Get-Command node -ErrorAction SilentlyContinue
+if ($node) {
+  & node --check $runtime
+  if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
+  foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $extractorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
+    $wrapped = "async function __smoke(){`n" + [IO.File]::ReadAllText($smokeBody) + "`n}"
+    $temp = Join-Path ([IO.Path]::GetTempPath()) ("ffmpeg-smoke-" + [guid]::NewGuid().ToString("N") + ".js")
+    [IO.File]::WriteAllText($temp, $wrapped)
+    try {
+      & node --check $temp
+      if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $smokeBody" }
+    } finally {
+      Remove-Item -Force $temp -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+Write-Host "[OK] Repository checks passed." -ForegroundColor Green
+) { throw "LIBMP3LAME_SHA256 must be a lowercase SHA-256." }
 foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', 'LIBWEBP_COMMIT', 'LIBVPX_COMMIT', 'LIBOPUS_COMMIT')) {
   $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
   $match = [regex]::Match($versionsText, $commitPattern)
