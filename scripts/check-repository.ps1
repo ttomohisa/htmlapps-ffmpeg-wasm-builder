@@ -358,7 +358,7 @@ Require-Text $extractorProfile "--enable-libmp3lame" "Video Audio Extractor Phas
 Require-Text $extractorProfile "--enable-encoder=libmp3lame" "Video Audio Extractor Phase 4 must enable the LAME MP3 encoder."
 Require-Text $extractorProfile "--enable-muxer=wav" "Video Audio Extractor Phase 3 must enable WAV output."
 Require-Text $extractorProfile "--enable-bsf=aac_adtstoasc" "Video Audio Extractor must support MPEG-TS/ADTS AAC -> M4A."
-Require-Text $extractorProfile "--enable-muxer=mp3" "Video Audio Extractor Phase 2 must enable MP3 output."
+Require-Text $extractorProfile "--enable-muxer=mp3" "Video Audio Extractor Phase 2 must enable MP3 output."\nRequire-Text $extractorProfile "--enable-demuxer=mp3" "Video Audio Extractor Phase 4 must re-inspect generated MP3 output."
 Require-Text $extractorProfile "--enable-muxer=flac" "Video Audio Extractor Phase 2 must enable FLAC output."
 Require-Text $extractorProfileEnv '"copyFormats":["m4a","opus","mp3","ogg","flac"]' "Video Audio Extractor capabilities must expose only the tested Phase 2 matrix."
 Require-Text $extractorRunner "AV_CODEC_ID_ALAC" "Video Audio Extractor Phase 2 must map ALAC to M4A."
