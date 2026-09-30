@@ -14,7 +14,7 @@ log() { printf '\n[release] %s\n' "$*"; }
 EXPECTED_TAG="v${BUILDER_VERSION}"
 [[ "$TAG" == "$EXPECTED_TAG" ]] || fail "Release tag $TAG does not match BUILDER_VERSION=$BUILDER_VERSION (expected $EXPECTED_TAG)."
 
-for cmd in git tar gzip sha256sum python3 xargs; do
+for cmd in git curl tar gzip sha256sum python3 xargs; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Required release tool is missing: $cmd"
 done
 
@@ -80,18 +80,34 @@ fetch_exact() {
   rm -rf "$destination/.git"
 }
 
+fetch_archive() {
+  local label="$1"
+  local url="$2"
+  local expected_sha="$3"
+  local destination="$4"
+  local archive="$WORK_DIR/lame-source.tar.gz"
+
+  log "Fetching exact $label source archive"
+  curl -fL --retry 3 --retry-delay 2 "$url" -o "$archive"
+  printf '%s  %s\n' "$expected_sha" "$archive" | sha256sum -c -
+  mkdir -p "$destination"
+  tar -xzf "$archive" --strip-components=1 -C "$destination"
+}
+
 FFMPEG_SRC="$WORK_DIR/ffmpeg-${FFMPEG_REF}"
 X264_SRC="$WORK_DIR/x264-${X264_COMMIT:0:12}"
 EMSCRIPTEN_SRC="$WORK_DIR/emscripten-${EMSCRIPTEN_REF}"
 LIBWEBP_SRC="$WORK_DIR/libwebp-${LIBWEBP_REF}"
 LIBVPX_SRC="$WORK_DIR/libvpx-${LIBVPX_REF}"
 LIBOPUS_SRC="$WORK_DIR/opus-${LIBOPUS_REF}"
+LAME_SRC="$WORK_DIR/lame-${LAME_VERSION}"
 fetch_exact "FFmpeg" "$FFMPEG_REPOSITORY" "" "$FFMPEG_COMMIT" "$FFMPEG_SRC"
 fetch_exact "x264" "$X264_REPOSITORY" "$X264_FALLBACK_REPOSITORY" "$X264_COMMIT" "$X264_SRC"
 fetch_exact "Emscripten" "$EMSCRIPTEN_REPOSITORY" "" "$EMSCRIPTEN_COMMIT" "$EMSCRIPTEN_SRC"
 fetch_exact "libwebp" "$LIBWEBP_REPOSITORY" "$LIBWEBP_FALLBACK_REPOSITORY" "$LIBWEBP_COMMIT" "$LIBWEBP_SRC"
 fetch_exact "libvpx" "$LIBVPX_REPOSITORY" "$LIBVPX_FALLBACK_REPOSITORY" "$LIBVPX_COMMIT" "$LIBVPX_SRC"
 fetch_exact "Opus" "$LIBOPUS_REPOSITORY" "$LIBOPUS_FALLBACK_REPOSITORY" "$LIBOPUS_COMMIT" "$LIBOPUS_SRC"
+fetch_archive "LAME-$LAME_VERSION" "$LAME_SOURCE_URL" "$LAME_SHA256" "$LAME_SRC"
 
 [[ -s "$FFMPEG_SRC/LICENSE.md" ]] || fail "FFmpeg LICENSE.md missing from source checkout"
 [[ -s "$FFMPEG_SRC/COPYING.GPLv2" ]] || fail "FFmpeg COPYING.GPLv2 missing from source checkout"
@@ -103,12 +119,13 @@ fetch_exact "Opus" "$LIBOPUS_REPOSITORY" "$LIBOPUS_FALLBACK_REPOSITORY" "$LIBOPU
 [[ -s "$LIBWEBP_SRC/COPYING" ]] || fail "libwebp COPYING missing from source checkout"
 [[ -s "$LIBVPX_SRC/LICENSE" ]] || fail "libvpx LICENSE missing from source checkout"
 [[ -s "$LIBOPUS_SRC/COPYING" ]] || fail "Opus COPYING missing from source checkout"
+[[ -s "$LAME_SRC/COPYING" ]] || fail "LAME COPYING missing from source archive"
 
 write_buildinfo() {
   local profile="$1"
   local variant="$2"
   local output="$3"
-  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_FREETYPE=0 PROFILE_USE_HARFBUZZ=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
+  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_FREETYPE=0 PROFILE_USE_HARFBUZZ=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBMP3LAME=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
   local -a PROFILE_REQUIRED_CONFIG=() PROFILE_LINK_LIBS=()
   # shellcheck disable=SC1090
   source "$ROOT/profiles/$profile/profile.env"
@@ -138,6 +155,7 @@ write_buildinfo() {
     echo "HarfBuzz system port linked into this profile: $([[ "$PROFILE_USE_HARFBUZZ" == "1" ]] && echo yes || echo no)"
     echo "libvpx linked into this profile: $([[ "$PROFILE_USE_LIBVPX" == "1" ]] && echo yes || echo no)"
     echo "Opus linked into this profile: $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo yes || echo no)"
+    echo "LAME/libmp3lame linked into this profile: $([[ "$PROFILE_USE_LIBMP3LAME" == "1" ]] && echo yes || echo no)"
     echo "libwebp linked into this profile: $([[ "$PROFILE_USE_LIBWEBP" == "1" ]] && echo yes || echo no)"
     echo "WORKERFS input enabled: $([[ "$PROFILE_USE_WORKERFS" == "1" ]] && echo yes || echo no)"
     echo
@@ -169,6 +187,10 @@ write_buildinfo() {
     echo "Opus commit: $LIBOPUS_COMMIT"
     echo "Opus repository: $LIBOPUS_REPOSITORY"
     echo "Opus fallback repository: $LIBOPUS_FALLBACK_REPOSITORY"
+    echo
+    echo "LAME version: $LAME_VERSION"
+    echo "LAME source URL: $LAME_SOURCE_URL"
+    echo "LAME source SHA-256: $LAME_SHA256"
     echo
     echo "FFmpeg base configure arguments:"
     cat <<'ARGS'
@@ -269,7 +291,7 @@ make_binary_zip() {
   local buildinfo="$3"
   local DIST
   DIST="$(profile_dist "$profile" "$variant")"
-  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_FREETYPE=0 PROFILE_USE_HARFBUZZ=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
+  local PROFILE_DISPLAY_NAME="" PROFILE_USE_X264=0 PROFILE_USE_ZLIB=0 PROFILE_USE_FREETYPE=0 PROFILE_USE_HARFBUZZ=0 PROFILE_USE_LIBVPX=0 PROFILE_USE_LIBOPUS=0 PROFILE_USE_LIBMP3LAME=0 PROFILE_USE_LIBWEBP=0 PROFILE_USE_WORKERFS=0 PROFILE_BINARY_LICENSE="" PROFILE_OUTPUT_DESCRIPTION="" PROFILE_CAPABILITIES_JSON="" PROFILE_THREADING_VARIANTS="single-thread" PROFILE_PTHREAD_POOL_SIZE=8 PROFILE_DECODER_THREAD_COUNT=2 PROFILE_ENCODER_THREAD_COUNT=4 PROFILE_X264_LOOKAHEAD_THREAD_COUNT=1
   local -a PROFILE_REQUIRED_CONFIG=() PROFILE_LINK_LIBS=()
   local suffix=""
   [[ -d "$ROOT/dist/$profile/$variant" ]] && suffix="-$variant"
@@ -303,6 +325,9 @@ make_binary_zip() {
   fi
   if [[ "$PROFILE_USE_LIBOPUS" == "1" ]]; then
     cp "$LIBOPUS_SRC/COPYING" "$binary_dir/LICENSES/Opus-COPYING"
+  fi
+  if [[ "$PROFILE_USE_LIBMP3LAME" == "1" ]]; then
+    cp "$LAME_SRC/COPYING" "$binary_dir/LICENSES/LAME-COPYING"
   fi
   if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
     cp "$LIBWEBP_SRC/COPYING" "$binary_dir/LICENSES/libwebp-COPYING"
@@ -347,6 +372,7 @@ mv "$EMSCRIPTEN_SRC" "$SOURCE_ROOT/emscripten-${EMSCRIPTEN_REF}"
 mv "$LIBWEBP_SRC" "$SOURCE_ROOT/libwebp-${LIBWEBP_REF}"
 mv "$LIBVPX_SRC" "$SOURCE_ROOT/libvpx-${LIBVPX_REF}"
 mv "$LIBOPUS_SRC" "$SOURCE_ROOT/opus-${LIBOPUS_REF}"
+mv "$LAME_SRC" "$SOURCE_ROOT/lame-${LAME_VERSION}"
 cp "$RELEASE_DIR"/BUILDINFO-*.txt "$SOURCE_ROOT/"
 
 BUILDER_COPY="$SOURCE_ROOT/builder-v${BUILDER_VERSION}"
@@ -370,6 +396,7 @@ This archive contains:
 - exact libwebp source at $LIBWEBP_COMMIT (used by animated-WebP profile)
 - exact libvpx source at $LIBVPX_COMMIT (used by video-compressor VP9 output)
 - exact Opus source at $LIBOPUS_COMMIT (used by video-compressor WebM audio)
+- exact LAME source version $LAME_VERSION verified by SHA-256 $LAME_SHA256 (used by Video Audio Extractor MP3 output)
 - the FFmpeg WASM Builder recipe at version $BUILDER_VERSION
 - profile-specific BUILDINFO files
 
