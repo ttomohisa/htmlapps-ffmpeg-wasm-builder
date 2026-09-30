@@ -49,6 +49,16 @@ require_libopus_env() {
   : "${SRC_DIR:?}"
 }
 
+require_lame_env() {
+  : "${EMSDK_VERSION:?}"
+  : "${EMSCRIPTEN_COMMIT:?}"
+  : "${LAME_REF:?}"
+  : "${LAME_URL:?}"
+  : "${LAME_SHA256:?}"
+  : "${INSTALL_DIR:?}"
+  : "${SRC_DIR:?}"
+}
+
 require_ffmpeg_env() {
   : "${EMSDK_VERSION:?}"
   : "${EMSCRIPTEN_COMMIT:?}"
@@ -63,6 +73,7 @@ require_build_env() {
   require_libwebp_env
   require_libvpx_env
   require_libopus_env
+  require_lame_env
   require_ffmpeg_env
   : "${BUILDER_VERSION:?}"
   : "${PROFILE:?}"
@@ -194,6 +205,7 @@ print_toolchain() {
   printf 'libwebp ref:    %s (%s)\n' "${LIBWEBP_REF:-n/a}" "${LIBWEBP_COMMIT:-n/a}"
   printf 'libvpx ref:     %s (%s)\n' "${LIBVPX_REF:-n/a}" "${LIBVPX_COMMIT:-n/a}"
   printf 'libopus ref:    %s (%s)\n' "${LIBOPUS_REF:-n/a}" "${LIBOPUS_COMMIT:-n/a}"
+  printf 'LAME ref:       %s (%s)\n' "${LAME_REF:-n/a}" "${LAME_SHA256:-n/a}"
   printf 'Profile:        %s\n' "${PROFILE:-n/a}"
 }
 
