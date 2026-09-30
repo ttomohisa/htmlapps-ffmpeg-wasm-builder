@@ -1,11 +1,10 @@
-# Phase 2 Video Audio Extractor profile.
+# Phase 3 Video Audio Extractor profile.
 # Inspect and copy compressed audio packets only: no decode, encode, filters,
 # swscale, swresample, or external codec libraries are linked.
 --enable-small
 --disable-everything
 --disable-avfilter
 --disable-swscale
---disable-swresample
 --enable-demuxer=mov
 --enable-demuxer=matroska
 --enable-demuxer=avi
@@ -17,9 +16,18 @@
 --enable-parser=aac
 --enable-parser=aac_latm
 --enable-parser=opus
+--enable-decoder=aac
+--enable-decoder=alac
+--enable-decoder=mp3
+--enable-decoder=opus
+--enable-decoder=vorbis
+--enable-decoder=flac
+--enable-encoder=aac
+--enable-encoder=pcm_s16le
 --enable-muxer=ipod
 --enable-muxer=ogg
 --enable-muxer=mp3
 --enable-muxer=flac
+--enable-muxer=wav
 --enable-bsf=aac_adtstoasc
 --enable-protocol=file
