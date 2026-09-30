@@ -1,6 +1,6 @@
 # Video Audio Extractor profile
 
-Phase 1 profile for Browser Kitty's Video Audio Extractor.
+Phase 2 compatibility profile for Browser Kitty's Video Audio Extractor.
 
 The runner has two operations:
 
@@ -14,10 +14,15 @@ Input `File` / `Blob` data is mounted with WORKERFS, so the browser does not cop
 | source codec | output |
 |---|---|
 | AAC | M4A |
+| ALAC | M4A |
+| MP3 | MP3 |
 | Opus | OPUS |
+| Vorbis | OGG |
+| FLAC | FLAC |
+| AC-3 | AC3 |
+| E-AC-3 | EAC3 |
+| PCM signed 16-bit little-endian | WAV |
 
-This Phase 1 matrix intentionally includes only combinations covered by the real-browser smoke test. ALAC, MP3, Vorbis, FLAC, PCM, AC-3 and E-AC-3 are deferred until their compatibility tests are added in the later compatibility phase.
+Every row in this Phase 2 matrix is covered by the real-browser smoke test. The runner rejects codecs outside the tested matrix instead of guessing a container. MPEG-TS/raw ADTS AAC -> M4A uses FFmpeg's `aac_adtstoasc` bitstream filter.
 
-The runner rejects codecs outside this matrix instead of guessing a container. MPEG-TS/raw ADTS AAC -> M4A uses FFmpeg's `aac_adtstoasc` bitstream filter.
-
-No decoder, encoder, libavfilter, libswscale, libswresample, x264, or GPL-only component is enabled in this Phase 1 profile.
+No decoder, encoder, libavfilter, libswscale, libswresample, x264, or GPL-only component is enabled in this Phase 2 profile.
