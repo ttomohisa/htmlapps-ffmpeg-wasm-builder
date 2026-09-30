@@ -106,6 +106,14 @@ fi
 if [[ "$PROFILE_USE_LIBOPUS" == "0" ]] && grep -q '^CONFIG_LIBOPUS=yes$' ffbuild/config.mak; then
   fail "Profile $PROFILE must not enable libopus"
 fi
+if [[ "$PROFILE_USE_LAME" == "1" ]]; then
+  grep -q '^CONFIG_LIBMP3LAME_ENCODER=yes$' ffbuild/config.mak \
+    || fail "Profile $PROFILE requires libmp3lame, but FFmpeg configure did not enable it"
+else
+  if grep -q '^CONFIG_LIBMP3LAME_ENCODER=yes$' ffbuild/config.mak; then
+    fail "Profile $PROFILE unexpectedly enabled libmp3lame"
+  fi
+fi
 if [[ "$PROFILE_USE_ZLIB" == "1" ]]; then
   grep -q '^CONFIG_ZLIB=yes$' ffbuild/config.mak \
     || fail "Profile $PROFILE requires zlib, but FFmpeg configure did not enable it"
@@ -142,6 +150,10 @@ fi
 if [[ "$PROFILE_USE_LIBOPUS" == "1" ]]; then
   [[ -s "$INSTALL_DIR/lib/libopus.a" ]] || fail "Profile requires Opus but libopus.a is missing"
   link_inputs+=("$INSTALL_DIR/lib/libopus.a")
+fi
+if [[ "$PROFILE_USE_LAME" == "1" ]]; then
+  [[ -s "$INSTALL_DIR/lib/libmp3lame.a" ]] || fail "Profile requires LAME but libmp3lame.a is missing"
+  link_inputs+=("$INSTALL_DIR/lib/libmp3lame.a")
 fi
 if [[ "$PROFILE_USE_LIBWEBP" == "1" ]]; then
   for lib in libwebpmux.a libwebp.a libsharpyuv.a; do
@@ -248,7 +260,10 @@ cat > "$OUT_DIR/manifest.json" <<EOF_JSON
     "libvpxLinked": $([[ "$PROFILE_USE_LIBVPX" == "1" ]] && echo true || echo false),
     "libopusRef": "$LIBOPUS_REF",
     "libopusCommit": "$LIBOPUS_COMMIT",
-    "libopusLinked": $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo true || echo false)
+    "libopusLinked": $([[ "$PROFILE_USE_LIBOPUS" == "1" ]] && echo true || echo false),
+    "lameRef": "$LAME_REF",
+    "lameSha256": "$LAME_SHA256",
+    "libmp3lameLinked": $([[ "$PROFILE_USE_LAME" == "1" ]] && echo true || echo false)
   },
   "runtime": {
     "frontend": "public-libav-runner",

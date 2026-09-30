@@ -351,7 +351,7 @@
       throw new RangeError("Video Audio Extractor streamIndex must be a non-negative integer.");
     }
     const format = String(options.format || "").toLowerCase();
-    if (!["m4a", "wav"].includes(format)) {
+    if (!["m4a", "wav", "mp3"].includes(format)) {
       throw new RangeError("Video Audio Extractor transcode format is not supported.");
     }
     const args = [
@@ -366,6 +366,18 @@
         throw new RangeError("Video Audio Extractor AAC bitrate must be 128, 192, or 256 kbps.");
       }
       args.splice(args.length - 2, 0, "--bitrate-kbps", String(bitrateKbps));
+    } else if (format === "mp3") {
+      const bitrateKbps = Number(options.bitrateKbps ?? 192);
+      if (![128, 192, 256, 320].includes(bitrateKbps)) {
+        throw new RangeError("Video Audio Extractor MP3 bitrate must be 128, 192, 256, or 320 kbps.");
+      }
+      const channelMode = String(options.channelMode || "stereo").toLowerCase();
+      if (!["mono", "stereo"].includes(channelMode)) {
+        throw new RangeError("Video Audio Extractor MP3 channel mode must be mono or stereo.");
+      }
+      args.splice(args.length - 2, 0,
+        "--bitrate-kbps", String(bitrateKbps),
+        "--channels", channelMode === "mono" ? "1" : "2");
     }
     return args;
   };

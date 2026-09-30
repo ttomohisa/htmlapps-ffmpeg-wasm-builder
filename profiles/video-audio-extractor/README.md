@@ -1,6 +1,6 @@
 # Video Audio Extractor profile
 
-Phase 3 profile for Browser Kitty's Video Audio Extractor.
+Phase 4 profile for Browser Kitty's Video Audio Extractor.
 
 The runner has two operations:
 
@@ -28,7 +28,8 @@ Every row in this stream-copy matrix is covered by the real-browser smoke test. 
 |---|---|
 | M4A | FFmpeg native AAC at 128 / 192 / 256 kbps |
 | WAV | PCM signed 16-bit little-endian |
+| MP3 | LAME 4.0 at 128 / 192 / 256 / 320 kbps; mono or stereo |
 
-Phase 3 enables decoders for AAC, ALAC, MP3, Opus, Vorbis and FLAC, then uses libswresample to adapt decoded audio to the selected encoder while preserving the selected track only. The real-browser smoke test covers Opus -> AAC/M4A at 192 kbps and AAC -> PCM16/WAV, then re-inspects both outputs.
+Phase 4 keeps the Phase 3 decoder/resampler path and adds the pinned LAME 4.0 `libmp3lame` library for MP3 output. The real-browser smoke test covers all four MP3 bitrates in stereo plus a mono case, and re-inspects the generated MP3 outputs.
 
-No video decoder/encoder, libavfilter, libswscale, x264, external audio codec library, or GPL-only component is enabled.
+No video decoder/encoder, libavfilter, libswscale, x264, LAME frontend/decoder, or GPL-only FFmpeg component is enabled. Only libmp3lame is linked for MP3 encoding.

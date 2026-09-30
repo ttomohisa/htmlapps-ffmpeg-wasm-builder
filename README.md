@@ -1,8 +1,8 @@
 # FFmpeg WASM Builder
 
-## Video Audio Extractor Phase 3 transcoding
+## Video Audio Extractor Phase 4 MP3
 
-`video-audio-extractor` keeps the Phase 2 stream-copy matrix and adds Phase 3 audio-only transcoding: native AAC/M4A at 128 / 192 / 256 kbps and PCM16/WAV. Decoding is limited to AAC, ALAC, MP3, Opus, Vorbis and FLAC; libswresample performs sample-format/rate/layout conversion. Input continues to use WORKERFS. The profile is included in PR browser CI but is not part of the v1.9.9 tagged release asset set.
+`video-audio-extractor` keeps the stream-copy and M4A/WAV paths and adds Phase 4 MP3 encoding through the pinned LAME 4.0 libmp3lame library. MP3 output supports 128 / 192 / 256 / 320 kbps and mono/stereo. Decoding remains limited to AAC, ALAC, MP3, Opus, Vorbis and FLAC; libswresample handles sample conversion. Input continues to use WORKERFS. The profile is included in PR browser CI but is not part of the v1.9.9 tagged release asset set.
 
 Browser apps use `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` and `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)`. The smoke test also keeps MKV multi-audio metadata/selection, MPEG-TS AAC -> M4A, and video-only coverage. AC-3, E-AC-3, and PCM/WAV remain deferred until dedicated browser compatibility cases are added.
 
