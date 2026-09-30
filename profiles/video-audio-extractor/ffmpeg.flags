@@ -1,6 +1,6 @@
-# Phase 3 Video Audio Extractor profile.
+# Phase 4 Video Audio Extractor profile.
 # Inspect/copy audio packets or transcode one selected audio track.
-# No video decode/encode, filters, swscale, x264, or external audio codec library is linked.
+# No video decode/encode, filters, swscale, or x264 is linked. LAME is linked only for MP3 encoding.
 --enable-small
 --disable-everything
 --disable-avfilter
@@ -25,6 +25,8 @@
 --enable-decoder=flac
 --enable-encoder=aac
 --enable-encoder=pcm_s16le
+--enable-libmp3lame
+--enable-encoder=libmp3lame
 --enable-muxer=ipod
 --enable-muxer=ogg
 --enable-muxer=mp3
