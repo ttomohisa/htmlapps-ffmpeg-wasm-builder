@@ -12,8 +12,9 @@ source "$ROOT/versions.env"
 PROFILE_USE_X264="$(grep '^PROFILE_USE_X264=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
 PROFILE_USE_LIBVPX="$(grep '^PROFILE_USE_LIBVPX=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]' || true)"; PROFILE_USE_LIBVPX="${PROFILE_USE_LIBVPX:-0}"
 PROFILE_USE_LIBOPUS="$(grep '^PROFILE_USE_LIBOPUS=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]' || true)"; PROFILE_USE_LIBOPUS="${PROFILE_USE_LIBOPUS:-0}"
+PROFILE_USE_LIBMP3LAME="$(grep '^PROFILE_USE_LIBMP3LAME=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]' || true)"; PROFILE_USE_LIBMP3LAME="${PROFILE_USE_LIBMP3LAME:-0}"
 PROFILE_USE_LIBWEBP="$(grep '^PROFILE_USE_LIBWEBP=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
-for item in PROFILE_USE_X264 PROFILE_USE_LIBVPX PROFILE_USE_LIBOPUS PROFILE_USE_LIBWEBP; do
+for item in PROFILE_USE_X264 PROFILE_USE_LIBVPX PROFILE_USE_LIBOPUS PROFILE_USE_LIBMP3LAME PROFILE_USE_LIBWEBP; do
   value="${!item}"
   [[ "$value" == "0" || "$value" == "1" ]] || { echo "Invalid $item in profiles/$PROFILE/profile.env" >&2; exit 1; }
 done
@@ -27,7 +28,9 @@ for variant in "${THREADING_LIST[@]}"; do
 done
 IS_DUAL=0; [[ "${#THREADING_LIST[@]}" -gt 1 ]] && IS_DUAL=1
 
-if [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBVPX" == "1" && "$PROFILE_USE_LIBOPUS" == "1" && "$PROFILE_USE_LIBWEBP" == "0" ]]; then
+if [[ "$PROFILE_USE_LIBMP3LAME" == "1" && "$PROFILE_USE_X264" == "0" && "$PROFILE_USE_LIBWEBP" == "0" && "$PROFILE_USE_LIBVPX" == "0" && "$PROFILE_USE_LIBOPUS" == "0" ]]; then
+  EXPORT_TARGET="export-with-libmp3lame"
+elif [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBVPX" == "1" && "$PROFILE_USE_LIBOPUS" == "1" && "$PROFILE_USE_LIBWEBP" == "0" && "$PROFILE_USE_LIBMP3LAME" == "0" ]]; then
   EXPORT_TARGET="export-with-video-codecs"
 elif [[ "$PROFILE_USE_X264" == "1" && "$PROFILE_USE_LIBWEBP" == "1" ]]; then
   echo "Profiles cannot currently link x264 and libwebp together." >&2; exit 1
@@ -82,6 +85,9 @@ for THREADING_MODE in "${THREADING_LIST[@]}"; do
     --build-arg "LIBOPUS_FALLBACK_REPOSITORY=$LIBOPUS_FALLBACK_REPOSITORY" \
     --build-arg "LIBOPUS_REF=$LIBOPUS_REF" \
     --build-arg "LIBOPUS_COMMIT=$LIBOPUS_COMMIT" \
+    --build-arg "LIBMP3LAME_VERSION=$LIBMP3LAME_VERSION" \
+    --build-arg "LIBMP3LAME_URL=$LIBMP3LAME_URL" \
+    --build-arg "LIBMP3LAME_SHA256=$LIBMP3LAME_SHA256" \
     --build-arg "PROFILE=$PROFILE" \
     --build-arg "THREADING_MODE=$THREADING_MODE" \
     --output "type=local,dest=$OUT_DIR" \

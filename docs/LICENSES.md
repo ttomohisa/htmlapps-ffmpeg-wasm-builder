@@ -9,3 +9,8 @@ The `ffmpeg-filter-builder` profile also links the zlib system port from the pin
 Every tagged release keeps binary artifacts, profile-specific build information, upstream notices, and the exact corresponding-source archive in the same GitHub Release. See `THIRD_PARTY_NOTICES.md` for the component summary.
 
 This documentation is an engineering packaging policy, not legal advice.
+
+
+## LAME / Video Audio Extractor MP3
+
+The Video Audio Extractor Phase 4 profile links the pinned LAME 4.0 static encoder library only for MP3 output. The source tarball URL and SHA-256 are recorded in `versions.env`; the build verifies the checksum before compiling. The LAME frontend and decoder are disabled. LAME is LGPL-licensed, so this does not change the profile's FFmpeg LGPL-2.1-or-later classification. Release packaging must include the corresponding pinned LAME source and its license notice before this profile is published as a tagged Builder asset.

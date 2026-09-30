@@ -30,7 +30,7 @@
 #include <libswresample/swresample.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.2.0"
+#define RUNNER_VERSION "1.3.0"
 #define REPORT_SCHEMA_VERSION 1
 
 typedef enum RunnerOperation {
@@ -46,6 +46,7 @@ typedef struct RunnerOptions {
     const char *copy_format;
     const char *transcode_format;
     int bitrate_kbps;
+    int channels;
     int audio_stream_index;
     RunnerOperation operation;
 } RunnerOptions;
@@ -63,7 +64,7 @@ static void usage(const char *program)
         "Usage:\n"
         "  %s --input INPUT --inspect-output REPORT.json\n"
         "  %s --input INPUT --audio-stream INDEX --copy-format FORMAT --output OUTPUT\n"
-        "  %s --input INPUT --audio-stream INDEX --transcode-format m4a|wav [--bitrate-kbps 128|192|256] --output OUTPUT\n",
+        "  %s --input INPUT --audio-stream INDEX --transcode-format m4a|wav|mp3 [--bitrate-kbps N] [--channels 1|2] --output OUTPUT\n",
         RUNNER_VERSION, program, program, program);
 }
 
@@ -124,6 +125,9 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
             options->transcode_format = value;
         } else if (!strcmp(arg, "--bitrate-kbps")) {
             if (parse_index(value, &options->bitrate_kbps) < 0)
+                return AVERROR(EINVAL);
+        } else if (!strcmp(arg, "--channels")) {
+            if (parse_index(value, &options->channels) < 0)
                 return AVERROR(EINVAL);
         } else if (!strcmp(arg, "--output")) options->output_path = value;
         else {
@@ -326,7 +330,7 @@ static int write_report(FILE *out, AVFormatContext *format)
         json_string(out, can_copy ? target.format : NULL);
         fputs(",\"extension\":", out);
         json_string(out, can_copy ? target.extension : NULL);
-        fprintf(out, "},\"transcode\":{\"supported\":%s,\"formats\":[\"m4a\",\"wav\"]}}",
+        fprintf(out, "},\"transcode\":{\"supported\":%s,\"formats\":[\"m4a\",\"wav\",\"mp3\"]}}",
                 transcode_source_supported(par->codec_id) ? "true" : "false");
     }
     fputs("]}\n", out);
@@ -1068,6 +1072,7 @@ static int transcode_audio(const RunnerOptions *options)
     enum AVCodecID encoder_id;
     const char *muxer;
     int bitrate_kbps = options->bitrate_kbps;
+    int output_channels = options->channels;
     double last_progress = -1;
     int64_t next_pts = 0;
     int header_written = 0;
@@ -1080,9 +1085,20 @@ static int transcode_audio(const RunnerOptions *options)
         if (!bitrate_kbps) bitrate_kbps = 192;
         if (bitrate_kbps != 128 && bitrate_kbps != 192 && bitrate_kbps != 256)
             return AVERROR(EINVAL);
+        if (output_channels) return AVERROR(EINVAL);
     } else if (!strcmp(options->transcode_format, "wav")) {
         encoder_id = AV_CODEC_ID_PCM_S16LE;
         muxer = "wav";
+        if (bitrate_kbps || output_channels) return AVERROR(EINVAL);
+    } else if (!strcmp(options->transcode_format, "mp3")) {
+        encoder_id = AV_CODEC_ID_MP3;
+        muxer = "mp3";
+        if (!bitrate_kbps) bitrate_kbps = 192;
+        if (bitrate_kbps != 128 && bitrate_kbps != 192 &&
+            bitrate_kbps != 256 && bitrate_kbps != 320)
+            return AVERROR(EINVAL);
+        if (output_channels && output_channels != 1 && output_channels != 2)
+            return AVERROR(EINVAL);
     } else {
         return AVERROR(EINVAL);
     }
@@ -1120,7 +1136,9 @@ static int transcode_audio(const RunnerOptions *options)
     ret = avcodec_open2(decoder, decoder_codec, NULL);
     if (ret < 0) goto end;
 
-    encoder_codec = avcodec_find_encoder(encoder_id);
+    encoder_codec = !strcmp(options->transcode_format, "mp3")
+        ? avcodec_find_encoder_by_name("libmp3lame")
+        : avcodec_find_encoder(encoder_id);
     if (!encoder_codec) {
         ret = AVERROR_ENCODER_NOT_FOUND;
         goto end;
@@ -1151,12 +1169,17 @@ static int transcode_audio(const RunnerOptions *options)
     encoder->time_base = (AVRational){1, encoder->sample_rate};
     encoder->thread_count = 1;
     encoder->thread_type = 0;
-    if (encoder_id == AV_CODEC_ID_AAC)
+    if (encoder_id == AV_CODEC_ID_AAC || !strcmp(options->transcode_format, "mp3"))
         encoder->bit_rate = (int64_t)bitrate_kbps * 1000;
 
-    if (decoder->ch_layout.nb_channels > 0)
+    if (!strcmp(options->transcode_format, "mp3")) {
+        if (!output_channels)
+            output_channels = decoder->ch_layout.nb_channels == 1 ? 1 : 2;
+        av_channel_layout_default(&encoder->ch_layout, output_channels);
+        ret = 0;
+    } else if (decoder->ch_layout.nb_channels > 0) {
         ret = av_channel_layout_copy(&encoder->ch_layout, &decoder->ch_layout);
-    else {
+    } else {
         av_channel_layout_default(&encoder->ch_layout, 2);
         ret = 0;
     }
