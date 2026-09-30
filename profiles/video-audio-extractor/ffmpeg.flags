@@ -21,8 +21,5 @@
 --enable-muxer=ogg
 --enable-muxer=mp3
 --enable-muxer=flac
---enable-muxer=ac3
---enable-muxer=eac3
---enable-muxer=wav
 --enable-bsf=aac_adtstoasc
 --enable-protocol=file
