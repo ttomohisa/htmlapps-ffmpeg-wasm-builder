@@ -27,7 +27,11 @@ For embedded MT use, `BrowserFFmpeg.loadEmbedded(...)` accepts `threading: "mult
 
 ## Public releases
 
-A v1.9.7 tag rebuilds and smoke-tests the existing seven ST profiles plus both FFmpeg Filter Builder variants. The release publishes separate `ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip` and `ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip` assets, BUILDINFO files, SHA-256 checksums, and one exact corresponding-source archive.
+v1.10.0 adds **Video Audio Extractor** to the tagged release set. The tag workflow rebuilds and real-browser smoke-tests every release profile before publishing.
+
+The release includes `ffmpeg-wasm-video-audio-extractor-v1.10.0.zip`, its `BUILDINFO-video-audio-extractor.txt`, `SHA256SUMS.txt`, the existing profile ZIPs, both FFmpeg Filter Builder variants, and one exact corresponding-source archive. The extractor bundle carries the applicable LAME 4.0 notice, and the source archive includes the SHA-256-verified LAME source used for MP3 encoding.
+
+Production consumers should pin the exact v1.10.0 profile asset and SHA-256 rather than using `latest`.
 
 ## Licensing
 
