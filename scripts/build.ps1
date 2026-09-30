@@ -54,7 +54,8 @@ $required = @(
   "X264_REPOSITORY", "X264_FALLBACK_REPOSITORY", "X264_REF", "X264_COMMIT",
   "LIBWEBP_REPOSITORY", "LIBWEBP_FALLBACK_REPOSITORY", "LIBWEBP_REF", "LIBWEBP_COMMIT",
   "LIBVPX_REPOSITORY", "LIBVPX_FALLBACK_REPOSITORY", "LIBVPX_REF", "LIBVPX_COMMIT",
-  "LIBOPUS_REPOSITORY", "LIBOPUS_FALLBACK_REPOSITORY", "LIBOPUS_REF", "LIBOPUS_COMMIT"
+  "LIBOPUS_REPOSITORY", "LIBOPUS_FALLBACK_REPOSITORY", "LIBOPUS_REF", "LIBOPUS_COMMIT",
+  "LIBMP3LAME_VERSION", "LIBMP3LAME_URL", "LIBMP3LAME_SHA256"
 )
 foreach ($name in $required) {
   if (-not $values.ContainsKey($name) -or [string]::IsNullOrWhiteSpace($values[$name])) {
@@ -82,6 +83,7 @@ $UseX264 = Read-BoolSetting "PROFILE_USE_X264" $true
 $UseLibwebp = Read-BoolSetting "PROFILE_USE_LIBWEBP" $true
 $UseLibvpx = Read-BoolSetting "PROFILE_USE_LIBVPX"
 $UseLibopus = Read-BoolSetting "PROFILE_USE_LIBOPUS"
+$UseLibmp3lame = Read-BoolSetting "PROFILE_USE_LIBMP3LAME"
 if ($UseX264 -and $UseLibwebp) { throw "Profiles cannot currently link x264 and libwebp together." }
 
 $threadingMatch = [regex]::Match($profileConfigText, '(?m)^PROFILE_THREADING_VARIANTS="([^"]+)"\s*$')
@@ -94,7 +96,9 @@ foreach ($variant in $threadingVariants) {
 $threadingVariants = @($threadingVariants | Select-Object -Unique)
 $isDual = $threadingVariants.Count -gt 1
 
-$ExportTarget = if ($UseX264 -and $UseLibvpx -and $UseLibopus -and -not $UseLibwebp) {
+$ExportTarget = if ($UseLibmp3lame -and -not $UseX264 -and -not $UseLibwebp -and -not $UseLibvpx -and -not $UseLibopus) {
+  "export-with-libmp3lame"
+} elseif ($UseX264 -and $UseLibvpx -and $UseLibopus -and -not $UseLibwebp -and -not $UseLibmp3lame) {
   "export-with-video-codecs"
 } elseif ($UseX264) {
   "export-with-x264"
@@ -137,6 +141,9 @@ foreach ($Threading in $threadingVariants) {
     "--build-arg", "LIBOPUS_FALLBACK_REPOSITORY=$($values['LIBOPUS_FALLBACK_REPOSITORY'])",
     "--build-arg", "LIBOPUS_REF=$($values['LIBOPUS_REF'])",
     "--build-arg", "LIBOPUS_COMMIT=$($values['LIBOPUS_COMMIT'])",
+    "--build-arg", "LIBMP3LAME_VERSION=$($values['LIBMP3LAME_VERSION'])",
+    "--build-arg", "LIBMP3LAME_URL=$($values['LIBMP3LAME_URL'])",
+    "--build-arg", "LIBMP3LAME_SHA256=$($values['LIBMP3LAME_SHA256'])",
     "--build-arg", "PROFILE=$Profile",
     "--build-arg", "THREADING_MODE=$Threading",
     "--output", "type=local,dest=$OutDir",
