@@ -1,8 +1,8 @@
 # FFmpeg WASM Builder
 
-## Development profile: Video Audio Extractor
+## Video Audio Extractor Phase 2 compatibility
 
-`video-audio-extractor` is a development profile for Browser Kitty. Phase 1 inventories audio tracks and stream-copies one selected compressed audio stream into an approved container without decoding or re-encoding. Large browser `File`/`Blob` inputs use WORKERFS. The profile runs in main/PR browser CI but is not yet included in the v1.9.9 tagged release asset set.
+`video-audio-extractor` is a development profile for Browser Kitty. Phase 2 keeps the decoder-free stream-copy design and expands the real-browser-tested matrix to AAC -> M4A, ALAC -> M4A, MP3 -> MP3, Opus -> OPUS, Vorbis -> OGG, and FLAC -> FLAC. Large browser `File`/`Blob` inputs use WORKERFS. The profile runs in main/PR browser CI but is not yet included in the v1.9.9 tagged release asset set. AC-3, E-AC-3, and PCM/WAV remain deferred until dedicated browser compatibility cases are added.
 
 ## v1.9.8 Filter Builder drawtext
 

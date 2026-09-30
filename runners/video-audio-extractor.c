@@ -1,7 +1,7 @@
 /*
  * FFmpeg WASM Builder - Video Audio Extractor runner.
  *
- * Phase 1 uses public libavformat/libavcodec APIs to inspect streams and copy
+ * Phase 2 uses public libavformat/libavcodec APIs to inspect streams and copy
  * one selected compressed audio stream into an approved audio container.
  * No decoder, encoder, filter, swscale, or swresample stage is used.
  */
@@ -26,7 +26,7 @@
 #include <libavutil/mathematics.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.0.0"
+#define RUNNER_VERSION "1.1.0"
 #define REPORT_SCHEMA_VERSION 1
 
 typedef enum RunnerOperation {
@@ -181,10 +181,20 @@ static int copy_target(enum AVCodecID id, CopyTarget *target)
     CopyTarget selected = {0};
     switch (id) {
     case AV_CODEC_ID_AAC:
+    case AV_CODEC_ID_ALAC:
         selected = (CopyTarget){"m4a", "m4a", "ipod"};
         break;
     case AV_CODEC_ID_OPUS:
         selected = (CopyTarget){"opus", "opus", "ogg"};
+        break;
+    case AV_CODEC_ID_VORBIS:
+        selected = (CopyTarget){"ogg", "ogg", "ogg"};
+        break;
+    case AV_CODEC_ID_MP3:
+        selected = (CopyTarget){"mp3", "mp3", "mp3"};
+        break;
+    case AV_CODEC_ID_FLAC:
+        selected = (CopyTarget){"flac", "flac", "flac"};
         break;
     default:
         break;

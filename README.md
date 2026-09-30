@@ -1,10 +1,10 @@
 # FFmpeg WASM Builder
 
-## Development profile: Video Audio Extractor
+## Video Audio Extractor Phase 2 compatibility
 
-`video-audio-extractor` is being developed for Browser Kitty's Video Audio Extractor. Phase 1 combines the lightweight inspection and stream-copy patterns already used by this Builder: it inventories audio tracks and can copy one selected compressed audio stream into an approved audio container without decoding or re-encoding. Input uses WORKERFS. The profile is included in main/PR browser CI but is not part of the v1.9.9 tagged release asset set.
+`video-audio-extractor` is being developed for Browser Kitty's Video Audio Extractor. Phase 2 keeps the decoder-free stream-copy design and expands the real-browser-tested matrix to AAC -> M4A, ALAC -> M4A, MP3 -> MP3, Opus -> OPUS, Vorbis -> OGG, and FLAC -> FLAC. Input uses WORKERFS. The profile is included in main/PR browser CI but is not part of the v1.9.9 tagged release asset set.
 
-Browser apps use `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` and `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)`. The Phase 1 smoke test covers MP4/AAC -> M4A, WebM/Opus, MKV multi-audio metadata/selection, MPEG-TS AAC -> M4A, and video-only input.
+Browser apps use `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` and `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)`. The smoke test also keeps MKV multi-audio metadata/selection, MPEG-TS AAC -> M4A, and video-only coverage. AC-3, E-AC-3, and PCM/WAV remain deferred until dedicated browser compatibility cases are added.
 
 ## v1.9.9 Filter Builder multiple input
 
