@@ -9,9 +9,10 @@ Tagged releases fetch the exact revisions pinned in `versions.env` and package a
 - libwebp `COPYING` / `PATENTS` only for profiles that actually link libwebp
 - libvpx `LICENSE` / `PATENTS` only for profiles that actually link libvpx
 - Opus `COPYING` only for profiles that actually link libopus
+- LAME license/corresponding source only for profiles that actually link libmp3lame
 - Emscripten license, musl notice, and compiler-rt license
 - `Builder-MIT.txt`
 
-The same GitHub Release also contains `ffmpeg-wasm-sources-<version>.tar.gz` with the exact FFmpeg, x264, libwebp, libvpx, Opus, and Emscripten source revisions plus this Builder recipe.
+The same GitHub Release also contains `ffmpeg-wasm-sources-<version>.tar.gz` with the exact FFmpeg, x264, libwebp, libvpx, Opus, LAME, and Emscripten source revisions plus this Builder recipe.
 
 See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and [docs/LICENSES.md](../docs/LICENSES.md).

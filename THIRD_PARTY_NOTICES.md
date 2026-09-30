@@ -2,13 +2,13 @@
 
 This repository contains build/runtime glue written for **FFmpeg WASM Builder** and licensed under the root [MIT License](LICENSE), except where a source file carries an additional preserved notice.
 
-The repository does not vendor FFmpeg, x264, libwebp, or Emscripten source trees. Builds fetch exact upstream revisions recorded in `versions.env`. Tagged GitHub Releases include the matching upstream source revisions and the Builder recipe.
+The repository does not vendor FFmpeg, x264, libwebp, LAME, or Emscripten source trees. Builds fetch exact upstream revisions recorded in `versions.env`. Tagged GitHub Releases include the matching upstream source revisions and the Builder recipe.
 
 ## FFmpeg
 
 `video-compressor` and `video-speed-changer` pass `--enable-gpl` and link x264, so those generated cores are distributed under GPL-2.0-or-later. `lossless-video-cutter`, `media-inspector`, `video-audio-extractor` (development profile), `video-contact-sheet`, `video-to-gif`, and `video-to-webp` enable no GPL-only FFmpeg component and do not link x264, so their generated cores remain under FFmpeg's LGPL-2.1-or-later terms. The exact FFmpeg source revision and applicable license text are included with public releases.
 
-`runners/video-compressor.c` and `runners/video-speed-changer.c` preserve the MIT notice for FFmpeg's `doc/examples/transcode.c`-derived structure. The speed changer uses public libavfilter/libavformat/libavcodec APIs with `setpts` and chained `atempo`. `runners/lossless-video-cutter.c` uses the public remuxing pattern and public libav APIs; it does not decode or encode media. `runners/media-inspector.c` uses public libavformat/libavcodec/libavutil inspection APIs and emits a structured JSON report without decoding frames. `runners/video-audio-extractor.c` uses public libavformat/libavcodec packet and bitstream-filter APIs to inventory audio tracks and copy one selected compressed audio stream without decoding or encoding. `runners/video-contact-sheet.c` uses public libavformat/libavcodec/libswscale APIs to seek/decode selected frames and write an RGB PPM without linking an image encoder. `runners/video-to-animation-common.inc` uses public libavformat/libavcodec/libavfilter APIs for trim/fps/rotation/scale; the GIF profile performs `palettegen` then `paletteuse`, while the WebP profile uses FFmpeg's `libwebp_anim` wrapper. These browser input paths use Emscripten WORKERFS so File/Blob data can be read from a Worker without first copying the entire input into MEMFS.
+`runners/video-compressor.c` and `runners/video-speed-changer.c` preserve the MIT notice for FFmpeg's `doc/examples/transcode.c`-derived structure. The speed changer uses public libavfilter/libavformat/libavcodec APIs with `setpts` and chained `atempo`. `runners/lossless-video-cutter.c` uses the public remuxing pattern and public libav APIs; it does not decode or encode media. `runners/media-inspector.c` uses public libavformat/libavcodec/libavutil inspection APIs and emits a structured JSON report without decoding frames. `runners/video-audio-extractor.c` uses public libavformat/libavcodec APIs to inventory/copy one selected track and to transcode supported audio to AAC/M4A, PCM16/WAV, or MP3. `runners/video-contact-sheet.c` uses public libavformat/libavcodec/libswscale APIs to seek/decode selected frames and write an RGB PPM without linking an image encoder. `runners/video-to-animation-common.inc` uses public libavformat/libavcodec/libavfilter APIs for trim/fps/rotation/scale; the GIF profile performs `palettegen` then `paletteuse`, while the WebP profile uses FFmpeg's `libwebp_anim` wrapper. These browser input paths use Emscripten WORKERFS so File/Blob data can be read from a Worker without first copying the entire input into MEMFS.
 
 ## x264
 
@@ -20,6 +20,10 @@ The open-source x264 build used by the video-compressor profile is GPL-2.0-or-la
 
 libwebp is pinned in `versions.env` and linked only by `video-to-webp` (`PROFILE_USE_LIBWEBP=1`). The GIF and existing profiles keep `PROFILE_USE_LIBWEBP=0`, so libwebp does not contribute to their Wasm size. The release bundle for `video-to-webp` includes libwebp's `COPYING` and, when present, `PATENTS` notice files.
 
+
+## LAME
+
+LAME 4.0 is pinned by official SourceForge source tarball and SHA-256 in `versions.env`. It is linked only by `video-audio-extractor` for MP3 encoding through FFmpeg's `libmp3lame` wrapper. The profile remains free of GPL-only FFmpeg components and x264. LAME is distributed under the GNU Lesser General Public License; release bundles must carry the applicable upstream license/corresponding source.
 
 ## zlib
 

@@ -34,7 +34,7 @@ BUILDINFO-ffmpeg-filter-builder-multi-thread.txt
 SHA256SUMS.txt
 ```
 
-Each binary ZIP contains its generated core, runtime, manifest, profile-specific `BUILDINFO.txt`, and applicable license notices. The corresponding-source archive contains exact FFmpeg/x264/libvpx/Opus/libwebp/Emscripten source revisions plus the Builder recipe.
+Each binary ZIP contains its generated core, runtime, manifest, profile-specific `BUILDINFO.txt`, and applicable license notices. The corresponding-source archive contains exact FFmpeg/x264/libvpx/Opus/libwebp/Emscripten source revisions, the SHA-256-verified LAME 4.0 source archive, and the Builder recipe.
 
 ## Consuming release assets
 
