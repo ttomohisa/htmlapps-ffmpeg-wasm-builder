@@ -211,7 +211,7 @@ Download and verify the asset only at **app build time**. The generated app shou
 Keep a separate local-Builder import path for runner/profile development, and record its provenance so local builds cannot be mistaken for release artifacts.
 
 
-### v1.10.0 Filter Builder speed timestamp hardening
+### v1.9.7 Filter Builder speed timestamp hardening
 
 The Filter Builder runner now uses a minimum 90 kHz video filter/encoder time base. Decoded PTS values are rescaled into that clock before caller filters run, so accelerated `setpts` expressions such as `PTS/1.5` retain distinct timestamps and do not produce non-monotonic DTS at the MP4 muxer.
 
