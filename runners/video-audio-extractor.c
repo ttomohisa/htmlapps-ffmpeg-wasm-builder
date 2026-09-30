@@ -1011,8 +1011,9 @@ static int encode_audio_fifo(AVAudioFifo *fifo,
         int available = av_audio_fifo_size(fifo);
         int read_samples = FFMIN(available, frame_size);
         int send_samples = read_samples;
-        int can_short = (encoder->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) ||
-                        (encoder->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME) ||
+        int capabilities = encoder->codec ? encoder->codec->capabilities : 0;
+        int can_short = (capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) ||
+                        (capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME) ||
                         encoder->frame_size <= 0;
 
         if (read_samples < frame_size && !can_short)
