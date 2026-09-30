@@ -47,6 +47,7 @@ jobs:
           ./build.sh video-speed-changer
           ./build.sh lossless-video-cutter
           ./build.sh media-inspector
+          ./build.sh video-audio-extractor
           ./build.sh video-contact-sheet
           ./build.sh video-to-gif
           ./build.sh video-to-webp
@@ -71,6 +72,7 @@ jobs:
             release/ffmpeg-wasm-video-speed-changer-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-video-audio-extractor-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-contact-sheet-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-to-gif-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-to-webp-v${BUILDER_VERSION}.zip \
@@ -81,6 +83,7 @@ jobs:
             release/BUILDINFO-video-speed-changer.txt \
             release/BUILDINFO-lossless-video-cutter.txt \
             release/BUILDINFO-media-inspector.txt \
+            release/BUILDINFO-video-audio-extractor.txt \
             release/BUILDINFO-video-contact-sheet.txt \
             release/BUILDINFO-video-to-gif.txt \
             release/BUILDINFO-video-to-webp.txt \
