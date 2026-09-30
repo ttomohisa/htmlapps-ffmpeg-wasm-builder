@@ -336,12 +336,17 @@ Require-Text $extractorProfileEnv "libavformat/libavformat.a" "Video Audio Extra
 Require-Text $extractorProfileEnv "libavcodec/libavcodec.a" "Video Audio Extractor must link libavcodec packet/BSF APIs."
 Require-Text $extractorProfileEnv "libavutil/libavutil.a" "Video Audio Extractor must link libavutil."
 $extractorFlagsText = [IO.File]::ReadAllText($extractorProfile)
-foreach ($forbiddenFlag in @("--enable-decoder=", "--enable-encoder=", "--enable-filter=", "--enable-libx264", "--enable-gpl")) {
-  if ($extractorFlagsText.Contains($forbiddenFlag)) { throw "Video Audio Extractor Phase 1 must stay inspect/stream-copy only: $forbiddenFlag" }
+foreach ($forbiddenFlag in @("--enable-filter=", "--enable-libx264", "--enable-gpl")) {
+  if ($extractorFlagsText.Contains($forbiddenFlag)) { throw "Video Audio Extractor must stay audio-only and LGPL: $forbiddenFlag" }
 }
 Require-Text $extractorProfile "--disable-avfilter" "Video Audio Extractor should disable libavfilter in Phase 1."
 Require-Text $extractorProfile "--disable-swscale" "Video Audio Extractor should disable libswscale in Phase 1."
-Require-Text $extractorProfile "--disable-swresample" "Video Audio Extractor should disable libswresample in Phase 1."
+Require-Text $extractorProfileEnv "libswresample/libswresample.a" "Video Audio Extractor Phase 3 must link libswresample."
+Require-Text $extractorProfile "--enable-decoder=opus" "Video Audio Extractor Phase 3 must decode Opus for M4A/WAV conversion."
+Require-Text $extractorProfile "--enable-decoder=flac" "Video Audio Extractor Phase 3 must decode FLAC for M4A/WAV conversion."
+Require-Text $extractorProfile "--enable-encoder=aac" "Video Audio Extractor Phase 3 must enable native AAC encoding."
+Require-Text $extractorProfile "--enable-encoder=pcm_s16le" "Video Audio Extractor Phase 3 must enable PCM16 WAV output."
+Require-Text $extractorProfile "--enable-muxer=wav" "Video Audio Extractor Phase 3 must enable WAV output."
 Require-Text $extractorProfile "--enable-bsf=aac_adtstoasc" "Video Audio Extractor must support MPEG-TS/ADTS AAC -> M4A."
 Require-Text $extractorProfile "--enable-muxer=mp3" "Video Audio Extractor Phase 2 must enable MP3 output."
 Require-Text $extractorProfile "--enable-muxer=flac" "Video Audio Extractor Phase 2 must enable FLAC output."
@@ -351,13 +356,18 @@ Require-Text $extractorRunner "AV_CODEC_ID_MP3" "Video Audio Extractor Phase 2 m
 Require-Text $extractorRunner "AV_CODEC_ID_VORBIS" "Video Audio Extractor Phase 2 must map Vorbis to OGG."
 Require-Text $extractorRunner "AV_CODEC_ID_FLAC" "Video Audio Extractor Phase 2 must map FLAC."
 Require-Text $runtime '["m4a", "opus", "mp3", "ogg", "flac"]' "Browser runtime must expose only tested Video Audio Extractor Phase 2 copy formats."
-Require-Text $extractorRunner '#define RUNNER_VERSION "1.1.0"' "Video Audio Extractor runner version must be 1.1.0 for Phase 2."
+Require-Text $extractorRunner '#define RUNNER_VERSION "1.2.0"' "Video Audio Extractor runner version must be 1.2.0 for Phase 3."
 Require-Text $extractorRunner "av_bsf_get_by_name" "Video Audio Extractor must apply a bitstream filter when needed."
 Require-Text $extractorRunner "fill_missing_adts_parameters" "Video Audio Extractor must derive missing MPEG-TS AAC parameters without adding an audio decoder."
 Require-Text $extractorRunner "av_interleaved_write_frame" "Video Audio Extractor stream copy must mux compressed packets."
 Require-Text $runtime "videoAudioExtractorInspectArgs" "Browser runtime must expose Video Audio Extractor inspection."
 Require-Text $runtime "videoAudioExtractorCopyArgs" "Browser runtime must expose Video Audio Extractor stream copy."
-Require-Text $extractorSmoke "phase2_copy_matrix" "Video Audio Extractor smoke test must cover the Phase 2 compatibility matrix."
+Require-Text $runtime "videoAudioExtractorTranscodeArgs" "Browser runtime must expose Video Audio Extractor transcoding."
+Require-Text $extractorProfileEnv '"transcode":true' "Video Audio Extractor manifest must advertise transcoding."
+Require-Text $extractorProfileEnv '"transcodeFormats":["m4a","wav"]' "Video Audio Extractor manifest must advertise M4A and WAV transcoding."
+Require-Text $extractorRunner "swr_alloc_set_opts2" "Video Audio Extractor Phase 3 must use libswresample directly."
+Require-Text $extractorRunner "AVAudioFifo" "Video Audio Extractor Phase 3 must buffer audio frames for fixed-size encoders."
+Require-Text $extractorSmoke "phase3_copy_and_transcode" "Video Audio Extractor smoke test must cover copy plus M4A/WAV transcoding."
 Require-Text $extractorReadme "WORKERFS" "Video Audio Extractor profile docs must explain large-file input."
 
 Require-Text $contactProfileEnv "PROFILE_USE_X264=0" "Video Contact Sheet must not link x264."
