@@ -48,14 +48,14 @@ const copy = async (label, bytes, extension, stream, format, outputPath) => {
     onLog: ({ message }) => append(message)
   });
 };
-const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps) => {
+const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps, channels) => {
   append("transcode=" + label + " stream=" + stream + " format=" + format);
   const inputPath = "/workerfs/" + label + "." + extension;
   return await runner.run({
     files: [{ name: inputPath, data: new Blob([bytes]), workerfs: true }],
     outputs: [outputPath],
     args: BrowserFFmpeg.videoAudioExtractorTranscodeArgs({
-      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps
+      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps, channels
     }),
     onLog: ({ message }) => append(message)
   });
@@ -111,6 +111,27 @@ try {
     throw new Error("Transcoded WAV is not PCM signed 16-bit little-endian.");
   }
 
+  for (const bitrateKbps of [128, 192, 256, 320]) {
+    const channels = bitrateKbps === 320 ? 1 : 2;
+    const label = "lame-" + bitrateKbps + "k-" + channels + "ch";
+    const outputPath = "/" + label + ".mp3";
+    const mp3Transcoded = await transcode(
+      label, fixtures.mkv, "mkv", english.index, "mp3", outputPath, bitrateKbps, channels
+    );
+    const mp3Bytes = mp3Transcoded.files[0].data;
+    if (!containsAscii(mp3Bytes, "ID3")) {
+      throw new Error("LAME MP3 output is missing ID3 for " + bitrateKbps + " kbps.");
+    }
+    const mp3TranscodedReport = await inspect(label + "-inspect", mp3Bytes, "mp3");
+    const mp3Stream = mp3TranscodedReport.audioStreams[0];
+    if (mp3Stream?.codec?.name !== "mp3") {
+      throw new Error("LAME output does not contain MP3 at " + bitrateKbps + " kbps.");
+    }
+    if (mp3Stream?.channels !== channels) {
+      throw new Error("LAME channel mode mismatch at " + bitrateKbps + " kbps.");
+    }
+  }
+
   const tsReport = await inspect("mpegts-aac", fixtures.ts, "ts");
   const tsAudio = tsReport.audioStreams.find((s) => s.codec?.name === "aac");
   if (!tsAudio || tsAudio.copy?.format !== "m4a" || tsAudio.sampleRate !== 48000 || tsAudio.channels !== 1) {
@@ -152,7 +173,7 @@ try {
     throw new Error("Video-only input was not reported correctly.");
   }
 
-  pass("phase3_copy_and_transcode");
+  pass("phase4_lame_mp3");
 } finally {
   runner.dispose();
 }
