@@ -48,6 +48,18 @@ const copy = async (label, bytes, extension, stream, format, outputPath) => {
     onLog: ({ message }) => append(message)
   });
 };
+const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps) => {
+  append("transcode=" + label + " stream=" + stream + " format=" + format);
+  const inputPath = "/workerfs/" + label + "." + extension;
+  return await runner.run({
+    files: [{ name: inputPath, data: new Blob([bytes]), workerfs: true }],
+    outputs: [outputPath],
+    args: BrowserFFmpeg.videoAudioExtractorTranscodeArgs({
+      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps
+    }),
+    onLog: ({ message }) => append(message)
+  });
+};
 try {
   const mp4 = await inspect("mp4-aac", fixtures.mp4, "mp4");
   if (mp4.format.videoStreamCount < 1 || mp4.format.audioStreamCount !== 1) throw new Error("MP4 stream counts are wrong.");
@@ -78,6 +90,26 @@ try {
   }
   const englishResult = await copy("multi-audio", fixtures.mkv, "mkv", english.index, "opus", "/english.opus");
   if (!containsAscii(englishResult.files[0].data, "OpusHead")) throw new Error("Selected MKV Opus track was not copied.");
+
+  const m4aTranscoded = await transcode("multi-opus-to-m4a", fixtures.mkv, "mkv", english.index, "m4a", "/english-aac.m4a", 192);
+  const m4aTranscodedBytes = m4aTranscoded.files[0].data;
+  if (!containsAscii(m4aTranscodedBytes, "ftyp") || !containsAscii(m4aTranscodedBytes, "mp4a")) {
+    throw new Error("Opus -> AAC/M4A transcode failed.");
+  }
+  const m4aTranscodedReport = await inspect("transcoded-m4a", m4aTranscodedBytes, "m4a");
+  if (m4aTranscodedReport.audioStreams[0]?.codec?.name !== "aac") {
+    throw new Error("Transcoded M4A does not contain AAC.");
+  }
+
+  const wavTranscoded = await transcode("multi-aac-to-wav", fixtures.mkv, "mkv", commentary.index, "wav", "/commentary.wav");
+  const wavTranscodedBytes = wavTranscoded.files[0].data;
+  if (!containsAscii(wavTranscodedBytes, "RIFF") || !containsAscii(wavTranscodedBytes, "WAVE")) {
+    throw new Error("AAC -> PCM16/WAV transcode failed.");
+  }
+  const wavTranscodedReport = await inspect("transcoded-wav", wavTranscodedBytes, "wav");
+  if (wavTranscodedReport.audioStreams[0]?.codec?.name !== "pcm_s16le") {
+    throw new Error("Transcoded WAV is not PCM signed 16-bit little-endian.");
+  }
 
   const tsReport = await inspect("mpegts-aac", fixtures.ts, "ts");
   const tsAudio = tsReport.audioStreams.find((s) => s.codec?.name === "aac");
@@ -120,7 +152,7 @@ try {
     throw new Error("Video-only input was not reported correctly.");
   }
 
-  pass("phase2_copy_matrix");
+  pass("phase3_copy_and_transcode");
 } finally {
   runner.dispose();
 }

@@ -13,32 +13,39 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <libavcodec/avcodec.h>
 #include <libavcodec/bsf.h>
 #include <libavcodec/codec_desc.h>
 #include <libavcodec/codec_par.h>
 #include <libavcodec/packet.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libavutil/audio_fifo.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
 #include <libavutil/log.h>
 #include <libavutil/mathematics.h>
+#include <libavutil/samplefmt.h>
+#include <libswresample/swresample.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.1.0"
+#define RUNNER_VERSION "1.2.0"
 #define REPORT_SCHEMA_VERSION 1
 
 typedef enum RunnerOperation {
     OP_NONE = 0,
     OP_INSPECT,
-    OP_COPY
+    OP_COPY,
+    OP_TRANSCODE
 } RunnerOperation;
 
 typedef struct RunnerOptions {
     const char *input_path;
     const char *output_path;
     const char *copy_format;
+    const char *transcode_format;
+    int bitrate_kbps;
     int audio_stream_index;
     RunnerOperation operation;
 } RunnerOptions;
@@ -55,8 +62,9 @@ static void usage(const char *program)
         "FFmpeg WASM Video Audio Extractor %s\n"
         "Usage:\n"
         "  %s --input INPUT --inspect-output REPORT.json\n"
-        "  %s --input INPUT --audio-stream INDEX --copy-format FORMAT --output OUTPUT\n",
-        RUNNER_VERSION, program, program);
+        "  %s --input INPUT --audio-stream INDEX --copy-format FORMAT --output OUTPUT\n"
+        "  %s --input INPUT --audio-stream INDEX --transcode-format m4a|wav [--bitrate-kbps 128|192|256] --output OUTPUT\n",
+        RUNNER_VERSION, program, program, program);
 }
 
 static int parse_index(const char *value, int *out)
@@ -109,6 +117,14 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
                 return AVERROR(EINVAL);
             options->operation = OP_COPY;
             options->copy_format = value;
+        } else if (!strcmp(arg, "--transcode-format")) {
+            if (options->operation != OP_NONE && options->operation != OP_TRANSCODE)
+                return AVERROR(EINVAL);
+            options->operation = OP_TRANSCODE;
+            options->transcode_format = value;
+        } else if (!strcmp(arg, "--bitrate-kbps")) {
+            if (parse_index(value, &options->bitrate_kbps) < 0)
+                return AVERROR(EINVAL);
         } else if (!strcmp(arg, "--output")) options->output_path = value;
         else {
             fprintf(stderr, "Unknown option: %s\n", arg);
@@ -121,6 +137,9 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
         return options->output_path ? 0 : AVERROR(EINVAL);
     if (options->operation == OP_COPY)
         return options->output_path && options->copy_format &&
+               options->audio_stream_index >= 0 ? 0 : AVERROR(EINVAL);
+    if (options->operation == OP_TRANSCODE)
+        return options->output_path && options->transcode_format &&
                options->audio_stream_index >= 0 ? 0 : AVERROR(EINVAL);
     return AVERROR(EINVAL);
 }
@@ -202,6 +221,21 @@ static int copy_target(enum AVCodecID id, CopyTarget *target)
     if (!selected.format) return AVERROR(ENOSYS);
     if (target) *target = selected;
     return 0;
+}
+
+static int transcode_source_supported(enum AVCodecID id)
+{
+    switch (id) {
+    case AV_CODEC_ID_AAC:
+    case AV_CODEC_ID_ALAC:
+    case AV_CODEC_ID_MP3:
+    case AV_CODEC_ID_OPUS:
+    case AV_CODEC_ID_VORBIS:
+    case AV_CODEC_ID_FLAC:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 static void channel_layout_text(const AVCodecParameters *par, char *text, size_t size)
@@ -292,7 +326,8 @@ static int write_report(FILE *out, AVFormatContext *format)
         json_string(out, can_copy ? target.format : NULL);
         fputs(",\"extension\":", out);
         json_string(out, can_copy ? target.extension : NULL);
-        fputs("}}", out);
+        fprintf(out, "},\"transcode\":{\"supported\":%s,\"formats\":[\"m4a\",\"wav\"]}}",
+                transcode_source_supported(par->codec_id) ? "true" : "false");
     }
     fputs("]}\n", out);
     return ferror(out) ? AVERROR(EIO) : 0;
@@ -786,6 +821,473 @@ end:
     return ret;
 }
 
+
+static int choose_audio_sample_rate(const AVCodec *codec, int preferred)
+{
+    const int *rates = NULL;
+    int count = 0;
+    int i;
+    int best = preferred > 0 ? preferred : 48000;
+    int selected = best;
+    int best_delta = INT32_MAX;
+
+    if (avcodec_get_supported_config(NULL, codec, AV_CODEC_CONFIG_SAMPLE_RATE,
+                                     0, (const void **)&rates, &count) < 0 ||
+        !rates || count <= 0)
+        return best;
+
+    for (i = 0; i < count; i++) {
+        int delta = abs(rates[i] - best);
+        if (delta < best_delta) {
+            best_delta = delta;
+            selected = rates[i];
+        }
+    }
+    return selected;
+}
+
+static enum AVSampleFormat choose_audio_sample_format(const AVCodec *codec,
+                                                       enum AVSampleFormat preferred)
+{
+    const enum AVSampleFormat *formats = NULL;
+    int count = 0;
+    int i;
+
+    if (avcodec_get_supported_config(NULL, codec, AV_CODEC_CONFIG_SAMPLE_FORMAT,
+                                     0, (const void **)&formats, &count) < 0 ||
+        !formats || count <= 0)
+        return preferred;
+
+    for (i = 0; i < count; i++)
+        if (formats[i] == preferred)
+            return preferred;
+    return formats[0];
+}
+
+static int drain_audio_encoder(AVFormatContext *output,
+                               AVCodecContext *encoder,
+                               AVStream *out_stream,
+                               AVPacket *packet)
+{
+    int ret;
+    while ((ret = avcodec_receive_packet(encoder, packet)) >= 0) {
+        packet->stream_index = out_stream->index;
+        av_packet_rescale_ts(packet, encoder->time_base, out_stream->time_base);
+        packet->pos = -1;
+        ret = av_interleaved_write_frame(output, packet);
+        av_packet_unref(packet);
+        if (ret < 0) return ret;
+    }
+    return ret == AVERROR(EAGAIN) || ret == AVERROR_EOF ? 0 : ret;
+}
+
+static int send_audio_frame(AVFormatContext *output,
+                            AVCodecContext *encoder,
+                            AVStream *out_stream,
+                            AVPacket *packet,
+                            AVFrame *frame)
+{
+    int ret = avcodec_send_frame(encoder, frame);
+    if (ret < 0) return ret;
+    return drain_audio_encoder(output, encoder, out_stream, packet);
+}
+
+static int write_resampled_to_fifo(SwrContext *swr,
+                                   AVAudioFifo *fifo,
+                                   const AVCodecContext *encoder,
+                                   const AVFrame *input,
+                                   int decoder_rate)
+{
+    AVFrame *converted = NULL;
+    int out_capacity;
+    int converted_count;
+    int ret = 0;
+
+    out_capacity = (int)av_rescale_rnd(
+        swr_get_delay(swr, decoder_rate) + input->nb_samples,
+        encoder->sample_rate, decoder_rate, AV_ROUND_UP);
+    if (out_capacity <= 0) return 0;
+
+    converted = av_frame_alloc();
+    if (!converted) return AVERROR(ENOMEM);
+    converted->format = encoder->sample_fmt;
+    converted->sample_rate = encoder->sample_rate;
+    converted->nb_samples = out_capacity;
+    ret = av_channel_layout_copy(&converted->ch_layout, &encoder->ch_layout);
+    if (ret < 0) goto end;
+    ret = av_frame_get_buffer(converted, 0);
+    if (ret < 0) goto end;
+
+    converted_count = swr_convert(swr, converted->data, out_capacity,
+                                  (const uint8_t **)input->extended_data,
+                                  input->nb_samples);
+    if (converted_count < 0) {
+        ret = converted_count;
+        goto end;
+    }
+    if (converted_count == 0) goto end;
+
+    ret = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + converted_count);
+    if (ret < 0) goto end;
+    if (av_audio_fifo_write(fifo, (void **)converted->extended_data, converted_count)
+        < converted_count) {
+        ret = AVERROR(EIO);
+        goto end;
+    }
+    ret = 0;
+
+end:
+    av_frame_free(&converted);
+    return ret;
+}
+
+static int flush_resampler_to_fifo(SwrContext *swr,
+                                   AVAudioFifo *fifo,
+                                   const AVCodecContext *encoder,
+                                   int decoder_rate)
+{
+    int ret = 0;
+    while (swr_get_delay(swr, decoder_rate) > 0) {
+        AVFrame *converted = NULL;
+        int out_capacity = (int)av_rescale_rnd(
+            swr_get_delay(swr, decoder_rate),
+            encoder->sample_rate, decoder_rate, AV_ROUND_UP);
+        int converted_count;
+        if (out_capacity <= 0) break;
+
+        converted = av_frame_alloc();
+        if (!converted) return AVERROR(ENOMEM);
+        converted->format = encoder->sample_fmt;
+        converted->sample_rate = encoder->sample_rate;
+        converted->nb_samples = out_capacity;
+        ret = av_channel_layout_copy(&converted->ch_layout, &encoder->ch_layout);
+        if (ret < 0) {
+            av_frame_free(&converted);
+            return ret;
+        }
+        ret = av_frame_get_buffer(converted, 0);
+        if (ret < 0) {
+            av_frame_free(&converted);
+            return ret;
+        }
+        converted_count = swr_convert(swr, converted->data, out_capacity, NULL, 0);
+        if (converted_count < 0) {
+            av_frame_free(&converted);
+            return converted_count;
+        }
+        if (converted_count == 0) {
+            av_frame_free(&converted);
+            break;
+        }
+        ret = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + converted_count);
+        if (ret < 0) {
+            av_frame_free(&converted);
+            return ret;
+        }
+        if (av_audio_fifo_write(fifo, (void **)converted->extended_data, converted_count)
+            < converted_count) {
+            av_frame_free(&converted);
+            return AVERROR(EIO);
+        }
+        av_frame_free(&converted);
+    }
+    return 0;
+}
+
+static int encode_audio_fifo(AVAudioFifo *fifo,
+                             AVFormatContext *output,
+                             AVCodecContext *encoder,
+                             AVStream *out_stream,
+                             AVPacket *packet,
+                             int flush,
+                             int64_t *next_pts)
+{
+    int frame_size = encoder->frame_size > 0 ? encoder->frame_size : 1024;
+    int ret = 0;
+
+    while (av_audio_fifo_size(fifo) >= frame_size ||
+           (flush && av_audio_fifo_size(fifo) > 0)) {
+        AVFrame *frame = NULL;
+        int available = av_audio_fifo_size(fifo);
+        int read_samples = FFMIN(available, frame_size);
+        int send_samples = read_samples;
+        int capabilities = encoder->codec ? encoder->codec->capabilities : 0;
+        int can_short = (capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) ||
+                        (capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME) ||
+                        encoder->frame_size <= 0;
+
+        if (read_samples < frame_size && !can_short)
+            send_samples = frame_size;
+
+        frame = av_frame_alloc();
+        if (!frame) return AVERROR(ENOMEM);
+        frame->format = encoder->sample_fmt;
+        frame->sample_rate = encoder->sample_rate;
+        frame->nb_samples = send_samples;
+        frame->pts = *next_pts;
+        ret = av_channel_layout_copy(&frame->ch_layout, &encoder->ch_layout);
+        if (ret < 0) {
+            av_frame_free(&frame);
+            return ret;
+        }
+        ret = av_frame_get_buffer(frame, 0);
+        if (ret < 0) {
+            av_frame_free(&frame);
+            return ret;
+        }
+        av_samples_set_silence(frame->extended_data, 0, send_samples,
+                               encoder->ch_layout.nb_channels, encoder->sample_fmt);
+        if (av_audio_fifo_read(fifo, (void **)frame->extended_data, read_samples)
+            < read_samples) {
+            av_frame_free(&frame);
+            return AVERROR(EIO);
+        }
+
+        ret = send_audio_frame(output, encoder, out_stream, packet, frame);
+        av_frame_free(&frame);
+        if (ret < 0) return ret;
+        *next_pts += send_samples;
+    }
+    return ret;
+}
+
+static int transcode_audio(const RunnerOptions *options)
+{
+    AVFormatContext *input = NULL;
+    AVFormatContext *output = NULL;
+    AVCodecContext *decoder = NULL;
+    AVCodecContext *encoder = NULL;
+    AVStream *in_stream;
+    AVStream *out_stream = NULL;
+    const AVCodec *decoder_codec;
+    const AVCodec *encoder_codec;
+    AVPacket *packet = NULL;
+    AVFrame *frame = NULL;
+    AVAudioFifo *fifo = NULL;
+    SwrContext *swr = NULL;
+    enum AVCodecID encoder_id;
+    const char *muxer;
+    int bitrate_kbps = options->bitrate_kbps;
+    double last_progress = -1;
+    int64_t next_pts = 0;
+    int header_written = 0;
+    int decoder_rate = 0;
+    int ret;
+
+    if (!strcmp(options->transcode_format, "m4a")) {
+        encoder_id = AV_CODEC_ID_AAC;
+        muxer = "ipod";
+        if (!bitrate_kbps) bitrate_kbps = 192;
+        if (bitrate_kbps != 128 && bitrate_kbps != 192 && bitrate_kbps != 256)
+            return AVERROR(EINVAL);
+    } else if (!strcmp(options->transcode_format, "wav")) {
+        encoder_id = AV_CODEC_ID_PCM_S16LE;
+        muxer = "wav";
+    } else {
+        return AVERROR(EINVAL);
+    }
+
+    ret = avformat_open_input(&input, options->input_path, NULL, NULL);
+    if (ret < 0) goto end;
+    ret = avformat_find_stream_info(input, NULL);
+    if (ret < 0) goto end;
+    if ((unsigned int)options->audio_stream_index >= input->nb_streams) {
+        ret = AVERROR(EINVAL);
+        goto end;
+    }
+    in_stream = input->streams[options->audio_stream_index];
+    if (in_stream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO ||
+        !transcode_source_supported(in_stream->codecpar->codec_id)) {
+        ret = AVERROR(ENOSYS);
+        goto end;
+    }
+
+    decoder_codec = avcodec_find_decoder(in_stream->codecpar->codec_id);
+    if (!decoder_codec) {
+        ret = AVERROR_DECODER_NOT_FOUND;
+        goto end;
+    }
+    decoder = avcodec_alloc_context3(decoder_codec);
+    if (!decoder) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
+    ret = avcodec_parameters_to_context(decoder, in_stream->codecpar);
+    if (ret < 0) goto end;
+    decoder->pkt_timebase = in_stream->time_base;
+    decoder->thread_count = 1;
+    decoder->thread_type = 0;
+    ret = avcodec_open2(decoder, decoder_codec, NULL);
+    if (ret < 0) goto end;
+
+    encoder_codec = avcodec_find_encoder(encoder_id);
+    if (!encoder_codec) {
+        ret = AVERROR_ENCODER_NOT_FOUND;
+        goto end;
+    }
+    ret = avformat_alloc_output_context2(&output, NULL, muxer, options->output_path);
+    if (ret < 0 || !output) {
+        if (ret >= 0) ret = AVERROR(EINVAL);
+        goto end;
+    }
+    out_stream = avformat_new_stream(output, NULL);
+    if (!out_stream) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
+    encoder = avcodec_alloc_context3(encoder_codec);
+    if (!encoder) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
+
+    encoder->codec_type = AVMEDIA_TYPE_AUDIO;
+    encoder->sample_rate = !strcmp(options->transcode_format, "wav")
+        ? (decoder->sample_rate > 0 ? decoder->sample_rate : 48000)
+        : choose_audio_sample_rate(encoder_codec, decoder->sample_rate);
+    encoder->sample_fmt = choose_audio_sample_format(
+        encoder_codec,
+        encoder_id == AV_CODEC_ID_PCM_S16LE ? AV_SAMPLE_FMT_S16 : AV_SAMPLE_FMT_FLTP);
+    encoder->time_base = (AVRational){1, encoder->sample_rate};
+    encoder->thread_count = 1;
+    encoder->thread_type = 0;
+    if (encoder_id == AV_CODEC_ID_AAC)
+        encoder->bit_rate = (int64_t)bitrate_kbps * 1000;
+
+    if (decoder->ch_layout.nb_channels > 0)
+        ret = av_channel_layout_copy(&encoder->ch_layout, &decoder->ch_layout);
+    else {
+        av_channel_layout_default(&encoder->ch_layout, 2);
+        ret = 0;
+    }
+    if (ret < 0) goto end;
+
+    if (output->oformat->flags & AVFMT_GLOBALHEADER)
+        encoder->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    ret = avcodec_open2(encoder, encoder_codec, NULL);
+    if (ret < 0) goto end;
+    ret = avcodec_parameters_from_context(out_stream->codecpar, encoder);
+    if (ret < 0) goto end;
+    out_stream->time_base = encoder->time_base;
+    out_stream->disposition = in_stream->disposition;
+    av_dict_copy(&out_stream->metadata, in_stream->metadata, 0);
+    output->avoid_negative_ts = AVFMT_AVOID_NEG_TS_MAKE_ZERO;
+
+    if (!(output->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&output->pb, options->output_path, AVIO_FLAG_WRITE);
+        if (ret < 0) goto end;
+    }
+    ret = avformat_write_header(output, NULL);
+    if (ret < 0) goto end;
+    header_written = 1;
+
+    packet = av_packet_alloc();
+    frame = av_frame_alloc();
+    fifo = av_audio_fifo_alloc(encoder->sample_fmt,
+                               encoder->ch_layout.nb_channels, 1);
+    if (!packet || !frame || !fifo) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
+
+    while ((ret = av_read_frame(input, packet)) >= 0) {
+        if (packet->stream_index != options->audio_stream_index) {
+            av_packet_unref(packet);
+            continue;
+        }
+        emit_progress(packet, in_stream, input->duration, &last_progress);
+        ret = avcodec_send_packet(decoder, packet);
+        av_packet_unref(packet);
+        if (ret < 0) goto end;
+
+        while ((ret = avcodec_receive_frame(decoder, frame)) >= 0) {
+            if (!swr) {
+                decoder_rate = frame->sample_rate > 0 ? frame->sample_rate : decoder->sample_rate;
+                if (decoder_rate <= 0) decoder_rate = encoder->sample_rate;
+                ret = swr_alloc_set_opts2(&swr,
+                                          &encoder->ch_layout, encoder->sample_fmt,
+                                          encoder->sample_rate,
+                                          &frame->ch_layout,
+                                          (enum AVSampleFormat)frame->format,
+                                          decoder_rate, 0, NULL);
+                if (ret < 0) goto end;
+                ret = swr_init(swr);
+                if (ret < 0) goto end;
+            }
+            ret = write_resampled_to_fifo(swr, fifo, encoder, frame, decoder_rate);
+            av_frame_unref(frame);
+            if (ret < 0) goto end;
+            ret = encode_audio_fifo(fifo, output, encoder, out_stream, packet,
+                                    0, &next_pts);
+            if (ret < 0) goto end;
+        }
+        if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) goto end;
+        ret = 0;
+    }
+    if (ret != AVERROR_EOF) goto end;
+    ret = 0;
+
+    ret = avcodec_send_packet(decoder, NULL);
+    if (ret < 0 && ret != AVERROR_EOF) goto end;
+    while ((ret = avcodec_receive_frame(decoder, frame)) >= 0) {
+        if (!swr) {
+            decoder_rate = frame->sample_rate > 0 ? frame->sample_rate : decoder->sample_rate;
+            if (decoder_rate <= 0) decoder_rate = encoder->sample_rate;
+            ret = swr_alloc_set_opts2(&swr,
+                                      &encoder->ch_layout, encoder->sample_fmt,
+                                      encoder->sample_rate,
+                                      &frame->ch_layout,
+                                      (enum AVSampleFormat)frame->format,
+                                      decoder_rate, 0, NULL);
+            if (ret < 0) goto end;
+            ret = swr_init(swr);
+            if (ret < 0) goto end;
+        }
+        ret = write_resampled_to_fifo(swr, fifo, encoder, frame, decoder_rate);
+        av_frame_unref(frame);
+        if (ret < 0) goto end;
+    }
+    if (ret != AVERROR_EOF && ret != AVERROR(EAGAIN)) goto end;
+    ret = 0;
+
+    if (swr) {
+        ret = flush_resampler_to_fifo(swr, fifo, encoder, decoder_rate);
+        if (ret < 0) goto end;
+    }
+    ret = encode_audio_fifo(fifo, output, encoder, out_stream, packet, 1, &next_pts);
+    if (ret < 0) goto end;
+    ret = send_audio_frame(output, encoder, out_stream, packet, NULL);
+    if (ret < 0) goto end;
+
+    ret = av_write_trailer(output);
+    if (ret < 0) goto end;
+    header_written = 0;
+    printf(PROGRESS_PREFIX " 1.000000\\n");
+    printf("video-audio-extractor: transcode stream=%d codec=%s format=%s bitrate=%d\\n",
+           options->audio_stream_index, avcodec_get_name(in_stream->codecpar->codec_id),
+           options->transcode_format, bitrate_kbps);
+    fflush(stdout);
+
+end:
+    if (ret < 0)
+        av_log(NULL, AV_LOG_ERROR, "Audio transcode failed: %s\\n", av_err2str(ret));
+    if (ret < 0 && header_written && output) av_write_trailer(output);
+    av_audio_fifo_free(fifo);
+    swr_free(&swr);
+    av_frame_free(&frame);
+    av_packet_free(&packet);
+    avcodec_free_context(&decoder);
+    avcodec_free_context(&encoder);
+    if (input) avformat_close_input(&input);
+    if (output) {
+        if (!(output->oformat->flags & AVFMT_NOFILE) && output->pb)
+            avio_closep(&output->pb);
+        avformat_free_context(output);
+    }
+    return ret;
+}
+
+
 int main(int argc, char **argv)
 {
     RunnerOptions options;
@@ -800,7 +1302,12 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    ret = options.operation == OP_INSPECT ? inspect_media(&options) : copy_audio(&options);
+    if (options.operation == OP_INSPECT)
+        ret = inspect_media(&options);
+    else if (options.operation == OP_COPY)
+        ret = copy_audio(&options);
+    else
+        ret = transcode_audio(&options);
     if (ret < 0) {
         fprintf(stderr, "Video Audio Extractor failed: %s\n", av_err2str(ret));
         return 1;

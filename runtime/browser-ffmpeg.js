@@ -345,6 +345,31 @@
     ];
   };
 
+  const videoAudioExtractorTranscodeArgs = (options = {}) => {
+    const streamIndex = Number(options.streamIndex);
+    if (!Number.isInteger(streamIndex) || streamIndex < 0) {
+      throw new RangeError("Video Audio Extractor streamIndex must be a non-negative integer.");
+    }
+    const format = String(options.format || "").toLowerCase();
+    if (!["m4a", "wav"].includes(format)) {
+      throw new RangeError("Video Audio Extractor transcode format is not supported.");
+    }
+    const args = [
+      "--input", options.input || "/workerfs/input.bin",
+      "--audio-stream", String(streamIndex),
+      "--transcode-format", format,
+      "--output", options.output || ("/output." + format)
+    ];
+    if (format === "m4a") {
+      const bitrateKbps = Number(options.bitrateKbps ?? 192);
+      if (![128, 192, 256].includes(bitrateKbps)) {
+        throw new RangeError("Video Audio Extractor AAC bitrate must be 128, 192, or 256 kbps.");
+      }
+      args.splice(args.length - 2, 0, "--bitrate-kbps", String(bitrateKbps));
+    }
+    return args;
+  };
+
   const videoContactSheetArgs = (options = {}) => {
     const count = Number(options.count ?? 12);
     const thumbSize = Number(options.thumbSize ?? 320);
@@ -531,6 +556,7 @@
     mediaInspectorArgs,
     videoAudioExtractorInspectArgs,
     videoAudioExtractorCopyArgs,
+    videoAudioExtractorTranscodeArgs,
     videoContactSheetArgs,
     videoToGifArgs,
     videoToWebpArgs,
