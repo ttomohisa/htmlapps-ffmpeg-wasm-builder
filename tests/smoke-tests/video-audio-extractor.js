@@ -113,8 +113,8 @@ try {
 
   for (const bitrateKbps of [128, 192, 256, 320]) {
     const mp3Transcoded = await transcode(
-      "multi-opus-to-mp3-" + bitrateKbps,
-      fixtures.mkv, "mkv", english.index, "mp3",
+      "multi-aac-to-mp3-" + bitrateKbps,
+      fixtures.mkv, "mkv", commentary.index, "mp3",
       "/english-" + bitrateKbps + ".mp3", bitrateKbps, "stereo"
     );
     const mp3TranscodedBytes = mp3Transcoded.files[0].data;
@@ -128,8 +128,8 @@ try {
   }
 
   const mp3Mono = await transcode(
-    "multi-opus-to-mp3-mono",
-    fixtures.mkv, "mkv", english.index, "mp3",
+    "multi-aac-to-mp3-mono",
+    fixtures.mkv, "mkv", commentary.index, "mp3",
     "/english-mono.mp3", 192, "mono"
   );
   const mp3MonoReport = await inspect("transcoded-mp3-mono", mp3Mono.files[0].data, "mp3");
