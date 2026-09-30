@@ -1,8 +1,8 @@
 # FFmpeg WASM Builder
 
-## Video Audio Extractor Phase 3 transcoding
+## Video Audio Extractor Phase 4 MP3 / LAME
 
-`video-audio-extractor` keeps the Phase 2 stream-copy matrix and adds Phase 3 audio-only transcoding: native AAC/M4A at 128 / 192 / 256 kbps and PCM16/WAV. Decoding is limited to AAC, ALAC, MP3, Opus, Vorbis and FLAC; libswresample performs sample-format/rate/layout conversion. Input continues to use WORKERFS. The profile is included in PR browser CI but is not part of the v1.9.9 tagged release asset set.
+`video-audio-extractor` keeps stream copy plus AAC/M4A and PCM16/WAV conversion, and Phase 4 adds MP3 encoding through pinned LAME 4.0 / libmp3lame. MP3 supports 128 / 192 / 256 / 320 kbps and mono/stereo output. Input continues to use WORKERFS. LAME is built only for this profile and does not enter the other Wasm cores.
 
 Browser apps use `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` and `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)`. The smoke test also keeps MKV multi-audio metadata/selection, MPEG-TS AAC -> M4A, and video-only coverage. AC-3, E-AC-3, and PCM/WAV remain deferred until dedicated browser compatibility cases are added.
 
@@ -80,6 +80,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
 - libwebp 1.6.0 / exact commit（`video-to-webp`だけが最終WASMへリンク）
 - libvpx 1.16.0 / exact commit（`video-compressor`のVP9出力だけが最終WASMへリンク）
 - Opus 1.5.2 / exact commit（`video-compressor`のWebM音声出力だけが最終WASMへリンク）
+- LAME 4.0 / official SourceForge tarball + SHA-256（`video-audio-extractor`のMP3出力だけが最終WASMへリンク）
 
 ## ビルド
 
