@@ -19,10 +19,7 @@ Input `File` / `Blob` data is mounted with WORKERFS, so the browser does not cop
 | Opus | OPUS |
 | Vorbis | OGG |
 | FLAC | FLAC |
-| AC-3 | AC3 |
-| E-AC-3 | EAC3 |
-| PCM signed 16-bit little-endian | WAV |
 
-Every row in this Phase 2 matrix is covered by the real-browser smoke test. The runner rejects codecs outside the tested matrix instead of guessing a container. MPEG-TS/raw ADTS AAC -> M4A uses FFmpeg's `aac_adtstoasc` bitstream filter.
+Every row in this Phase 2 matrix is covered by the real-browser smoke test. AC-3, E-AC-3 and PCM/WAV remain deferred until their own browser compatibility cases are added. The runner rejects codecs outside the tested matrix instead of guessing a container. MPEG-TS/raw ADTS AAC -> M4A uses FFmpeg's `aac_adtstoasc` bitstream filter.
 
 No decoder, encoder, libavfilter, libswscale, libswresample, x264, or GPL-only component is enabled in this Phase 2 profile.
