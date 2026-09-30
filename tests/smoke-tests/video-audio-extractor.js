@@ -48,14 +48,14 @@ const copy = async (label, bytes, extension, stream, format, outputPath) => {
     onLog: ({ message }) => append(message)
   });
 };
-const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps) => {
+const transcode = async (label, bytes, extension, stream, format, outputPath, bitrateKbps, channelMode) => {
   append("transcode=" + label + " stream=" + stream + " format=" + format);
   const inputPath = "/workerfs/" + label + "." + extension;
   return await runner.run({
     files: [{ name: inputPath, data: new Blob([bytes]), workerfs: true }],
     outputs: [outputPath],
     args: BrowserFFmpeg.videoAudioExtractorTranscodeArgs({
-      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps
+      input: inputPath, streamIndex: stream, format, output: outputPath, bitrateKbps, channelMode
     }),
     onLog: ({ message }) => append(message)
   });
@@ -111,6 +111,33 @@ try {
     throw new Error("Transcoded WAV is not PCM signed 16-bit little-endian.");
   }
 
+  for (const bitrateKbps of [128, 192, 256, 320]) {
+    const mp3Transcoded = await transcode(
+      "multi-opus-to-mp3-" + bitrateKbps,
+      fixtures.mkv, "mkv", english.index, "mp3",
+      "/english-" + bitrateKbps + ".mp3", bitrateKbps, "stereo"
+    );
+    const mp3TranscodedBytes = mp3Transcoded.files[0].data;
+    const mp3TranscodedReport = await inspect(
+      "transcoded-mp3-" + bitrateKbps, mp3TranscodedBytes, "mp3"
+    );
+    const encoded = mp3TranscodedReport.audioStreams[0];
+    if (encoded?.codec?.name !== "mp3" || encoded?.channels !== 2) {
+      throw new Error("LAME MP3 " + bitrateKbps + " kbps stereo transcode failed.");
+    }
+  }
+
+  const mp3Mono = await transcode(
+    "multi-opus-to-mp3-mono",
+    fixtures.mkv, "mkv", english.index, "mp3",
+    "/english-mono.mp3", 192, "mono"
+  );
+  const mp3MonoReport = await inspect("transcoded-mp3-mono", mp3Mono.files[0].data, "mp3");
+  if (mp3MonoReport.audioStreams[0]?.codec?.name !== "mp3" ||
+      mp3MonoReport.audioStreams[0]?.channels !== 1) {
+    throw new Error("LAME MP3 mono transcode failed.");
+  }
+
   const tsReport = await inspect("mpegts-aac", fixtures.ts, "ts");
   const tsAudio = tsReport.audioStreams.find((s) => s.codec?.name === "aac");
   if (!tsAudio || tsAudio.copy?.format !== "m4a" || tsAudio.sampleRate !== 48000 || tsAudio.channels !== 1) {
@@ -152,7 +179,7 @@ try {
     throw new Error("Video-only input was not reported correctly.");
   }
 
-  pass("phase3_copy_and_transcode");
+  pass("phase4_copy_and_transcode_mp3");
 } finally {
   runner.dispose();
 }
