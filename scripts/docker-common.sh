@@ -132,6 +132,7 @@ load_profile_config() {
   : "${PROFILE_USE_LIBWEBP:?}"
   PROFILE_USE_LIBVPX="${PROFILE_USE_LIBVPX:-0}"
   PROFILE_USE_LIBOPUS="${PROFILE_USE_LIBOPUS:-0}"
+  PROFILE_USE_LAME="${PROFILE_USE_LAME:-0}"
   : "${PROFILE_USE_WORKERFS:?}"
   : "${PROFILE_BINARY_LICENSE:?}"
   : "${PROFILE_OUTPUT_DESCRIPTION:?}"
@@ -160,6 +161,8 @@ load_profile_config() {
     || fail "PROFILE_USE_LIBVPX must be 0 or 1"
   [[ "$PROFILE_USE_LIBOPUS" == "0" || "$PROFILE_USE_LIBOPUS" == "1" ]] \
     || fail "PROFILE_USE_LIBOPUS must be 0 or 1"
+  [[ "$PROFILE_USE_LAME" == "0" || "$PROFILE_USE_LAME" == "1" ]] \
+    || fail "PROFILE_USE_LAME must be 0 or 1"
   [[ "$PROFILE_USE_LIBWEBP" != "1" || "$PROFILE_USE_X264" != "1" ]] \
     || fail "A profile cannot currently link libwebp and x264 at the same time"
   [[ "$PROFILE_USE_LIBWEBP" != "1" || "$PROFILE_USE_LIBVPX" != "1" ]] \
