@@ -1,6 +1,6 @@
 # Phase 3 Video Audio Extractor profile.
-# Inspect and copy compressed audio packets only: no decode, encode, filters,
-# swscale, swresample, or external codec libraries are linked.
+# Inspect/copy audio packets or transcode one selected audio track.
+# No video decode/encode, filters, swscale, x264, or external audio codec library is linked.
 --enable-small
 --disable-everything
 --disable-avfilter
