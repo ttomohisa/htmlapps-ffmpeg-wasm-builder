@@ -567,12 +567,13 @@ foreach ($requiredPin in @(
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
 }
-if ($versionsText -notmatch '(?m)^LIBMP3LAME_VERSION=4\.0
+if ($versionsText -notmatch '(?m)^LIBMP3LAME_VERSION=4\.0$') { throw "LAME must be pinned to 4.0 for Video Audio Extractor Phase 4." }
+if ($versionsText -notmatch '(?m)^LIBMP3LAME_SHA256=([0-9a-f]{64})$') { throw "LIBMP3LAME_SHA256 must be a lowercase SHA-256." }
+foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', 'LIBWEBP_COMMIT', 'LIBVPX_COMMIT', 'LIBOPUS_COMMIT')) {
   $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
   $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
 }
-
 $dockerText = [IO.File]::ReadAllText($dockerfile)
 if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
 Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expose a no-x264 export target."
