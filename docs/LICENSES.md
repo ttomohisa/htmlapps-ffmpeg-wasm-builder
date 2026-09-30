@@ -2,7 +2,7 @@
 
 The root `LICENSE` applies to the Builder's original source. Generated WebAssembly contains third-party code and is not relicensed by that MIT file.
 
-`video-compressor` and `video-speed-changer` configure FFmpeg with `--enable-gpl` and link x264, so their generated cores are GPL-2.0-or-later. `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` enable no GPL-only FFmpeg component and do not link x264, so their generated cores are LGPL-2.1-or-later. `video-to-webp` additionally links the pinned BSD-licensed libwebp and ships its upstream notices. Each binary bundle carries the license text applicable to that profile.
+`video-compressor` and `video-speed-changer` configure FFmpeg with `--enable-gpl` and link x264, so their generated cores are GPL-2.0-or-later. `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` enable no GPL-only FFmpeg component and do not link x264, so their generated cores are LGPL-2.1-or-later. `video-to-webp` additionally links the pinned BSD-licensed libwebp and ships its upstream notices. `video-audio-extractor` additionally links the pinned LGPL-licensed LAME 4.0 library only for MP3 encoding and must ship its applicable upstream license/corresponding source. Each binary bundle carries the license text applicable to that profile.
 
 The `ffmpeg-filter-builder` profile also links the zlib system port from the pinned Emscripten toolchain for native PNG decoding; zlib remains under its upstream permissive license.
 
