@@ -333,7 +333,7 @@
       throw new RangeError("Video Audio Extractor streamIndex must be a non-negative integer.");
     }
     const format = String(options.format || "").toLowerCase();
-    const supported = ["m4a", "opus", "mp3", "ogg", "flac", "ac3", "eac3", "wav"];
+    const supported = ["m4a", "opus", "mp3", "ogg", "flac"];
     if (!supported.includes(format)) {
       throw new RangeError("Video Audio Extractor copy format is not supported.");
     }
