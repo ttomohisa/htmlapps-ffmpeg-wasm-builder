@@ -5,15 +5,16 @@ Do not fetch Wasm from GitHub Releases during a user's browser session. Pin a Bu
 Examples:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.7.zip
-ffmpeg-wasm-video-speed-changer-v1.9.7.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.7.zip
-ffmpeg-wasm-media-inspector-v1.9.7.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.7.zip
-ffmpeg-wasm-video-to-gif-v1.9.7.zip
-ffmpeg-wasm-video-to-webp-v1.9.7.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip
+ffmpeg-wasm-video-compressor-v1.10.0.zip
+ffmpeg-wasm-video-speed-changer-v1.10.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.10.0.zip
+ffmpeg-wasm-media-inspector-v1.10.0.zip
+ffmpeg-wasm-video-audio-extractor-v1.10.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.10.0.zip
+ffmpeg-wasm-video-to-gif-v1.10.0.zip
+ffmpeg-wasm-video-to-webp-v1.10.0.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.10.0.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.10.0.zip
 ```
 
 
@@ -81,6 +82,14 @@ const report = BrowserFFmpeg.decodeJsonOutput(result, output);
 
 The Wasm report contains deterministic media facts. Browser playback advice should be derived in the app layer with APIs such as `HTMLMediaElement.canPlayType()` and MediaCapabilities instead of hard-coding browser support policy into the Wasm core.
 
+
+## Video Audio Extractor
+
+Use the tagged `ffmpeg-wasm-video-audio-extractor-v1.10.0.zip` asset for production consumers. Keep the browser source `File` / `Blob` on WORKERFS, and use the profile helpers for inspection, validated stream copy, or audio-only transcoding.
+
+The profile supports the tested stream-copy matrix plus M4A/AAC, WAV/PCM16, and MP3/LAME output. Production apps should pin the v1.10.0 asset SHA-256 from `SHA256SUMS.txt` and verify the embedded manifest before vendoring it.
+
+Do not fetch this asset from a user's browser session. Download and verify it during the app update/build process, then embed the verified runtime and Wasm files into the app.
 
 ## Video Contact Sheet
 
@@ -193,7 +202,7 @@ From v1.9.5, `startTimeSeconds` / `durationSeconds` are real runner bounds: the 
 
 For a production app, prefer a tagged profile ZIP from the Builder GitHub Release over an arbitrary local `dist/` directory. Pin all of the following in the consumer repository:
 
-- Builder tag (for example `v1.9.7`),
+- Builder tag (for example `v1.10.0`),
 - exact profile asset name,
 - SHA-256 of that asset.
 

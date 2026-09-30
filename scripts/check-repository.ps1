@@ -563,14 +563,15 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.9\.9$') { throw "Builder version must be 1.9.9." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.0$') { throw "Builder version must be 1.10.0." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
   'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT',
   'LIBWEBP_REPOSITORY', 'LIBWEBP_FALLBACK_REPOSITORY', 'LIBWEBP_REF', 'LIBWEBP_COMMIT',
   'LIBVPX_REPOSITORY', 'LIBVPX_FALLBACK_REPOSITORY', 'LIBVPX_REF', 'LIBVPX_COMMIT',
-  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT'
+  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT',
+  'LAME_VERSION', 'LAME_SOURCE_URL', 'LAME_SHA256'
 )) {
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
@@ -580,6 +581,9 @@ foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', '
   $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
 }
+
+$lameShaMatch = [regex]::Match($versionsText, '(?m)^LAME_SHA256=([0-9a-f]{64})$')
+if (-not $lameShaMatch.Success) { throw "LAME_SHA256 must be a full 64-character lowercase hex SHA-256." }
 
 $dockerText = [IO.File]::ReadAllText($dockerfile)
 if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
@@ -616,9 +620,13 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.9.9" "Release documentation must include the v1.9.9 tag procedure."
+Require-Text $releaseDoc "git tag -a v1.10.0" "Release documentation must include the v1.10.0 tag procedure."
+Require-Text $releaseDoc "ffmpeg-wasm-video-audio-extractor-v1.10.0.zip" "Release documentation must list the Video Audio Extractor v1.10.0 asset."
+Require-Text $readme "ffmpeg-wasm-video-audio-extractor-v1.10.0.zip" "Japanese README must document the v1.10.0 Video Audio Extractor release asset."
+Require-Text $readmeEn "ffmpeg-wasm-video-audio-extractor-v1.10.0.zip" "English README must document the v1.10.0 Video Audio Extractor release asset."
 
-Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles."
+Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-audio-extractor video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles, including Video Audio Extractor."
+Require-Text $releaseScript "- video-audio-extractor" "Corresponding-source README must list Video Audio Extractor as a published binary profile."
 Require-Text $releaseScript 'fetch_exact "FFmpeg"' "Release packer must fetch exact FFmpeg source."
 Require-Text $releaseScript 'fetch_exact "x264"' "Release packer must fetch exact x264 source."
 Require-Text $releaseScript 'fetch_exact "Emscripten"' "Release packer must fetch exact Emscripten source."
@@ -651,12 +659,15 @@ Require-Text $releaseWorkflow "./build.sh lossless-video-cutter" "Release workfl
 Require-Text $releaseWorkflow "./build.sh video-compressor" "Release workflow must smoke-test video compressor before publishing."
 Require-Text $releaseWorkflow "./build.sh video-speed-changer" "Release workflow must smoke-test Video Speed Changer before publishing."
 Require-Text $releaseWorkflow "./build.sh media-inspector" "Release workflow must smoke-test Media Inspector before publishing."
+Require-Text $releaseWorkflow "./build.sh video-audio-extractor" "Release workflow must smoke-test Video Audio Extractor before publishing."
 Require-Text $releaseWorkflow "./build.sh video-contact-sheet" "Release workflow must smoke-test Video Contact Sheet before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-gif" "Release workflow must smoke-test GIF before publishing."
 Require-Text $releaseWorkflow "./build.sh video-to-webp" "Release workflow must smoke-test WebP before publishing."
 Require-Text $releaseWorkflow "./build.sh ffmpeg-filter-builder" "Release workflow must smoke-test both FFmpeg Filter Builder variants before publishing."
 Require-Text $releaseWorkflow "ffmpeg-wasm-lossless-video-cutter" "Release workflow must publish the cutter binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-media-inspector" "Release workflow must publish the Media Inspector binary bundle."
+Require-Text $releaseWorkflow "ffmpeg-wasm-video-audio-extractor" "Release workflow must publish the Video Audio Extractor binary bundle."
+Require-Text $releaseWorkflow "BUILDINFO-video-audio-extractor.txt" "Release workflow must publish the Video Audio Extractor BUILDINFO."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-contact-sheet" "Release workflow must publish the Video Contact Sheet binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-gif" "Release workflow must publish the GIF binary bundle."
 Require-Text $releaseWorkflow "ffmpeg-wasm-video-to-webp" "Release workflow must publish the WebP binary bundle."
