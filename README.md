@@ -347,23 +347,25 @@ MT版をembedded assetから起動するときは `threading: "multi-thread"` �
 
 ## Public Release
 
-v1.9.7では既存7 profileに加え、FFmpeg Filter BuilderのST/MTをbuild + smoke testして公開します。
+v1.10.0では既存の公開profileに加え、**Video Audio Extractor** を正式Release対象へ追加します。タグReleaseは全profileを再build + 実ブラウザーsmoke testしてから公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.9.7.zip
-ffmpeg-wasm-video-speed-changer-v1.9.7.zip
-ffmpeg-wasm-lossless-video-cutter-v1.9.7.zip
-ffmpeg-wasm-media-inspector-v1.9.7.zip
-ffmpeg-wasm-video-contact-sheet-v1.9.7.zip
-ffmpeg-wasm-video-to-gif-v1.9.7.zip
-ffmpeg-wasm-video-to-webp-v1.9.7.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.9.7.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.9.7.zip
-ffmpeg-wasm-sources-v1.9.7.tar.gz
-BUILDINFO-ffmpeg-filter-builder-single-thread.txt
-BUILDINFO-ffmpeg-filter-builder-multi-thread.txt
+ffmpeg-wasm-video-compressor-v1.10.0.zip
+ffmpeg-wasm-video-speed-changer-v1.10.0.zip
+ffmpeg-wasm-lossless-video-cutter-v1.10.0.zip
+ffmpeg-wasm-media-inspector-v1.10.0.zip
+ffmpeg-wasm-video-audio-extractor-v1.10.0.zip
+ffmpeg-wasm-video-contact-sheet-v1.10.0.zip
+ffmpeg-wasm-video-to-gif-v1.10.0.zip
+ffmpeg-wasm-video-to-webp-v1.10.0.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.10.0.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.10.0.zip
+ffmpeg-wasm-sources-v1.10.0.tar.gz
+BUILDINFO-video-audio-extractor.txt
 SHA256SUMS.txt
 ```
+
+Video Audio ExtractorのZIPにはLAME 4.0を含むprofile固有のライセンス情報が入り、対応ソースarchiveにもSHA-256検証済みLAME 4.0ソースを含めます。
 
 詳しくは [docs/RELEASING.md](docs/RELEASING.md) を参照してください。
 
