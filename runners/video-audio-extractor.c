@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <libavcodec/avcodec.h>
 #include <libavcodec/bsf.h>
 #include <libavcodec/codec_desc.h>
 #include <libavcodec/codec_par.h>
