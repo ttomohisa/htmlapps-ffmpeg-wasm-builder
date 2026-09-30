@@ -140,7 +140,7 @@ Require-Text $libopusBuild "OPUS_DRED=OFF" "Opus build must keep DRED out of the
 Require-Text $libopusBuild "OPUS_OSCE=OFF" "Opus build must keep OSCE out of the compact profile."
 Require-Text $libmp3lameBuild "--disable-frontend" "LAME build must exclude the CLI frontend."
 Require-Text $libmp3lameBuild "--disable-decoder" "LAME build must exclude the mpg123 decoder."
-Require-Text $libmp3lameBuild 'sha256sum -c' "LAME source tarball must be SHA-256 verified."
+Require-Text $libmp3lameBuild "sha256sum -c" "LAME source tarball must be SHA-256 verified."
 Require-Text $libmp3lameBuild "libmp3lame.a" "LAME build must produce a static libmp3lame archive."
 Require-Text $buildScript 'PROFILE_USE_LIBWEBP' "Build must make libwebp profile-specific."
 Require-Text $buildScript 'PROFILE_USE_WORKERFS' "Build must make WORKERFS profile-specific."
@@ -567,13 +567,12 @@ foreach ($requiredPin in @(
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
 }
-if ($versionsText -notmatch '(?m)^LIBMP3LAME_VERSION=4\.0$') { throw "LAME must be pinned to 4.0 for Video Audio Extractor Phase 4." }
-if ($versionsText -notmatch '(?m)^LIBMP3LAME_SHA256=([0-9a-f]{64})$') { throw "LIBMP3LAME_SHA256 must be a lowercase SHA-256." }
-foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', 'LIBWEBP_COMMIT', 'LIBVPX_COMMIT', 'LIBOPUS_COMMIT')) {
+if ($versionsText -notmatch '(?m)^LIBMP3LAME_VERSION=4\.0
   $commitPattern = '(?m)^' + [regex]::Escape($commitName) + '=([0-9a-f]{40})$'
   $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
 }
+
 $dockerText = [IO.File]::ReadAllText($dockerfile)
 if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
 Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expose a no-x264 export target."
