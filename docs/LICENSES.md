@@ -9,3 +9,6 @@ The `ffmpeg-filter-builder` profile also links the zlib system port from the pin
 Every tagged release keeps binary artifacts, profile-specific build information, upstream notices, and the exact corresponding-source archive in the same GitHub Release. See `THIRD_PARTY_NOTICES.md` for the component summary.
 
 This documentation is an engineering packaging policy, not legal advice.
+
+
+Video Audio Extractor's MP3 phase links the pinned LAME 4.0 libmp3lame library without the LAME frontend or decoder. libmp3lame is LGPL-2.0-or-later; tagged releases that include this profile must carry its COPYING notice and corresponding source alongside the FFmpeg/Emscripten sources.

@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update \
     && apt-get install -y --no-install-recommends \
-       git ca-certificates pkg-config make autoconf automake libtool
+       git ca-certificates curl pkg-config make autoconf automake libtool
 WORKDIR /workspace
 
 # Built only by profiles whose final Wasm actually links x264.
@@ -72,6 +72,17 @@ ENV LIBOPUS_REPOSITORY=${LIBOPUS_REPOSITORY} \
 COPY scripts/docker-common.sh scripts/build-libopus.sh /workspace/scripts/
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-libopus.sh
 
+# Built only by Video Audio Extractor for MP3/LAME output.
+FROM toolchain-base AS lame-builder
+ARG LAME_REF
+ARG LAME_URL
+ARG LAME_SHA256
+ENV LAME_REF=${LAME_REF} \
+    LAME_URL=${LAME_URL} \
+    LAME_SHA256=${LAME_SHA256}
+COPY scripts/docker-common.sh scripts/build-lame.sh /workspace/scripts/
+RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-lame.sh
+
 # Exact FFmpeg checkout shared by all profiles.
 FROM toolchain-base AS ffmpeg-source
 ARG FFMPEG_REPOSITORY
@@ -105,6 +116,9 @@ ARG LIBOPUS_REPOSITORY
 ARG LIBOPUS_FALLBACK_REPOSITORY
 ARG LIBOPUS_REF
 ARG LIBOPUS_COMMIT
+ARG LAME_REF
+ARG LAME_URL
+ARG LAME_SHA256
 ARG PROFILE=video-compressor
 ARG THREADING_MODE=single-thread
 ENV BUILDER_VERSION=${BUILDER_VERSION} \
@@ -127,6 +141,9 @@ ENV BUILDER_VERSION=${BUILDER_VERSION} \
     LIBOPUS_FALLBACK_REPOSITORY=${LIBOPUS_FALLBACK_REPOSITORY} \
     LIBOPUS_REF=${LIBOPUS_REF} \
     LIBOPUS_COMMIT=${LIBOPUS_COMMIT} \
+    LAME_REF=${LAME_REF} \
+    LAME_URL=${LAME_URL} \
+    LAME_SHA256=${LAME_SHA256} \
     PROFILE=${PROFILE} \
     THREADING_MODE=${THREADING_MODE}
 COPY --from=ffmpeg-source /src/ffmpeg /src/ffmpeg
@@ -135,6 +152,10 @@ COPY runners /workspace/runners
 COPY scripts/docker-common.sh scripts/build-ffmpeg.sh /workspace/scripts/
 
 FROM wasm-common AS wasm-builder-no-x264
+RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-ffmpeg.sh
+
+FROM wasm-common AS wasm-builder-with-lame
+COPY --from=lame-builder /opt/ffmpeg-wasm /opt/ffmpeg-wasm
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-ffmpeg.sh
 
 FROM wasm-common AS wasm-builder-with-x264
@@ -157,6 +178,16 @@ ARG PROFILE=lossless-video-cutter
 ARG THREADING_MODE=single-thread
 ENV PROFILE=${PROFILE} THREADING_MODE=${THREADING_MODE} OUT_DIR=/out
 COPY --from=wasm-builder-no-x264 /out/ /out/
+COPY runtime /workspace/runtime
+COPY tests /workspace/tests
+COPY scripts/docker-common.sh scripts/pack-smoke-test.sh /workspace/scripts/
+RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
+
+FROM toolchain-base AS package-with-lame
+ARG PROFILE=video-audio-extractor
+ARG THREADING_MODE=single-thread
+ENV PROFILE=${PROFILE} THREADING_MODE=${THREADING_MODE} OUT_DIR=/out
+COPY --from=wasm-builder-with-lame /out/ /out/
 COPY runtime /workspace/runtime
 COPY tests /workspace/tests
 COPY scripts/docker-common.sh scripts/pack-smoke-test.sh /workspace/scripts/
@@ -194,6 +225,9 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/pack-smoke-test.sh
 
 FROM scratch AS export-no-x264
 COPY --from=package-no-x264 /out/ /
+
+FROM scratch AS export-with-lame
+COPY --from=package-with-lame /out/ /
 
 FROM scratch AS export-with-x264
 COPY --from=package-with-x264 /out/ /

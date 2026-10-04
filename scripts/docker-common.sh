@@ -49,6 +49,16 @@ require_libopus_env() {
   : "${SRC_DIR:?}"
 }
 
+require_lame_env() {
+  : "${EMSDK_VERSION:?}"
+  : "${EMSCRIPTEN_COMMIT:?}"
+  : "${LAME_REF:?}"
+  : "${LAME_URL:?}"
+  : "${LAME_SHA256:?}"
+  : "${INSTALL_DIR:?}"
+  : "${SRC_DIR:?}"
+}
+
 require_ffmpeg_env() {
   : "${EMSDK_VERSION:?}"
   : "${EMSCRIPTEN_COMMIT:?}"
@@ -63,6 +73,7 @@ require_build_env() {
   require_libwebp_env
   require_libvpx_env
   require_libopus_env
+  require_lame_env
   require_ffmpeg_env
   : "${BUILDER_VERSION:?}"
   : "${PROFILE:?}"
@@ -121,6 +132,7 @@ load_profile_config() {
   : "${PROFILE_USE_LIBWEBP:?}"
   PROFILE_USE_LIBVPX="${PROFILE_USE_LIBVPX:-0}"
   PROFILE_USE_LIBOPUS="${PROFILE_USE_LIBOPUS:-0}"
+  PROFILE_USE_LAME="${PROFILE_USE_LAME:-0}"
   : "${PROFILE_USE_WORKERFS:?}"
   : "${PROFILE_BINARY_LICENSE:?}"
   : "${PROFILE_OUTPUT_DESCRIPTION:?}"
@@ -149,6 +161,8 @@ load_profile_config() {
     || fail "PROFILE_USE_LIBVPX must be 0 or 1"
   [[ "$PROFILE_USE_LIBOPUS" == "0" || "$PROFILE_USE_LIBOPUS" == "1" ]] \
     || fail "PROFILE_USE_LIBOPUS must be 0 or 1"
+  [[ "$PROFILE_USE_LAME" == "0" || "$PROFILE_USE_LAME" == "1" ]] \
+    || fail "PROFILE_USE_LAME must be 0 or 1"
   [[ "$PROFILE_USE_LIBWEBP" != "1" || "$PROFILE_USE_X264" != "1" ]] \
     || fail "A profile cannot currently link libwebp and x264 at the same time"
   [[ "$PROFILE_USE_LIBWEBP" != "1" || "$PROFILE_USE_LIBVPX" != "1" ]] \
@@ -194,6 +208,7 @@ print_toolchain() {
   printf 'libwebp ref:    %s (%s)\n' "${LIBWEBP_REF:-n/a}" "${LIBWEBP_COMMIT:-n/a}"
   printf 'libvpx ref:     %s (%s)\n' "${LIBVPX_REF:-n/a}" "${LIBVPX_COMMIT:-n/a}"
   printf 'libopus ref:    %s (%s)\n' "${LIBOPUS_REF:-n/a}" "${LIBOPUS_COMMIT:-n/a}"
+  printf 'LAME ref:       %s (%s)\n' "${LAME_REF:-n/a}" "${LAME_SHA256:-n/a}"
   printf 'Profile:        %s\n' "${PROFILE:-n/a}"
 }
 

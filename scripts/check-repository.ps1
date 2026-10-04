@@ -97,6 +97,7 @@ $filterLauncher = Require-File "build-ffmpeg-filter-builder.bat"
 $libwebpBuild = Require-File "scripts/build-libwebp.sh"
 $libvpxBuild = Require-File "scripts/build-libvpx.sh"
 $libopusBuild = Require-File "scripts/build-libopus.sh"
+$lameBuild = Require-File "scripts/build-lame.sh"
 $smokeFixture = Require-File "tests/fixtures/smoke-input.mp4"
 $rotatedSmokeFixture = Require-File "tests/fixtures/smoke-rotated.mp4"
 $smokeWindows = Require-File "scripts/smoke-test.ps1"
@@ -131,6 +132,10 @@ Require-Text $buildScript '"${PROFILE_LINK_LIBS[@]}"' "Build must link profile-s
 Require-Text $buildScript 'PROFILE_USE_X264' "Build must make x264 profile-specific."
 Require-Text $buildScript 'PROFILE_USE_LIBVPX' "Build must make libvpx profile-specific."
 Require-Text $buildScript 'PROFILE_USE_LIBOPUS' "Build must make Opus profile-specific."
+Require-Text $buildScript 'PROFILE_USE_LAME' "Build must make LAME profile-specific."
+Require-Text $lameBuild 'LAME_SHA256' "LAME build must verify the pinned official source archive."
+Require-Text $lameBuild '--disable-shared' "LAME build must produce a static library for WASM."
+Require-Text $lameBuild '--disable-frontend' "LAME build must not include the CLI frontend."
 Require-Text $libvpxBuild "--enable-vp9-encoder" "libvpx build must keep the VP9 encoder."
 Require-Text $libvpxBuild "--disable-vp9-decoder" "libvpx build must stay encoder-only."
 Require-Text $libvpxBuild "--enable-small" "libvpx build must favor compact output."
@@ -165,6 +170,8 @@ Require-Text $buildScript 'Unexpected legacy pthread worker asset' "Build must r
 Require-Text $buildScript '"x264Linked":' "Manifest must state whether x264 is linked."
 Require-Text $buildScript '"libvpxLinked":' "Manifest must state whether libvpx is linked."
 Require-Text $buildScript '"libopusLinked":' "Manifest must state whether Opus is linked."
+Require-Text $buildScript '"libmp3lameLinked":' "Manifest must state whether libmp3lame is linked."
+Require-Text $buildScript '"lameSha256":' "Manifest must record the pinned LAME source digest."
 Require-Text $buildScript '"libwebpLinked":' "Manifest must state whether libwebp is linked."
 
 Require-Text $runtime "instantiateWasm" "Browser runtime must instantiate transferred Wasm bytes directly."
@@ -330,6 +337,7 @@ Require-Text $inspectorProfile "--enable-parser=hevc" "Media Inspector must pars
 Require-Text $inspectorReadme "Media Doctor" "Media Inspector docs must explain the browser-diagnosis layer."
 
 Require-Text $extractorProfileEnv "PROFILE_USE_X264=0" "Video Audio Extractor must not link x264."
+Require-Text $extractorProfileEnv "PROFILE_USE_LAME=1" "Video Audio Extractor Phase 4 must link LAME only for MP3 output."
 Require-Text $extractorProfileEnv "PROFILE_USE_WORKERFS=1" "Video Audio Extractor must use WORKERFS for large File/Blob inputs."
 Require-Text $extractorProfileEnv 'PROFILE_BINARY_LICENSE="LGPL-2.1-or-later"' "Video Audio Extractor Phase 1 must remain LGPL."
 Require-Text $extractorProfileEnv "libavformat/libavformat.a" "Video Audio Extractor must link libavformat."
@@ -346,9 +354,11 @@ Require-Text $extractorProfile "--enable-decoder=opus" "Video Audio Extractor Ph
 Require-Text $extractorProfile "--enable-decoder=flac" "Video Audio Extractor Phase 3 must decode FLAC for M4A/WAV conversion."
 Require-Text $extractorProfile "--enable-encoder=aac" "Video Audio Extractor Phase 3 must enable native AAC encoding."
 Require-Text $extractorProfile "--enable-encoder=pcm_s16le" "Video Audio Extractor Phase 3 must enable PCM16 WAV output."
+Require-Text $extractorProfile "--enable-libmp3lame" "Video Audio Extractor Phase 4 must enable libmp3lame."
+Require-Text $extractorProfile "--enable-encoder=libmp3lame" "Video Audio Extractor Phase 4 must enable the LAME MP3 encoder."
 Require-Text $extractorProfile "--enable-muxer=wav" "Video Audio Extractor Phase 3 must enable WAV output."
 Require-Text $extractorProfile "--enable-bsf=aac_adtstoasc" "Video Audio Extractor must support MPEG-TS/ADTS AAC -> M4A."
-Require-Text $extractorProfile "--enable-muxer=mp3" "Video Audio Extractor Phase 2 must enable MP3 output."
+Require-Text $extractorProfile "--enable-muxer=mp3" "Video Audio Extractor Phase 2 must enable MP3 output."\nRequire-Text $extractorProfile "--enable-demuxer=mp3" "Video Audio Extractor Phase 4 must re-inspect generated MP3 output."
 Require-Text $extractorProfile "--enable-muxer=flac" "Video Audio Extractor Phase 2 must enable FLAC output."
 Require-Text $extractorProfileEnv '"copyFormats":["m4a","opus","mp3","ogg","flac"]' "Video Audio Extractor capabilities must expose only the tested Phase 2 matrix."
 Require-Text $extractorRunner "AV_CODEC_ID_ALAC" "Video Audio Extractor Phase 2 must map ALAC to M4A."
@@ -356,7 +366,7 @@ Require-Text $extractorRunner "AV_CODEC_ID_MP3" "Video Audio Extractor Phase 2 m
 Require-Text $extractorRunner "AV_CODEC_ID_VORBIS" "Video Audio Extractor Phase 2 must map Vorbis to OGG."
 Require-Text $extractorRunner "AV_CODEC_ID_FLAC" "Video Audio Extractor Phase 2 must map FLAC."
 Require-Text $runtime '["m4a", "opus", "mp3", "ogg", "flac"]' "Browser runtime must expose only tested Video Audio Extractor Phase 2 copy formats."
-Require-Text $extractorRunner '#define RUNNER_VERSION "1.2.0"' "Video Audio Extractor runner version must be 1.2.0 for Phase 3."
+Require-Text $extractorRunner '#define RUNNER_VERSION "1.3.0"' "Video Audio Extractor runner version must be 1.3.0 for Phase 4."
 Require-Text $extractorRunner "av_bsf_get_by_name" "Video Audio Extractor must apply a bitstream filter when needed."
 Require-Text $extractorRunner "fill_missing_adts_parameters" "Video Audio Extractor must derive missing MPEG-TS AAC parameters without adding an audio decoder."
 Require-Text $extractorRunner "av_interleaved_write_frame" "Video Audio Extractor stream copy must mux compressed packets."
@@ -364,10 +374,16 @@ Require-Text $runtime "videoAudioExtractorInspectArgs" "Browser runtime must exp
 Require-Text $runtime "videoAudioExtractorCopyArgs" "Browser runtime must expose Video Audio Extractor stream copy."
 Require-Text $runtime "videoAudioExtractorTranscodeArgs" "Browser runtime must expose Video Audio Extractor transcoding."
 Require-Text $extractorProfileEnv '"transcode":true' "Video Audio Extractor manifest must advertise transcoding."
-Require-Text $extractorProfileEnv '"transcodeFormats":["m4a","wav"]' "Video Audio Extractor manifest must advertise M4A and WAV transcoding."
+Require-Text $extractorProfileEnv '"transcodeFormats":["m4a","wav","mp3"]' "Video Audio Extractor manifest must advertise M4A, WAV, and MP3 transcoding."
+Require-Text $extractorProfileEnv '"mp3BitratesKbps":[128,192,256,320]' "Video Audio Extractor must advertise the tested MP3 bitrate matrix."
+Require-Text $extractorProfileEnv '"mp3Channels":["mono","stereo"]' "Video Audio Extractor must advertise MP3 mono/stereo output."
 Require-Text $extractorRunner "swr_alloc_set_opts2" "Video Audio Extractor Phase 3 must use libswresample directly."
 Require-Text $extractorRunner "AVAudioFifo" "Video Audio Extractor Phase 3 must buffer audio frames for fixed-size encoders."
-Require-Text $extractorSmoke "phase3_copy_and_transcode" "Video Audio Extractor smoke test must cover copy plus M4A/WAV transcoding."
+Require-Text $extractorSmoke "phase4_copy_and_transcode_mp3" "Video Audio Extractor smoke test must cover copy plus M4A/WAV/MP3 transcoding."
+Require-Text $extractorSmoke "[128, 192, 256, 320]" "Video Audio Extractor smoke test must exercise every MP3 bitrate."
+Require-Text $extractorSmoke '"mono"' "Video Audio Extractor smoke test must verify mono MP3 output."
+Require-Text $runtime "channelMode" "Browser runtime must expose MP3 mono/stereo selection."
+Require-Text $runtime "128, 192, 256, 320" "Browser runtime must validate the MP3 bitrate matrix."
 Require-Text $extractorReadme "WORKERFS" "Video Audio Extractor profile docs must explain large-file input."
 
 Require-Text $contactProfileEnv "PROFILE_USE_X264=0" "Video Contact Sheet must not link x264."
@@ -543,7 +559,8 @@ foreach ($requiredPin in @(
   'X264_REPOSITORY', 'X264_FALLBACK_REPOSITORY', 'X264_REF', 'X264_COMMIT',
   'LIBWEBP_REPOSITORY', 'LIBWEBP_FALLBACK_REPOSITORY', 'LIBWEBP_REF', 'LIBWEBP_COMMIT',
   'LIBVPX_REPOSITORY', 'LIBVPX_FALLBACK_REPOSITORY', 'LIBVPX_REF', 'LIBVPX_COMMIT',
-  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT'
+  'LIBOPUS_REPOSITORY', 'LIBOPUS_FALLBACK_REPOSITORY', 'LIBOPUS_REF', 'LIBOPUS_COMMIT',
+  'LAME_REF', 'LAME_URL', 'LAME_SHA256'
 )) {
   $pinPattern = '(?m)^' + [regex]::Escape($requiredPin) + '=.+$'
   if ($versionsText -notmatch $pinPattern) { throw "versions.env is missing $requiredPin." }
@@ -553,6 +570,8 @@ foreach ($commitName in @('EMSCRIPTEN_COMMIT', 'FFMPEG_COMMIT', 'X264_COMMIT', '
   $match = [regex]::Match($versionsText, $commitPattern)
   if (-not $match.Success) { throw "$commitName must be a full 40-character lowercase hex commit." }
 }
+$lameDigest = [regex]::Match($versionsText, '(?m)^LAME_SHA256=([0-9a-f]{64})$')
+if (-not $lameDigest.Success) { throw "LAME_SHA256 must be a full 64-character lowercase SHA-256 digest." }
 
 $dockerText = [IO.File]::ReadAllText($dockerfile)
 if ($dockerText -match 'cli-builder|export-cli|export-compact|export-all|build-cli') { throw "Dockerfile still contains removed dual-mode stages." }
@@ -560,19 +579,24 @@ Require-Text $dockerfile "FROM scratch AS export-no-x264" "Dockerfile must expos
 Require-Text $dockerfile "FROM scratch AS export-with-video-codecs" "Dockerfile must expose a combined video-codec export target."
 Require-Text $dockerfile "FROM scratch AS export-with-x264" "Dockerfile must expose an x264 export target."
 Require-Text $dockerfile "FROM scratch AS export-with-libwebp" "Dockerfile must expose a libwebp export target."
+Require-Text $dockerfile "FROM scratch AS export-with-lame" "Dockerfile must expose a LAME export target."
 Require-Text $unixBuild 'EXPORT_TARGET="export-no-x264"' "Unix build must skip optional codec libraries when unused."
 Require-Text $unixBuild 'EXPORT_TARGET="export-with-video-codecs"' "Unix build must select the combined video codec target."
 Require-Text $unixBuild 'EXPORT_TARGET="export-with-x264"' "Unix build must select x264 only when required."
 Require-Text $unixBuild 'EXPORT_TARGET="export-with-libwebp"' "Unix build must select libwebp only when required."
+Require-Text $unixBuild 'EXPORT_TARGET="export-with-lame"' "Unix build must select LAME only when required."
 Require-Text $windowsBuild '"export-no-x264"' "Windows build must support the no-x264 Docker target."
 Require-Text $windowsBuild '"export-with-video-codecs"' "Windows build must support the combined video codec target."
 Require-Text $windowsBuild '"export-with-x264"' "Windows build must support the x264 Docker target."
 Require-Text $windowsBuild '"export-with-libwebp"' "Windows build must support the libwebp Docker target."
+Require-Text $windowsBuild '"export-with-lame"' "Windows build must support the LAME Docker target."
 
 Require-Text $thirdParty 'generated `ffmpeg.wasm`' "Third-party notice must distinguish generated Wasm from the MIT builder source."
 Require-Text $thirdParty "lossless-video-cutter" "Third-party notice must explain cutter x264 usage."
 Require-Text $thirdParty "media-inspector" "Third-party notice must explain Media Inspector licensing."
 Require-Text $thirdParty "video-contact-sheet" "Third-party notice must explain Video Contact Sheet licensing."
+Require-Text $thirdParty "libmp3lame" "Third-party notice must explain the LAME dependency."
+Require-Text $licenseIndex "LAME-COPYING" "License index must document LAME notice packaging."
 Require-Text $thirdParty "GPL-2.0-or-later" "Third-party notice must state video-compressor core licensing."
 Require-Text $thirdParty "LGPL-2.1-or-later" "Third-party notice must state cutter core licensing."
 Require-Text $licenseIndex "FFmpeg-COPYING.GPLv2" "License index must document FFmpeg GPL license packaging."
