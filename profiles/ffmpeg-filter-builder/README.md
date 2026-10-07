@@ -45,7 +45,7 @@ Runner 0.2.2 uses a minimum 90 kHz video filter time base and rescales decoded P
 
 v1.9.6 hardens bounded preview rendering for long inputs: filter-source EOF after `trim` / `atrim` is a normal completion condition, not a runner failure. The runner also probes video filter output geometry before encoder creation, so graph filters that change frame dimensions are preserved in the encoded MP4.
 
-## Video frame durations (unreleased repair)
+## v1.10.2 video frame durations
 
 Both input paths preserve positive decoded/filtered video duration through each time-base conversion and opt into FFmpeg's public `AV_CODEC_FLAG_FRAME_DURATION` contract. Multi-input ranges exclude the frame exactly at the end (`[start, end)`), matching `trim`. No universal one-tick or 30-fps duration is invented.
 

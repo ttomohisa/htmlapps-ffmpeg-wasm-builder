@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.10.2 - 2026-10-07
 
-- Preserve valid final video-frame durations in both Filter Builder input paths and threading variants, including variable-rate and one-frame input, explicit FPS, and app-generated constant-speed timestamp chains.
-- Rescale video duration at decode/filter/encoder time-base boundaries and make multi-input preview endpoints half-open.
-- Keep custom timestamp expressions accepted; expressions whose duration transform is not recognized retain legacy unknown-duration behavior with a warning rather than receiving an invented terminal interval. A downstream FPS filter establishes a fresh cadence.
-- Add shared encoded-timing and normal-decode regressions to both Filter Builder browser smoke variants, without changing dependency pins or release versions.
+- Fixed shortened final video-frame durations in both Filter Builder input paths and threading variants, including original/VFR, one-frame, explicit-FPS and app-generated constant-speed output.
+- Rescaled positive video duration at decode/filter/encoder time-base boundaries and made multi-input preview endpoints half-open.
+- Kept custom timestamp expressions accepted; unrecognized duration transforms retain legacy unknown-duration behavior with a warning. A downstream FPS filter establishes a fresh cadence.
+- Added shared encoded-timing and coded-sample decode coverage to both browser smoke variants, with independent normal MP4 demux/decode checks in Node. Preview alignment uses decoded luma with a wrong-start negative control.
+- Kept dependency pins, release profiles, licensing, runtime APIs and threading contracts unchanged from v1.10.1.
 
 ## 1.10.1 - 2026-10-07
 

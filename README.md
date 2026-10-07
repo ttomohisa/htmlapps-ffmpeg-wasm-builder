@@ -347,20 +347,20 @@ MT版をembedded assetから起動するときは `threading: "multi-thread"` �
 
 ## Public Release
 
-v1.10.1は、Video CompressorのMP4/WebMとVideo to GIFで最終フレームの長さが短くなる問題を修正するpatch releaseです。v1.10.0で追加した **Video Audio Extractor** を含む公開profileを維持します。タグReleaseは全profileを再build + 実ブラウザーsmoke testしてから公開します。
+v1.10.2は、FFmpeg Filter Builderのsingle-thread / multi-threadで最終フレームの長さとPreviewの終端を修正するpatch releaseです。Original / VFR、1フレーム入力、FPS変換、アプリが生成する定速Speedチェーンに対応し、**Video Audio Extractor** を含むv1.10.1の公開profileと依存関係pinを維持します。タグReleaseは全profileを再build + 実ブラウザーsmoke testしてから公開します。
 
 ```text
-ffmpeg-wasm-video-compressor-v1.10.1.zip
-ffmpeg-wasm-video-speed-changer-v1.10.1.zip
-ffmpeg-wasm-lossless-video-cutter-v1.10.1.zip
-ffmpeg-wasm-media-inspector-v1.10.1.zip
-ffmpeg-wasm-video-audio-extractor-v1.10.1.zip
-ffmpeg-wasm-video-contact-sheet-v1.10.1.zip
-ffmpeg-wasm-video-to-gif-v1.10.1.zip
-ffmpeg-wasm-video-to-webp-v1.10.1.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.10.1.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.10.1.zip
-ffmpeg-wasm-sources-v1.10.1.tar.gz
+ffmpeg-wasm-video-compressor-v1.10.2.zip
+ffmpeg-wasm-video-speed-changer-v1.10.2.zip
+ffmpeg-wasm-lossless-video-cutter-v1.10.2.zip
+ffmpeg-wasm-media-inspector-v1.10.2.zip
+ffmpeg-wasm-video-audio-extractor-v1.10.2.zip
+ffmpeg-wasm-video-contact-sheet-v1.10.2.zip
+ffmpeg-wasm-video-to-gif-v1.10.2.zip
+ffmpeg-wasm-video-to-webp-v1.10.2.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.10.2.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.10.2.zip
+ffmpeg-wasm-sources-v1.10.2.tar.gz
 BUILDINFO-video-audio-extractor.txt
 SHA256SUMS.txt
 ```
