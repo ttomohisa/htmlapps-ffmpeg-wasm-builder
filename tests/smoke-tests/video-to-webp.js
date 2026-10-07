@@ -17,7 +17,6 @@ const result = await runner.run({
   }),
   onLog: ({ message }) => append(message)
 });
-runner.dispose();
 
 if (result.exitCode !== 0) throw new Error("Runner exit code was " + result.exitCode);
 if (!result.files || result.files.length !== 1) throw new Error("Expected exactly one WebP output");
@@ -28,4 +27,20 @@ if (String.fromCharCode(...output.slice(0, 4)) !== "RIFF") throw new Error("WebP
 if (String.fromCharCode(...output.slice(8, 12)) !== "WEBP") throw new Error("WebP output does not contain WEBP signature");
 if (!containsAscii(output, "ANIM")) throw new Error("WebP output does not contain ANIM chunk");
 if (!containsAscii(output, "ANMF")) throw new Error("WebP output does not contain ANMF frames");
+await runTimingRegressions("video-to-webp", timingFixtures, async (bytes, args, output) => {
+  let result;
+  try { result = await runner.run({
+    files: [{name: "/workerfs/timing-input.mp4", data: new Blob([bytes]), workerfs: true}],
+    outputs: [output], args,
+    onLog: ({message}) => append(message)
+  });
+  } catch (error) {
+    const match = /FFmpeg WASM runner exited with code (\d+)/.exec(error.message);
+    if (match) return {exitCode: Number(match[1])};
+    throw error;
+  }
+  return {exitCode: result.exitCode, data: result.files?.find(file => file.name === output)?.data};
+}, BrowserFFmpeg, append);
+runner.dispose();
+
 pass("webpBytes=" + output.byteLength);
