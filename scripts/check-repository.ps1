@@ -568,7 +568,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.0$') { throw "Builder version must be 1.10.0." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.1$') { throw "Builder version must be 1.10.1." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -625,10 +625,10 @@ Require-Text $readme "BrowserFFmpeg.videoToGifArgs" "Japanese README must docume
 Require-Text $readme "video-to-webp" "Japanese README must document the WebP profile."
 Require-Text $readme "BrowserFFmpeg.videoToWebpArgs" "Japanese README must document the WebP browser helper."
 Require-Text $readmeEn 'does **not** relicense generated `ffmpeg.wasm`' "English README must clearly scope the root MIT license."
-Require-Text $releaseDoc "git tag -a v1.10.0" "Release documentation must include the v1.10.0 tag procedure."
-Require-Text $releaseDoc "ffmpeg-wasm-video-audio-extractor-v1.10.0.zip" "Release documentation must list the Video Audio Extractor v1.10.0 asset."
-Require-Text $readme "ffmpeg-wasm-video-audio-extractor-v1.10.0.zip" "Japanese README must document the v1.10.0 Video Audio Extractor release asset."
-Require-Text $readmeEn "ffmpeg-wasm-video-audio-extractor-v1.10.0.zip" "English README must document the v1.10.0 Video Audio Extractor release asset."
+Require-Text $releaseDoc "git tag -a v1.10.1" "Release documentation must include the v1.10.1 tag procedure."
+Require-Text $releaseDoc "ffmpeg-wasm-video-audio-extractor-v1.10.1.zip" "Release documentation must list the Video Audio Extractor v1.10.1 asset."
+Require-Text $readme "ffmpeg-wasm-video-audio-extractor-v1.10.1.zip" "Japanese README must document the v1.10.1 Video Audio Extractor release asset."
+Require-Text $readmeEn "ffmpeg-wasm-video-audio-extractor-v1.10.1.zip" "English README must document the v1.10.1 Video Audio Extractor release asset."
 
 Require-Text $releaseScript 'RELEASE_PROFILES=(video-compressor video-speed-changer lossless-video-cutter media-inspector video-audio-extractor video-contact-sheet video-to-gif video-to-webp ffmpeg-filter-builder)' "Release packer must include all release profiles, including Video Audio Extractor."
 Require-Text $releaseScript "- video-audio-extractor" "Corresponding-source README must list Video Audio Extractor as a published binary profile."
