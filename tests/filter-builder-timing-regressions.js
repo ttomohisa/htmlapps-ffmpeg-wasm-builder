@@ -68,13 +68,31 @@
     return {gray, lumaVariance: values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length,
       chromaError: chromaError / values.length};
   }
+  // Compare source/output Y planes directly: Canvas RGB conversion can choose
+  // different color matrices for untagged video. This retains the strict
+  // spatial-alignment threshold and the wrong-start negative control.
+  function lumaReference(bytes, plane, width, height, columns = 32, rows = 18) {
+    assert(plane && Number.isInteger(plane.offset) && plane.offset >= 0 &&
+      Number.isInteger(plane.stride) && plane.stride >= width && width >= columns && height >= rows &&
+      plane.offset + (height - 1) * plane.stride + width <= bytes.length, "invalid decoded luma plane");
+    const values = [];
+    for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
+      const left = Math.floor(x * width / columns), right = Math.floor((x + 1) * width / columns);
+      const top = Math.floor(y * height / rows), bottom = Math.floor((y + 1) * height / rows);
+      let sum = 0;
+      for (let row = top; row < bottom; row++) for (let col = left; col < right; col++)
+        sum += bytes[plane.offset + row * plane.stride + col];
+      values.push(sum / ((right - left) * (bottom - top)));
+    }
+    return values;
+  }
   function referenceError(actual, reference) {
     assert(actual.length === reference.length, "reference sample geometry differs");
     return actual.reduce((sum, value, i) => sum + Math.abs(value - reference[i]), 0) / actual.length;
   }
   function assertPreviewAlignment(error) {
-    // Correct encoded 1s frames are <=1.51 MAE with either native grayscale or
-    // browser weighted-RGB reference; the wrong 0s/2s frames are >=8.50 MAE.
+    // Native RGB and browser Y-grid references avoid an assumed display color
+    // matrix. Correct Y-grid MAE is <0.55; wrong 0s/2s grids are >7.49.
     assert(Number.isFinite(error) && error < 4, `nonzero preview does not start at source 1s: pixel error ${error}`);
   }
   function rejectWrongStart(wrong, reference) {
@@ -175,7 +193,7 @@
     return cases.length;
   }
 
-  root.FilterBuilderTiming = {run: runFilterBuilderTimingRegressions, pixelSummary, referenceError, assertPreviewAlignment, rejectWrongStart, toneFrequency};
+  root.FilterBuilderTiming = {run: runFilterBuilderTimingRegressions, pixelSummary, lumaReference, referenceError, assertPreviewAlignment, rejectWrongStart, toneFrequency};
   if (typeof module !== "undefined" && module.exports) module.exports = root.FilterBuilderTiming;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
@@ -259,7 +277,7 @@
     const source = h264Samples(bytes);
     const supported = await VideoDecoder.isConfigSupported(source.config);
     assert(supported.supported, "browser H.264 VideoDecoder is unavailable");
-    let count = 0, pixels, format, failure;
+    let count = 0, pixels, format, failure, capturedFrame;
     const surface = canvas(), context = surface.getContext("2d", {willReadFrequently: true});
     const decoder = new VideoDecoder({error: error => { failure = error; }, output: frame => {
       try {
@@ -267,6 +285,7 @@
           context.drawImage(frame, 0, 0, 32, 18);
           pixels = root.FilterBuilderTiming.pixelSummary(context.getImageData(0, 0, 32, 18).data);
           format = frame.format;
+          capturedFrame = frame.clone();
         }
         count++;
       } catch (error) { failure = error; } finally { frame.close(); }
@@ -276,10 +295,20 @@
       for (const sample of source.samples) decoder.decode(new EncodedVideoChunk(sample));
       await decoder.flush();
       if (failure) throw failure;
-    } finally { if (decoder.state !== "closed") decoder.close(); }
-    assert(pixels, "browser coded-sample decoder returned no captured frame");
-    return {decodeKind: "browser coded-sample decoded", codec: "h264", count, width: source.config.codedWidth, height: source.config.codedHeight,
-      yuv420p: format === "I420" || format === "NV12", encodedAudio: source.audio, ...pixels};
+      assert(pixels && capturedFrame, "browser coded-sample decoder returned no captured frame");
+      assert(format === "I420" || format === "NV12", "decoded video is not 8-bit 4:2:0");
+      const planeBytes = new Uint8Array(capturedFrame.allocationSize());
+      const layout = await capturedFrame.copyTo(planeBytes);
+      const luma = root.FilterBuilderTiming.lumaReference(planeBytes, layout[0],
+        capturedFrame.visibleRect.width, capturedFrame.visibleRect.height);
+      return {decodeKind: "browser coded-sample decoded", codec: "h264", count,
+        width: source.config.codedWidth, height: source.config.codedHeight,
+        yuv420p: true, encodedAudio: source.audio, ...pixels, alignmentLuma: luma,
+        captureTimestamp: capturedFrame.timestamp};
+    } finally {
+      if (capturedFrame) capturedFrame.close();
+      if (decoder.state !== "closed") decoder.close();
+    }
   }
   function createBrowserDecoder(fixtures) {
     let reference, wrongStart;
@@ -288,9 +317,10 @@
       if (expected.sourceStart === 1) {
         reference ||= decodeVideo(fixtures.filterCfr, 30);
         wrongStart ||= decodeVideo(fixtures.filterCfr, 0);
-        const referencePixels = (await reference).gray;
-        result.referenceControlRejected = root.FilterBuilderTiming.rejectWrongStart((await wrongStart).gray, referencePixels);
-        result.referenceError = root.FilterBuilderTiming.referenceError(result.gray, referencePixels);
+        assert((await reference).captureTimestamp === 1000000, "source reference is not exactly 1s");
+        const referencePixels = (await reference).alignmentLuma;
+        result.referenceControlRejected = root.FilterBuilderTiming.rejectWrongStart((await wrongStart).alignmentLuma, referencePixels);
+        result.referenceError = root.FilterBuilderTiming.referenceError(result.alignmentLuma, referencePixels);
       }
       if (expected.audio) {
         assert(result.encodedAudio && result.encodedAudio.codec === "aac", "missing AAC sample description");

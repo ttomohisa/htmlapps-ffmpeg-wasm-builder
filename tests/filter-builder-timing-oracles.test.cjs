@@ -45,3 +45,11 @@ test('video-only VFR browser demux retains all samples with no audio', () => {
   assert.deepEqual(actual.samples.map(sample => sample.timestamp), [0, 83000, 207000, 249000, 491000, 532000]);
   assert.equal(actual.samples.at(-1).duration, 41000);
 });
+
+// Preview alignment compares decoded luma directly. Browser RGB conversion can
+// select a different YUV matrix for untagged source and filtered output.
+test('decoded luma reference respects plane offset, stride and spatial averaging', () => {
+  const bytes = Uint8Array.from([99, 10, 20, 30, 40, 99, 99, 50, 60, 70, 80, 99]);
+  assert.deepEqual(timing.lumaReference(bytes, {offset: 1, stride: 6}, 4, 2, 2, 1), [35, 55]);
+  assert.throws(() => timing.lumaReference(bytes.subarray(0, 9), {offset: 1, stride: 6}, 4, 2, 2, 1), /luma plane/);
+});
