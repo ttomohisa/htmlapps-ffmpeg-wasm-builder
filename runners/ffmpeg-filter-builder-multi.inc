@@ -34,6 +34,7 @@ typedef struct MultiOutput {
     AVFrame *frame;
     AVPacket *packet;
     enum AVMediaType type;
+    VideoDurationContext video_duration;
 } MultiOutput;
 
 typedef struct MultiContext {
@@ -419,6 +420,7 @@ static int multi_setup_video_encoder(MultiContext *ctx)
     if (!ctx->video.enc_ctx)
         return AVERROR(ENOMEM);
 
+    configure_video_duration(ctx->video.sink_ctx, &ctx->video.video_duration);
     frame_rate = av_buffersink_get_frame_rate(ctx->video.sink_ctx);
     if (frame_rate.num <= 0 || frame_rate.den <= 0)
         frame_rate = (AVRational){30, 1};
@@ -432,6 +434,7 @@ static int multi_setup_video_encoder(MultiContext *ctx)
     ctx->video.enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     ctx->video.enc_ctx->framerate = frame_rate;
     ctx->video.enc_ctx->time_base = sink_time_base;
+    ctx->video.enc_ctx->flags |= AV_CODEC_FLAG_FRAME_DURATION;
     ctx->video.enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
     ctx->video.enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
     ctx->video.enc_ctx->max_b_frames = 2;
@@ -562,9 +565,13 @@ static int multi_encode_output(MultiContext *ctx, MultiOutput *output,
     int ret;
     if (!output->enc_ctx)
         return 0;
-    if (frame && frame->pts != AV_NOPTS_VALUE) {
+    if (frame && !flush) {
         AVRational sink_tb = av_buffersink_get_time_base(output->sink_ctx);
-        frame->pts = av_rescale_q(frame->pts, sink_tb, output->enc_ctx->time_base);
+        if (output->type == AVMEDIA_TYPE_VIDEO)
+            rescale_video_frame(frame, sink_tb, output->enc_ctx->time_base,
+                                &output->video_duration);
+        else if (frame->pts != AV_NOPTS_VALUE)
+            frame->pts = av_rescale_q(frame->pts, sink_tb, output->enc_ctx->time_base);
     }
     ret = avcodec_send_frame(output->enc_ctx, flush ? NULL : frame);
     if (ret < 0 && ret != AVERROR_EOF)
@@ -626,15 +633,18 @@ static int multi_frame_in_range(MultiContext *ctx, MultiInput *input,
         : 0;
     int64_t relative;
 
+    if (frame->duration > 0)
+        frame->duration = av_rescale_q(frame->duration, avstream->time_base, stream->filter_time_base);
+    frame->time_base = stream->filter_time_base;
     if (pts == AV_NOPTS_VALUE)
         return 1;
     if (pts < origin + start)
         return 0;
-    if (duration > 0 && pts > origin + start + duration)
+    /* Bounded previews use [start, end), matching single-input trim. */
+    if (duration > 0 && pts >= origin + start + duration)
         return -1;
     relative = pts - origin - start;
     frame->pts = av_rescale_q(relative, avstream->time_base, stream->filter_time_base);
-    frame->time_base = stream->filter_time_base;
     return 1;
 }
 

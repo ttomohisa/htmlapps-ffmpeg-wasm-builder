@@ -44,3 +44,13 @@ Runner 0.2.2 uses a minimum 90 kHz video filter time base and rescales decoded P
 ## v1.9.6 fixes
 
 v1.9.6 hardens bounded preview rendering for long inputs: filter-source EOF after `trim` / `atrim` is a normal completion condition, not a runner failure. The runner also probes video filter output geometry before encoder creation, so graph filters that change frame dimensions are preserved in the encoded MP4.
+
+## Video frame durations (unreleased repair)
+
+Both input paths preserve positive decoded/filtered video duration through each time-base conversion and opt into FFmpeg's public `AV_CODEC_FLAG_FRAME_DURATION` contract. Multi-input ranges exclude the frame exactly at the end (`[start, end)`), matching `trim`. No universal one-tick or 30-fps duration is invented.
+
+Pinned FFmpeg `setpts` changes timestamps without changing frame duration. The runner recognizes `PTS`, `PTS-STARTPTS`, and constant positive multiplication/division of `PTS` or `(PTS-STARTPTS)`, including the app-generated `PTS/1.5` and `PTS/0.5` forms. Factors compose along the primary video path; overlay uses its main/input-0 timing. A downstream `fps` filter supplies new durations and resets all earlier duration factors.
+
+Arbitrary supported filter expressions remain accepted. Unrecognized timestamp expressions, `strip_fps` after the final `fps`, missing source durations, and unrepresentable scaled intervals keep legacy unknown-duration encoding and emit a warning. Their final frame is not guaranteed to have a complete display interval; put an explicit `fps` after those transformations when a fixed output cadence is intended. This repair does not claim to infer arbitrary nonlinear or frame-index expressions.
+
+An `fps` filter also makes the timestamp grid coarser. A later speed-up can therefore collapse adjacent timestamps; place the final `fps` after speed changes. This preexisting timestamp-grid limitation is separate from duration propagation. Non-frame-aligned trims preserve each surviving whole video frame, so a requested endpoint between frames may include that frame's remaining display interval.

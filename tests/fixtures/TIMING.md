@@ -17,3 +17,22 @@ coverage rather than relying on average frame rate. GIF expectations round the
 adjacent presentation timestamps to centiseconds, with an independently rounded
 final packet duration, matching the format's quantization. A decoder may mask
 short encoded GIF delays; these tests assert encoded timing, not visual playback.
+
+## Filter Builder fixtures
+
+- `timing-filter-cfr.mp4`: existing synthetic QA source, 320×180, 30 fps,
+  180 H.264 frames, exactly 6 seconds, mono 48 kHz AAC carrying a 440 Hz tone.
+  Video time base is 1/15360. No user media is included.
+  SHA-256: `215090e91b31c4e95a2227de4876c8c8d6822b3c856e04110527d8531e9474a4`.
+- `timing-filter-vfr-tail.mp4`: the same six PTS as `timing-vfr.mp4`, with
+  final duration 0.073 seconds and endpoint 0.605 seconds. The final duration
+  deliberately differs from the preceding 0.041-second gap, exposing a fallback
+  that incorrectly copies the previous interval. Video time base is 1/1000.
+  SHA-256: `897e09205a30ae5d80771609b58315766a49272a3574f146266fc48c28fa39cc`.
+  Regenerate from the existing synthetic VFR source, never from test output:
+
+  ```sh
+  ffmpeg -i tests/fixtures/timing-vfr.mp4 -map 0:v -c copy \
+    -bsf:v setts=duration=73:time_base=1/1000 -video_track_timescale 1000 \
+    tests/fixtures/timing-filter-vfr-tail.mp4
+  ```

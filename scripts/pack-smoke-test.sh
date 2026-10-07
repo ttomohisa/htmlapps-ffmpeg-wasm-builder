@@ -46,6 +46,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       if [[ "$PROFILE" == "video-compressor" || "$PROFILE" == "video-to-gif" || "$PROFILE" == "video-to-webp" ]]; then
         cat /workspace/tests/timing-readers.js /workspace/tests/timing-regressions.js >> "$OUTPUT"
         printf '\n' >> "$OUTPUT"
+      elif [[ "$PROFILE" == "ffmpeg-filter-builder" ]]; then
+        cat /workspace/tests/timing-readers.js /workspace/tests/filter-builder-timing-regressions.js >> "$OUTPUT"
+        printf '\n' >> "$OUTPUT"
       fi
       ;;
     __TIMING_FIXTURES__)
@@ -53,6 +56,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         printf 'const timingFixtures = {};\n' >> "$OUTPUT"
         for name in cfr vfr single; do
           printf 'timingFixtures.%s = Uint8Array.from(atob("' "$name" >> "$OUTPUT"
+          base64_one_line "/workspace/tests/fixtures/timing-$name.mp4" >> "$OUTPUT"
+          printf '"), c => c.charCodeAt(0));\n' >> "$OUTPUT"
+        done
+      elif [[ "$PROFILE" == "ffmpeg-filter-builder" ]]; then
+        printf 'const timingFixtures = {};\n' >> "$OUTPUT"
+        for name in filter-cfr filter-vfr-tail vfr single; do
+          key="$name"
+          [[ "$name" != "filter-cfr" ]] || key="filterCfr"
+          [[ "$name" != "filter-vfr-tail" ]] || key="vfrTail"
+          printf 'timingFixtures.%s = Uint8Array.from(atob("' "$key" >> "$OUTPUT"
           base64_one_line "/workspace/tests/fixtures/timing-$name.mp4" >> "$OUTPUT"
           printf '"), c => c.charCodeAt(0));\n' >> "$OUTPUT"
         done

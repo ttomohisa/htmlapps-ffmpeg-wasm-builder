@@ -52,6 +52,8 @@
 #include <libavutil/pixfmt.h>
 #include <libavutil/rational.h>
 
+#include "filter-builder-duration-scale.h"
+
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
 #define RUNNER_VERSION "0.3.0"
 #define FILTER_BUILDER_MAX_INPUTS 8
@@ -97,6 +99,12 @@ typedef struct RunnerOptions {
     int faststart;
 } RunnerOptions;
 
+typedef struct VideoDurationContext {
+    AVRational scale;
+    int known;
+    int warned_missing;
+} VideoDurationContext;
+
 typedef struct StreamContext {
     int input_index;
     int output_index;
@@ -107,6 +115,7 @@ typedef struct StreamContext {
     AVFrame *filtered_frame;
     AVPacket *enc_pkt;
     AVRational filter_time_base;
+    VideoDurationContext video_duration;
     AVFilterGraph *filter_graph;
     AVFilterContext *buffersrc_ctx;
     AVFilterContext *buffersink_ctx;
@@ -165,6 +174,93 @@ static AVRational choose_filter_time_base(enum AVMediaType type, AVRational sour
     if (type == AVMEDIA_TYPE_VIDEO && av_cmp_q(source_time_base, video_minimum) > 0)
         return video_minimum;
     return source_time_base;
+}
+
+/* setpts changes PTS but does not scale AVFrame.duration in pinned FFmpeg.
+ * Follow the primary video path (overlay takes timing from input 0). A final
+ * fps filter supplies fresh durations, so earlier timestamp transforms no
+ * longer matter. Public AVOptions avoid depending on private filter structs.
+ */
+static void configure_video_duration(AVFilterContext *sink, VideoDurationContext *timing)
+{
+    AVFilterContext *filter = sink;
+    unsigned remaining = sink->graph->nb_filters;
+    double scale = 1.0;
+    timing->known = 1;
+    timing->warned_missing = 0;
+    while (filter && filter->nb_inputs && filter->inputs[0]) {
+        if (!remaining) {
+            timing->known = 0;
+            av_log(NULL, AV_LOG_WARNING, "Video frame duration is unknown for a cyclic filter path; preserving legacy timing.\n");
+            break;
+        }
+        remaining--;
+        filter = filter->inputs[0]->src;
+        if (!strcmp(filter->filter->name, "fps"))
+            break;
+        if (!strcmp(filter->filter->name, "setpts")) {
+            uint8_t *expression = NULL;
+            int64_t strip_fps = 0;
+            double factor = 1.0;
+            int ret = av_opt_get(filter, "expr", AV_OPT_SEARCH_CHILDREN, &expression);
+            av_opt_get_int(filter, "strip_fps", AV_OPT_SEARCH_CHILDREN, &strip_fps);
+            if (ret < 0 || strip_fps ||
+                filter_builder_duration_scale((const char *)expression, &factor) < 0 ||
+                !isfinite(scale * factor) || scale * factor < 0.000001 || scale * factor > 1000000) {
+                timing->known = 0;
+                av_log(NULL, AV_LOG_WARNING,
+                       "Video frame duration is unknown for setpts expression '%s'%s; "
+                       "preserving legacy timing. A final fps filter establishes an explicit cadence.\n",
+                       expression ? (const char *)expression : "", strip_fps ? " with strip_fps" : "");
+                av_free(expression);
+                break;
+            }
+            scale *= factor;
+            av_free(expression);
+        } else {
+            /* Current profile filters that preserve the primary frame's
+             * duration. Future timing-changing filters require an audit. */
+            static const char *const preserving[] = {
+                "buffer", "scale", "crop", "pad", "transpose", "hflip", "vflip",
+                "setdar", "setsar", "trim", "eq", "hue", "boxblur", "gblur",
+                "unsharp", "fade", "drawtext", "split", "overlay", "format",
+                "colorchannelmixer", "null"
+            };
+            unsigned i;
+            for (i = 0; i < sizeof(preserving) / sizeof(*preserving); i++)
+                if (!strcmp(filter->filter->name, preserving[i])) break;
+            if (i == sizeof(preserving) / sizeof(*preserving)) {
+                timing->known = 0;
+                av_log(NULL, AV_LOG_WARNING,
+                       "Video frame duration is unknown for filter '%s'; preserving legacy timing.\n",
+                       filter->filter->name);
+                break;
+            }
+        }
+    }
+    timing->scale = av_d2q(scale, 1000000000);
+}
+
+static void rescale_video_frame(AVFrame *frame, AVRational source_time_base,
+                                AVRational encoder_time_base, VideoDurationContext *timing)
+{
+    if (frame->pts != AV_NOPTS_VALUE)
+        frame->pts = av_rescale_q(frame->pts, source_time_base, encoder_time_base);
+    if (timing->known && frame->duration > 0)
+        frame->duration = av_rescale_q(frame->duration,
+                                       av_mul_q(source_time_base, timing->scale), encoder_time_base);
+    else
+        frame->duration = 0;
+    if (frame->duration <= 0) {
+        frame->duration = 0;
+        if (timing->known && !timing->warned_missing) {
+            av_log(NULL, AV_LOG_WARNING,
+                   "Video frame duration is missing or unrepresentable; preserving legacy timing. "
+                   "A final fps filter establishes an explicit cadence.\n");
+            timing->warned_missing = 1;
+        }
+    }
+    frame->time_base = encoder_time_base;
 }
 
 static void print_usage(const char *program)
@@ -628,6 +724,7 @@ static int setup_video_output(RunnerContext *ctx)
     stream->enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     stream->enc_ctx->framerate = frame_rate;
     stream->enc_ctx->time_base = stream->filter_time_base;
+    stream->enc_ctx->flags |= AV_CODEC_FLAG_FRAME_DURATION;
     stream->enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
     stream->enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
     stream->enc_ctx->max_b_frames = use_vp9 ? 0 : 2;
@@ -1106,6 +1203,8 @@ static int init_filters(RunnerContext *ctx)
         return ret;
     }
 
+    configure_video_duration(ctx->video.buffersink_ctx, &ctx->video.video_duration);
+
     if (ctx->have_audio) {
         audio_filter[0] = '\0';
         ret = append_timeline_audio_filters(&ctx->options, audio_filter, sizeof(audio_filter));
@@ -1135,7 +1234,10 @@ static int encode_write_frame(RunnerContext *ctx, StreamContext *stream, int flu
     int ret;
 
     av_packet_unref(stream->enc_pkt);
-    if (frame && frame->pts != AV_NOPTS_VALUE)
+    if (frame && stream->type == AVMEDIA_TYPE_VIDEO)
+        rescale_video_frame(frame, frame->time_base, stream->enc_ctx->time_base,
+                            &stream->video_duration);
+    else if (frame && frame->pts != AV_NOPTS_VALUE)
         frame->pts = av_rescale_q(frame->pts, frame->time_base, stream->enc_ctx->time_base);
 
     ret = avcodec_send_frame(stream->enc_ctx, frame);
