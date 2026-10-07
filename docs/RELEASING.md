@@ -2,33 +2,33 @@
 
 `main` builds and smoke-tests every profile listed in `.github/workflows/build.yml`. Do not tag a release until all matrix jobs are green.
 
-v1.10.1 is a patch release for the merged final-frame duration fix in Video Compressor and Video to GIF. It keeps the v1.10.0 profile set and dependency pins.
+v1.10.2 is a patch release for the merged Filter Builder frame-duration and half-open preview repair in both ST and MT runtimes. It keeps the v1.10.1 profile set and dependency pins.
 
 After the release-preparation PR is merged and every matrix job for that exact `main` commit succeeds, create the new tag:
 
 ```text
 git switch main
 git pull --ff-only
-git tag -a v1.10.1 -m "FFmpeg WASM Builder v1.10.1"
-git push origin v1.10.1
+git tag -a v1.10.2 -m "FFmpeg WASM Builder v1.10.2"
+git push origin v1.10.2
 ```
 
 The tag workflow verifies that the tag matches `BUILDER_VERSION`, rebuilds all current release profiles, and runs their real-browser smoke tests before publishing. `ffmpeg-filter-builder` still ships both single-thread and COOP/COEP-hosted multi-thread variants.
 
-v1.10.1 publishes:
+v1.10.2 publishes:
 
 ```text
-ffmpeg-wasm-video-compressor-v1.10.1.zip
-ffmpeg-wasm-video-speed-changer-v1.10.1.zip
-ffmpeg-wasm-lossless-video-cutter-v1.10.1.zip
-ffmpeg-wasm-media-inspector-v1.10.1.zip
-ffmpeg-wasm-video-audio-extractor-v1.10.1.zip
-ffmpeg-wasm-video-contact-sheet-v1.10.1.zip
-ffmpeg-wasm-video-to-gif-v1.10.1.zip
-ffmpeg-wasm-video-to-webp-v1.10.1.zip
-ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.10.1.zip
-ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.10.1.zip
-ffmpeg-wasm-sources-v1.10.1.tar.gz
+ffmpeg-wasm-video-compressor-v1.10.2.zip
+ffmpeg-wasm-video-speed-changer-v1.10.2.zip
+ffmpeg-wasm-lossless-video-cutter-v1.10.2.zip
+ffmpeg-wasm-media-inspector-v1.10.2.zip
+ffmpeg-wasm-video-audio-extractor-v1.10.2.zip
+ffmpeg-wasm-video-contact-sheet-v1.10.2.zip
+ffmpeg-wasm-video-to-gif-v1.10.2.zip
+ffmpeg-wasm-video-to-webp-v1.10.2.zip
+ffmpeg-wasm-ffmpeg-filter-builder-single-thread-v1.10.2.zip
+ffmpeg-wasm-ffmpeg-filter-builder-multi-thread-v1.10.2.zip
+ffmpeg-wasm-sources-v1.10.2.tar.gz
 BUILDINFO-video-compressor.txt
 BUILDINFO-video-speed-changer.txt
 BUILDINFO-lossless-video-cutter.txt
@@ -48,10 +48,10 @@ Each binary ZIP contains its generated core, runtime, manifest, profile-specific
 
 After the workflow succeeds:
 
-1. open the GitHub Release for `v1.10.1`,
+1. open the GitHub Release for `v1.10.2`,
 2. confirm all 22 assets listed above are attached, including all 10 profile ZIPs and the corresponding-source archive,
 3. verify downloaded asset SHA-256 values against `SHA256SUMS.txt` and GitHub asset digests,
-4. confirm each manifest and BUILDINFO identifies Builder 1.10.1 and the intended profile/threading variant,
+4. confirm each manifest and BUILDINFO identifies Builder 1.10.2 and the intended profile/threading variant,
 5. confirm binary bundles contain their applicable license notices and the source archive contains the pinned sources and matching Builder recipe,
 6. use that exact tag, asset name, and verified SHA-256 in the consuming app.
 

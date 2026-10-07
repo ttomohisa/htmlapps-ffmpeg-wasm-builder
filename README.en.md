@@ -27,11 +27,11 @@ For embedded MT use, `BrowserFFmpeg.loadEmbedded(...)` accepts `threading: "mult
 
 ## Public releases
 
-v1.10.1 fixes shortened final-frame durations in Video Compressor MP4/WebM output and Video to GIF output. It retains the release profiles from v1.10.0, including **Video Audio Extractor**. The tag workflow rebuilds and real-browser smoke-tests every release profile before publishing.
+v1.10.2 fixes final video-frame durations and half-open preview endpoints in FFmpeg Filter Builder, for both single-thread and multi-thread runtimes. It covers original/VFR, one-frame, explicit-FPS and app-generated constant-speed chains, while keeping the v1.10.1 profile set and dependency pins, including **Video Audio Extractor**. The tag workflow rebuilds and real-browser smoke-tests every release profile before publishing.
 
-The release includes `ffmpeg-wasm-video-audio-extractor-v1.10.1.zip`, its `BUILDINFO-video-audio-extractor.txt`, `SHA256SUMS.txt`, the existing profile ZIPs, both FFmpeg Filter Builder variants, and one exact corresponding-source archive. The extractor bundle carries the applicable LAME 4.0 notice, and the source archive includes the SHA-256-verified LAME source used for MP3 encoding.
+The release includes `ffmpeg-wasm-video-audio-extractor-v1.10.2.zip`, its `BUILDINFO-video-audio-extractor.txt`, `SHA256SUMS.txt`, the existing profile ZIPs, both FFmpeg Filter Builder variants, and one exact corresponding-source archive. The extractor bundle carries the applicable LAME 4.0 notice, and the source archive includes the SHA-256-verified LAME source used for MP3 encoding.
 
-Production consumers should pin the exact v1.10.1 profile asset and SHA-256 rather than using `latest`.
+Production consumers should pin the exact v1.10.2 profile asset and SHA-256 rather than using `latest`.
 
 ## Licensing
 
