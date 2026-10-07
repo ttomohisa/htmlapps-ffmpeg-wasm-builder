@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## 1.10.1 - 2026-10-07
 
-- Added the development `video-audio-extractor` profile with WORKERFS input, compact audio-stream inventory JSON, and validated single-track stream copy without decoding or re-encoding.
-- Added the `aac_adtstoasc` path for MPEG-TS/raw ADTS AAC -> M4A remuxing.
-- Added `BrowserFFmpeg.videoAudioExtractorInspectArgs()` / `videoAudioExtractorCopyArgs()` and a real-browser smoke test covering MP4/AAC, WebM/Opus, MKV multi-audio selection, MPEG-TS/AAC, and video-only input.
-- Kept the profile out of tagged release packaging until its planned release scope is complete.
+- Fixed shortened final-frame durations in Video Compressor MP4/H.264 and WebM/VP9 output by enabling the public FFmpeg frame-duration contract and rescaling frame duration together with PTS.
+- Preserved source timestamp precision for Original/VFR compression; the one-tick duration fallback is limited to explicit FPS-filter output.
+- Fixed the final GIF frame delay through the same encoder frame-duration contract. WebP encoding behavior is unchanged.
+- Added encoded-timing regression coverage for CFR, VFR, one-frame, and explicit-FPS output, with separate cadence and final-endpoint checks in the real-browser Compressor/GIF/WebP smoke tests.
+- Kept all release profiles, dependency pins, threading modes, and runtime interfaces unchanged from v1.10.0.
+
+## 1.10.0 - 2026-10-01
+
+- Added Video Audio Extractor to tagged release packaging with WORKERFS input, audio-stream inspection, and validated single-track stream copy, including MPEG-TS/raw ADTS AAC to M4A remuxing.
+- Added audio-only M4A/AAC, WAV/PCM16, and MP3/LAME output; LAME 4.0 is pinned and linked only for this profile.
+- Added real-browser extraction and conversion smoke coverage, the profile ZIP and BUILDINFO, applicable LAME notices, and SHA-256-verified LAME source in the corresponding-source archive.
 
 ## 1.9.9 - 2026-09-19
 
