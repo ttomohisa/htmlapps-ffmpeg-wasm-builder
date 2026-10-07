@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Preserve valid final video-frame durations in both Filter Builder input paths and threading variants, including variable-rate and one-frame input, explicit FPS, and app-generated constant-speed timestamp chains.
+- Rescale video duration at decode/filter/encoder time-base boundaries and make multi-input preview endpoints half-open.
+- Keep custom timestamp expressions accepted; expressions whose duration transform is not recognized retain legacy unknown-duration behavior with a warning rather than receiving an invented terminal interval. A downstream FPS filter establishes a fresh cadence.
+- Add shared encoded-timing and normal-decode regressions to both Filter Builder browser smoke variants, without changing dependency pins or release versions.
+
 ## 1.10.1 - 2026-10-07
 
 - Fixed shortened final-frame durations in Video Compressor MP4/H.264 and WebM/VP9 output by enabling the public FFmpeg frame-duration contract and rescaling frame duration together with PTS.

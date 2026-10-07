@@ -150,5 +150,21 @@ if (!multiOutput || multiOutput.byteLength < 1024) throw new Error("Multi-input 
 if (String.fromCharCode(...multiOutput.slice(4, 8)) !== "ftyp") throw new Error("Multi-input output is not MP4");
 if (!containsAscii(multiOutput, "avc1")) throw new Error("Multi-input H.264 marker missing");
 if (!containsAscii(multiOutput, "mp4a")) throw new Error("Multi-input AAC marker missing");
-if (multiProgress < 0.99) throw new Error("Multi-input progress did not reach completion");runner.dispose();
-pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3) + ";speedDuration=" + speedReport.duration.toFixed(3) + ";drawtext=compiled");
+if (multiProgress < 0.99) throw new Error("Multi-input progress did not reach completion");
+
+// Run the exact same timing matrix in canonical ST/file:// and MT/isolated
+// browser CI. WORKERFS is mandatory here; Node/MEMFS remains supplemental.
+const filterTimingCount = await FilterBuilderTiming.run(timingFixtures,
+  async (files, args, outputPath) => {
+    const logs = [];
+    const result = await runner.run({
+      files: files.map(file => ({name: file.name,
+        data: new File([file.data], file.name.split("/").pop(), {type: "video/mp4"}), workerfs: true})),
+      outputs: [outputPath], args,
+      onLog: ({message}) => { logs.push(message); }
+    });
+    return {exitCode: result.exitCode,
+      data: result.files?.find(file => file.name === outputPath)?.data || new Uint8Array(), logs};
+  }, BrowserFFmpeg, FilterBuilderTiming.createBrowserDecoder(timingFixtures), append);
+runner.dispose();
+pass("threading=" + threadingMode + ";bytes=" + output.byteLength + ";duration=" + report.duration.toFixed(3) + ";speedDuration=" + speedReport.duration.toFixed(3) + ";drawtext=compiled;filterTimingCases=" + filterTimingCount);

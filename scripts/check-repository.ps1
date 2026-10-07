@@ -84,6 +84,13 @@ $timingReaders = Require-File "tests/timing-readers.js"
 $timingReaderTests = Require-File "tests/timing-readers.test.cjs"
 $timingRegressions = Require-File "tests/timing-regressions.js"
 $timingNodeRunner = Require-File "tests/run-timing-regressions.cjs"
+$filterTimingRegressions = Require-File "tests/filter-builder-timing-regressions.js"
+$filterTimingNodeRunner = Require-File "tests/run-filter-builder-timing-regressions.cjs"
+$filterTimingOracleTests = Require-File "tests/filter-builder-timing-oracles.test.cjs"
+$filterDurationHeader = Require-File "runners/filter-builder-duration-scale.h"
+$filterDurationTests = Require-File "tests/filter-builder-duration-scale.test.c"
+$null = Require-File "tests/fixtures/timing-filter-cfr.mp4"
+$null = Require-File "tests/fixtures/timing-filter-vfr-tail.mp4"
 foreach ($fixture in @("cfr", "vfr", "single")) { $null = Require-File "tests/fixtures/timing-$fixture.mp4" }
 $videoSmoke = Require-File "tests/smoke-tests/video-compressor.js"
 $speedSmoke = Require-File "tests/smoke-tests/video-speed-changer.js"
@@ -533,7 +540,18 @@ Require-Text $filterProfile "--enable-filter=anull" "FFmpeg Filter Builder must 
 Require-Text $filterProfileEnv '"complexGraph":true' "Filter Builder manifest must advertise complex graph support."
 Require-Text $filterProfileEnv '"multipleInputs":true' "Filter Builder manifest must advertise multiple input support."
 Require-Text $runtime 'options.mode === "multi-input"' "Filter Builder browser helper must expose multi-input arguments."
-Require-Text $filterSmoke 'mode: "multi-input"' "Filter Builder smoke test must execute a real multi-input graph."
+Require-Text $filterSmoke "FilterBuilderTiming.run" "Both Filter Builder browser variants must run the exact timing matrix."
+Require-Text $filterSmoke "FilterBuilderTiming.createBrowserDecoder" "Filter Builder browser smoke must decode actual H.264 samples."
+Require-Text $filterTimingRegressions "preview-0-3" "Filter Builder timing cases must catch half-open preview endpoints."
+Require-Text $filterTimingRegressions "preview-1-4" "Filter Builder timing cases must verify nonzero preview starts."
+Require-Text $filterTimingRegressions "video.durations.every(duration => duration > 0)" "Filter Builder timing must reject zero terminal intervals."
+Require-Text $filterTimingRegressions "video.editPresentationEnd" "Filter Builder timing must inspect edit-list coverage."
+Require-Text $filterTimingRegressions "vfr-distinct-tail" "Filter Builder timing must retain a distinct final VFR interval."
+Require-Text $filterTimingRegressions "unknown-expression-compatible" "Unknown setpts expressions must retain compatibility coverage."
+Require-Text $filterTimingNodeRunner "'-count_frames'" "Filter Builder Node tests must count normally decoded frames."
+Require-Text $smokePacker "filter-builder-timing-regressions.js" "Smoke packaging must embed the Filter Builder timing tests."
+Require-Text $smokePacker "filter-vfr-tail" "Smoke packaging must include the distinct-tail VFR fixture."
+Require-Text $filterSmoke 'mode: "multi-input"'  "Filter Builder smoke test must execute a real multi-input graph."
 Require-Text $filterSmoke 'amix=inputs=2' "Filter Builder smoke test must exercise multi-input audio mixing."Require-Text $filterRunner "--video-filter" "FFmpeg Filter Builder runner must accept compiled video filter chains."
 Require-Text $filterRunner "--audio-filter" "FFmpeg Filter Builder runner must accept compiled audio filter chains."
 Require-Text $filterRunner "--start-time" "FFmpeg Filter Builder runner must accept a relative preview start time."
@@ -683,11 +701,11 @@ Require-Text $releaseWorkflow "contents: write" "Release workflow needs explicit
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
-  foreach ($timingScript in @($timingReaders, $timingRegressions, $timingNodeRunner)) {
+  foreach ($timingScript in @($timingReaders, $timingRegressions, $timingNodeRunner, $filterTimingRegressions, $filterTimingNodeRunner)) {
     & node --check $timingScript
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
   }
-  & node --test $timingReaderTests
+  & node --test $timingReaderTests $filterTimingOracleTests
   if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
@@ -702,6 +720,21 @@ if ($node) {
       Remove-Item -Force $temp -ErrorAction SilentlyContinue
     }
   }
+}
+
+$cc = Get-Command cc -ErrorAction SilentlyContinue
+if ($cc) {
+  $nativeTest = Join-Path ([IO.Path]::GetTempPath()) ("filter-duration-test-" + [guid]::NewGuid().ToString("N") + ".exe")
+  try {
+    & cc -Wall -Wextra -Werror -std=c11 $filterDurationTests -lm -o $nativeTest
+    if ($LASTEXITCODE -ne 0) { throw "Filter Builder duration expression test compilation failed." }
+    & $nativeTest
+    if ($LASTEXITCODE -ne 0) { throw "Filter Builder duration expression tests failed." }
+  } finally {
+    Remove-Item -Force $nativeTest -ErrorAction SilentlyContinue
+  }
+} else {
+  Write-Warning "cc is unavailable; native Filter Builder duration expression tests were not run."
 }
 
 Write-Host "[OK] Repository checks passed." -ForegroundColor Green
