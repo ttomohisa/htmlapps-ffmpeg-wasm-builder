@@ -32,6 +32,9 @@ if (h264.exitCode !== 0 || h264.files?.length !== 1) throw new Error("H.264 enco
 const mp4 = h264.files[0].data;
 if (mp4.byteLength < 1024 || String.fromCharCode(...mp4.slice(4, 8)) !== "ftyp") throw new Error("H.264 MP4 output is invalid");
 if (!containsAscii(mp4, "avc1") || !containsAscii(mp4, "mp4a")) throw new Error("H.264/AAC markers are missing");
+const audioVideoTiming = TimingReaders.readMp4(mp4).video;
+if (audioVideoTiming.sampleCount !== 48 || audioVideoTiming.durations.some(duration => duration <= 0)) throw new Error("Audio/video MP4 lost a complete video sample");
+if (Math.abs((audioVideoTiming.presentationEnd - audioVideoTiming.presentationStart) / audioVideoTiming.timescale - 2) > 1 / audioVideoTiming.timescale) throw new Error("Audio must not conceal a shortened video endpoint");
 const h264Info = await inspect(new File([mp4], "output.mp4", { type: "video/mp4" }), "/workerfs/h264.mp4", "/h264.json");
 if (h264Info.video.width !== 96 || h264Info.video.height !== 160) throw new Error("H.264 autorotation did not produce portrait pixels");
 if (Math.abs(Number(h264Info.video.rotation || 0)) > 1) throw new Error("H.264 output should not depend on a rotation matrix");
@@ -55,5 +58,20 @@ const vp9Info = await inspect(new File([webm], "output.webm", { type: "video/web
 if (vp9Info.video.width !== 96 || vp9Info.video.height !== 160) throw new Error("VP9 autorotation did not produce portrait pixels");
 if (Math.abs(Number(vp9Info.video.rotation || 0)) > 1) throw new Error("VP9 output should not depend on a rotation matrix");
 
+await runTimingRegressions("video-compressor", timingFixtures, async (bytes, args, output) => {
+  let result;
+  try { result = await runner.run({
+    files: [{name: "/workerfs/timing-input.mp4", data: new Blob([bytes]), workerfs: true}],
+    outputs: [output], args,
+    onLog: ({message}) => append(message)
+  });
+  } catch (error) {
+    const match = /FFmpeg WASM runner exited with code (\d+)/.exec(error.message);
+    if (match) return {exitCode: Number(match[1])};
+    throw error;
+  }
+  return {exitCode: result.exitCode, data: result.files?.find(file => file.name === output)?.data};
+}, BrowserFFmpeg, append);
 runner.dispose();
+
 pass("h264=" + mp4.byteLength + "_vp9=" + webm.byteLength + "_bitrate=" + inputInfo.video.bitRateKbps + "_rotation=" + inputInfo.video.rotation);

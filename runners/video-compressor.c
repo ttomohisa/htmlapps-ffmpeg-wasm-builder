@@ -509,7 +509,12 @@ static int setup_video_output(RunnerContext *ctx)
     stream->enc_ctx->height = height;
     stream->enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     stream->enc_ctx->framerate = frame_rate;
-    stream->enc_ctx->time_base = av_inv_q(frame_rate);
+    /* Original timing may be variable-rate: keep the input timestamp grid. */
+    stream->enc_ctx->time_base = ctx->options.fps <= 0.0 &&
+        input_stream->time_base.num > 0 && input_stream->time_base.den > 0
+        ? input_stream->time_base : av_inv_q(frame_rate);
+    /* FFmpeg otherwise discards AVFrame.duration before encoding. */
+    stream->enc_ctx->flags |= AV_CODEC_FLAG_FRAME_DURATION;
     stream->enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
     stream->enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
     stream->enc_ctx->max_b_frames = use_vp9 ? 0 : 2;
@@ -865,8 +870,19 @@ static int encode_write_frame(RunnerContext *ctx, StreamContext *stream, int flu
     int ret;
 
     av_packet_unref(stream->enc_pkt);
-    if (frame && frame->pts != AV_NOPTS_VALUE)
-        frame->pts = av_rescale_q(frame->pts, frame->time_base, stream->enc_ctx->time_base);
+    if (frame) {
+        AVRational source_tb = frame->time_base;
+        if (frame->pts != AV_NOPTS_VALUE)
+            frame->pts = av_rescale_q(frame->pts, source_tb, stream->enc_ctx->time_base);
+        if (stream->enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+            frame->duration = frame->duration > 0
+                ? av_rescale_q(frame->duration, source_tb, stream->enc_ctx->time_base) : 0;
+            /* Only an explicit fps filter guarantees one encoder tick per frame. */
+            if (frame->duration <= 0 && ctx->options.fps > 0.0)
+                frame->duration = 1;
+            frame->time_base = stream->enc_ctx->time_base;
+        }
+    }
 
     ret = avcodec_send_frame(stream->enc_ctx, frame);
     if (ret < 0)

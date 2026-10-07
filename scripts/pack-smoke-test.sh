@@ -42,6 +42,22 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       cat "$RUNTIME" >> "$OUTPUT"
       printf '\n' >> "$OUTPUT"
       ;;
+    __TIMING_HELPERS__)
+      if [[ "$PROFILE" == "video-compressor" || "$PROFILE" == "video-to-gif" || "$PROFILE" == "video-to-webp" ]]; then
+        cat /workspace/tests/timing-readers.js /workspace/tests/timing-regressions.js >> "$OUTPUT"
+        printf '\n' >> "$OUTPUT"
+      fi
+      ;;
+    __TIMING_FIXTURES__)
+      if [[ "$PROFILE" == "video-compressor" || "$PROFILE" == "video-to-gif" || "$PROFILE" == "video-to-webp" ]]; then
+        printf 'const timingFixtures = {};\n' >> "$OUTPUT"
+        for name in cfr vfr single; do
+          printf 'timingFixtures.%s = Uint8Array.from(atob("' "$name" >> "$OUTPUT"
+          base64_one_line "/workspace/tests/fixtures/timing-$name.mp4" >> "$OUTPUT"
+          printf '"), c => c.charCodeAt(0));\n' >> "$OUTPUT"
+        done
+      fi
+      ;;
     __SMOKE_TEST_BODY__)
       sed 's/^/        /' "$SMOKE_BODY" >> "$OUTPUT"
       printf '\n' >> "$OUTPUT"
@@ -56,7 +72,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done < "$TEMPLATE"
 
-if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|TEST_BODY)__' "$OUTPUT"; then
+if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__TIMING_(HELPERS|FIXTURES)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|TEST_BODY)__' "$OUTPUT"; then
   fail "A smoke-test packaging placeholder remains in $OUTPUT"
 fi
 [[ -s "$OUTPUT" ]] || fail "Smoke-test HTML was not produced"

@@ -21,6 +21,7 @@ __SMOKE_INPUT_BASE64__
 __FFMPEG_RUNTIME__
   </script>
   <script>
+__TIMING_HELPERS__
   (() => {
     "use strict";
     const status = document.getElementById("smoke-status");
@@ -73,6 +74,7 @@ __FFMPEG_RUNTIME__
         ]);
         if (threadingMode === "multi-thread" && !crossOriginIsolated) throw new Error("Multi-thread smoke test requires cross-origin isolation.");
         const input = decodeBase64("smoke-input");
+__TIMING_FIXTURES__
 __SMOKE_TEST_BODY__
       } catch (error) {
         fail(error);

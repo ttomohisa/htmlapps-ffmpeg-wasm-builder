@@ -16,7 +16,6 @@ const result = await runner.run({
   }),
   onLog: ({ message }) => append(message)
 });
-runner.dispose();
 
 if (result.exitCode !== 0) throw new Error("Runner exit code was " + result.exitCode);
 if (!result.files || result.files.length !== 1) throw new Error("Expected exactly one GIF output");
@@ -26,4 +25,20 @@ if (output.byteLength < 512) throw new Error("GIF output is unexpectedly small: 
 const header = String.fromCharCode(...output.slice(0, 6));
 if (header !== "GIF89a" && header !== "GIF87a") throw new Error("Invalid GIF header: " + header);
 if (!containsAscii(output, "NETSCAPE2.0")) throw new Error("GIF does not contain an animation loop extension");
+await runTimingRegressions("video-to-gif", timingFixtures, async (bytes, args, output) => {
+  let result;
+  try { result = await runner.run({
+    files: [{name: "/workerfs/timing-input.mp4", data: new Blob([bytes]), workerfs: true}],
+    outputs: [output], args,
+    onLog: ({message}) => append(message)
+  });
+  } catch (error) {
+    const match = /FFmpeg WASM runner exited with code (\d+)/.exec(error.message);
+    if (match) return {exitCode: Number(match[1])};
+    throw error;
+  }
+  return {exitCode: result.exitCode, data: result.files?.find(file => file.name === output)?.data};
+}, BrowserFFmpeg, append);
+runner.dispose();
+
 pass("gifBytes=" + output.byteLength);

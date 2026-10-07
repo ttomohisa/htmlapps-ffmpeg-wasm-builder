@@ -677,6 +677,8 @@ static int open_output(const RunnerOptions *options, const Geometry *geometry, O
     output->encoder->thread_count = 1;
     output->encoder->thread_type = 0;
 #if ANIMATION_FORMAT_GIF
+    /* encode_available supplies durations in encoder ticks, including the last frame. */
+    output->encoder->flags |= AV_CODEC_FLAG_FRAME_DURATION;
     output->encoder->pix_fmt = AV_PIX_FMT_PAL8;
 #else
     output->encoder->pix_fmt = options->lossless ? AV_PIX_FMT_BGRA : AV_PIX_FMT_YUV420P;

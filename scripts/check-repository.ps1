@@ -80,6 +80,11 @@ $template = Require-File "profiles/video-compressor/single-html/template.html"
 $packer = Require-File "scripts/pack-single-html.ps1"
 $smokePacker = Require-File "scripts/pack-smoke-test.sh"
 $smokeTemplate = Require-File "tests/smoke-test.template.html"
+$timingReaders = Require-File "tests/timing-readers.js"
+$timingReaderTests = Require-File "tests/timing-readers.test.cjs"
+$timingRegressions = Require-File "tests/timing-regressions.js"
+$timingNodeRunner = Require-File "tests/run-timing-regressions.cjs"
+foreach ($fixture in @("cfr", "vfr", "single")) { $null = Require-File "tests/fixtures/timing-$fixture.mp4" }
 $videoSmoke = Require-File "tests/smoke-tests/video-compressor.js"
 $speedSmoke = Require-File "tests/smoke-tests/video-speed-changer.js"
 $cutterSmoke = Require-File "tests/smoke-tests/lossless-video-cutter.js"
@@ -678,6 +683,12 @@ Require-Text $releaseWorkflow "contents: write" "Release workflow needs explicit
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
+  foreach ($timingScript in @($timingReaders, $timingRegressions, $timingNodeRunner)) {
+    & node --check $timingScript
+    if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
+  }
+  & node --test $timingReaderTests
+  if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
   foreach ($smokeBody in @($videoSmoke, $speedSmoke, $cutterSmoke, $inspectorSmoke, $extractorSmoke, $contactSmoke, $gifSmoke, $webpSmoke, $filterSmoke)) {
