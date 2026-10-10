@@ -42,7 +42,7 @@ test('runner preserves ST but uses bounded video decoding and encoding for MT', 
 });
 test('browser smoke selects the actual variant and verifies both encoder thread logs', () => {
   const smoke = read('tests/smoke-tests/video-compressor.js');
-  assert.match(smoke, /loadEmbedded\(\{ coreJsText, wasmBytes, threading: threadingMode \}\)/);
+  assert.match(smoke, /loadEmbedded\(\{ coreJsText: observedCoreJsText, wasmBytes, threading: threadingMode \}\)/);
   assert.match(smoke, /assertThreading\('libx264'\)/);
   assert.match(smoke, /assertThreading\('libvpx-vp9'\)/);
 });
@@ -73,4 +73,18 @@ test('libvpx uses its supported linker environment instead of an unknown configu
  const s=read('scripts/build-libvpx.sh');
  assert.doesNotMatch(s,/--extra-ldflags/);
  assert.match(s,/export LDFLAGS=.*thread_flags/);
+});
+test('browser smoke observes shared memory and real nested Worker construction',()=>{
+ const smoke=read('tests/smoke-tests/video-compressor.js');
+ assert.match(smoke,/WebAssembly\.Memory/);
+ assert.match(smoke,/extends OriginalWorker/);
+ assert.match(smoke,/__COMPRESSOR_PTHREAD_CREATED__/);
+ assert.match(smoke,/assertRuntimeObserved\(\)/);
+});
+test('browser smoke cancels a live core and transcodes again without audio',()=>{
+ const smoke=read('tests/smoke-tests/video-compressor.js');
+ assert.match(smoke,/new AbortController\(\)/);
+ assert.match(smoke,/runner.activeRuns.size !== 0/);
+ assert.match(smoke,/retryBytes/);
+ assert.match(smoke,/noAudio: true/);
 });
