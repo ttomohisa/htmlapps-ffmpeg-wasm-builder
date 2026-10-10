@@ -8,7 +8,7 @@ Self-build current FFmpeg for focused browser apps without depending on prebuilt
 
 - Public `libav*` runner only; do not link the upstream `ffmpeg` CLI.
 - Existing profiles stay single-threaded unless their profile metadata explicitly opts into a multi-thread variant.
-- `ffmpeg-filter-builder` is the first dual-runtime profile and must build both single-thread and pthread variants.
+- `ffmpeg-filter-builder` and `video-compressor` are explicit dual-runtime profiles and must build both single-thread and pthread variants.
 - Single-thread variants remain SharedArrayBuffer-free and keep direct `file://` single-HTML support.
 - Multi-thread variants may require SharedArrayBuffer + cross-origin isolation and must never silently replace the single-thread artifact.
 - Long processing runs in a normal Web Worker; pthread builds may create nested Emscripten workers inside it.

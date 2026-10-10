@@ -1,5 +1,8 @@
 # FFmpeg WASM Builder
 
+> Builder 1.10.3 adds explicit Video Compressor ST/MT runtimes with MP4 and WebM output. The existing Compressor release filename remains the portable ST alias. See [Compressor threading](profiles/video-compressor/README.md#threading-variants-builder-1103).
+
+
 ## Video Audio Extractor Phase 4 MP3 / LAME
 
 `video-audio-extractor` keeps stream copy plus AAC/M4A and PCM16/WAV conversion, and Phase 4 adds MP3 encoding through pinned LAME 4.0 / libmp3lame. MP3 supports 128 / 192 / 256 / 320 kbps and mono/stereo output. Input continues to use WORKERFS. LAME is built only for this profile and does not enter the other Wasm cores.

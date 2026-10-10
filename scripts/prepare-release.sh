@@ -256,7 +256,7 @@ ARGS
     fi
     if [[ "$PROFILE_USE_LIBVPX" == "1" ]]; then
       echo
-      echo "libvpx configure: VP9 encoder-only, static, single-threaded; see scripts/build-libvpx.sh"
+      echo "libvpx configure: VP9 encoder-only, static, $variant; see scripts/build-libvpx.sh"
     fi
     if [[ "$PROFILE_USE_LIBOPUS" == "1" ]]; then
       echo
@@ -363,6 +363,12 @@ for profile in "${RELEASE_PROFILES[@]}"; do
     make_binary_zip "$profile" "$variant" "$buildinfo"
   done
 done
+
+# Preserve the existing ST asset name for downstream consumers.
+cp "$RELEASE_DIR/ffmpeg-wasm-video-compressor-single-thread-v${BUILDER_VERSION}.zip" \
+   "$RELEASE_DIR/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip"
+cp "$RELEASE_DIR/BUILDINFO-video-compressor-single-thread.txt" \
+   "$RELEASE_DIR/BUILDINFO-video-compressor.txt"
 
 SOURCE_ROOT="$WORK_DIR/source-bundle"
 mkdir -p "$SOURCE_ROOT"

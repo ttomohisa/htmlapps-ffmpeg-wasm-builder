@@ -1,4 +1,12 @@
-const runner = await BrowserFFmpeg.loadEmbedded({ coreJsText, wasmBytes });
+const runner = await BrowserFFmpeg.loadEmbedded({ coreJsText, wasmBytes, threading: threadingMode });
+const threadLogs = [];
+const recordLog = ({message}) => { threadLogs.push(message); append(message); };
+const assertThreading = codec => {
+  const threads = threadingMode === "multi-thread" ? 4 : 1;
+  const rowMt = threadingMode === "multi-thread" && codec === "libvpx-vp9" ? 1 : 0;
+  if (!threadLogs.some(line => line.includes(`opening ${codec} encoder: threads=${threads} row_mt=${rowMt}`)))
+    throw new Error(`Incorrect ${codec} threading: ${threadingMode}`);
+};
 const inputFile = new File([input], "smoke-rotated.mp4", { type: "video/mp4" });
 const inputPath = "/workerfs/input.mp4";
 
@@ -7,7 +15,7 @@ const inspect = async (file, path, output) => {
     files: [{ name: path, data: file, workerfs: true }],
     outputs: [output],
     args: BrowserFFmpeg.videoCompressorInspectArgs({ input: path, output }),
-    onLog: ({ message }) => append(message)
+    onLog: recordLog
   });
   return BrowserFFmpeg.decodeJsonOutput(result, output);
 };
@@ -26,9 +34,10 @@ const h264 = await runner.run({
     input: inputPath, output: "/output.mp4", codec: "h264", speed: "fastest",
     maxWidth: 96, videoBitrateKbps: Math.max(100, inputInfo.video.bitRateKbps), audioBitrateKbps: 32
   }),
-  onLog: ({ message }) => append(message)
+  onLog: recordLog
 });
 if (h264.exitCode !== 0 || h264.files?.length !== 1) throw new Error("H.264 encode failed");
+assertThreading('libx264');
 const mp4 = h264.files[0].data;
 if (mp4.byteLength < 1024 || String.fromCharCode(...mp4.slice(4, 8)) !== "ftyp") throw new Error("H.264 MP4 output is invalid");
 if (!containsAscii(mp4, "avc1") || !containsAscii(mp4, "mp4a")) throw new Error("H.264/AAC markers are missing");
@@ -46,9 +55,10 @@ const vp9 = await runner.run({
     input: inputPath, output: "/output.webm", codec: "vp9", speed: "fastest",
     maxWidth: 96, videoBitrateKbps: Math.max(80, Math.round(inputInfo.video.bitRateKbps * 0.7)), audioBitrateKbps: 32
   }),
-  onLog: ({ message }) => append(message)
+  onLog: recordLog
 });
 if (vp9.exitCode !== 0 || vp9.files?.length !== 1) throw new Error("VP9 encode failed");
+assertThreading('libvpx-vp9');
 const webm = vp9.files[0].data;
 if (webm.byteLength < 1024) throw new Error("VP9 WebM output is unexpectedly small");
 if (!(webm[0] === 0x1a && webm[1] === 0x45 && webm[2] === 0xdf && webm[3] === 0xa3)) throw new Error("Output does not start with an EBML header");

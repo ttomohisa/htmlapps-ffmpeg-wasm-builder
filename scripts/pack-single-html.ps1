@@ -7,6 +7,8 @@ Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $DistDir = Join-Path $Root ("dist\" + $Profile)
+$SingleThreadDir = Join-Path $DistDir "single-thread"
+if (Test-Path -LiteralPath $SingleThreadDir -PathType Container) { $DistDir = $SingleThreadDir }
 $TemplatePath = Join-Path $Root ("profiles\" + $Profile + "\single-html\template.html")
 $RuntimePath = Join-Path $Root "runtime\browser-ffmpeg.js"
 

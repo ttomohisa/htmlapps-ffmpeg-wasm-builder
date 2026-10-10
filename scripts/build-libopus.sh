@@ -5,11 +5,15 @@ require_libopus_env
 print_toolchain "libopus"
 
 JOBS="${JOBS:-$(nproc)}"
+THREADING_MODE="${THREADING_MODE:-single-thread}"
+thread_flags=""
+if [[ "$THREADING_MODE" == "multi-thread" ]]; then thread_flags="-pthread"; fi
 clone_exact_commit "$LIBOPUS_REPOSITORY" "$LIBOPUS_FALLBACK_REPOSITORY" "$LIBOPUS_COMMIT" "$SRC_DIR/opus"
 
 log "Building Opus $LIBOPUS_REF ($LIBOPUS_COMMIT) for WebAssembly"
 emcmake cmake -S "$SRC_DIR/opus" -B "$SRC_DIR/opus/build-wasm" \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS="$thread_flags" \
   -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
   -DBUILD_SHARED_LIBS=OFF \
   -DOPUS_BUILD_SHARED_LIBRARY=OFF \
