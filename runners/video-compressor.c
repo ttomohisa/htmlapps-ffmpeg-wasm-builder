@@ -55,7 +55,20 @@
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.6.0"
+#define RUNNER_VERSION "1.10.3"
+
+#ifndef FFMPEG_WASM_PTHREADS
+#define FFMPEG_WASM_PTHREADS 0
+#endif
+#ifndef FFMPEG_WASM_DECODER_THREAD_COUNT
+#define FFMPEG_WASM_DECODER_THREAD_COUNT 1
+#endif
+#ifndef FFMPEG_WASM_ENCODER_THREAD_COUNT
+#define FFMPEG_WASM_ENCODER_THREAD_COUNT 1
+#endif
+#ifndef FFMPEG_WASM_X264_LOOKAHEAD_THREAD_COUNT
+#define FFMPEG_WASM_X264_LOOKAHEAD_THREAD_COUNT 1
+#endif
 
 typedef struct RunnerOptions {
     const char *input_path;
@@ -412,8 +425,13 @@ static int open_decoder(RunnerContext *ctx, int stream_index, StreamContext *str
         return ret;
 
     stream->dec_ctx->pkt_timebase = input_stream->time_base;
-    stream->dec_ctx->thread_count = 1;
-    stream->dec_ctx->thread_type = 0;
+    if (FFMPEG_WASM_PTHREADS && input_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+        stream->dec_ctx->thread_count = FFMPEG_WASM_DECODER_THREAD_COUNT;
+        stream->dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+    } else {
+        stream->dec_ctx->thread_count = 1;
+        stream->dec_ctx->thread_type = 0;
+    }
     if (input_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
         stream->dec_ctx->framerate = av_guess_frame_rate(ctx->ifmt_ctx, input_stream, NULL);
 
@@ -518,8 +536,8 @@ static int setup_video_output(RunnerContext *ctx)
     stream->enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
     stream->enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
     stream->enc_ctx->max_b_frames = use_vp9 ? 0 : 2;
-    stream->enc_ctx->thread_count = 1;
-    stream->enc_ctx->thread_type = 0;
+    stream->enc_ctx->thread_count = FFMPEG_WASM_PTHREADS ? FFMPEG_WASM_ENCODER_THREAD_COUNT : 1;
+    stream->enc_ctx->thread_type = FFMPEG_WASM_PTHREADS ? FF_THREAD_FRAME : 0;
 
     if (ctx->options.video_bitrate_kbps > 0)
         stream->enc_ctx->bit_rate = (int64_t)ctx->options.video_bitrate_kbps * 1000;
@@ -532,13 +550,23 @@ static int setup_video_output(RunnerContext *ctx)
         av_dict_set(&encoder_options, "deadline", "good", 0);
         av_dict_set(&encoder_options, "cpu-used", vp9_cpu_used_for_speed(&ctx->options), 0);
         av_dict_set(&encoder_options, "lag-in-frames", vp9_lag_in_frames_for_speed(&ctx->options), 0);
+        if (FFMPEG_WASM_PTHREADS) av_dict_set(&encoder_options, "row-mt", "1", 0);
     } else {
         av_dict_set(&encoder_options, "preset", x264_preset_for_speed(&ctx->options), 0);
+        if (FFMPEG_WASM_PTHREADS) {
+            char x264_params[64];
+            snprintf(x264_params, sizeof(x264_params), "lookahead-threads=%d",
+                     FFMPEG_WASM_X264_LOOKAHEAD_THREAD_COUNT);
+            av_dict_set(&encoder_options, "x264-params", x264_params, 0);
+        }
     }
 
     if (ctx->ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
         stream->enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
+    av_log(NULL, AV_LOG_INFO, "opening %s encoder: threads=%d row_mt=%d x264_lookahead_threads=%d\n",
+           encoder_name, stream->enc_ctx->thread_count, FFMPEG_WASM_PTHREADS && use_vp9,
+           FFMPEG_WASM_PTHREADS && !use_vp9 ? FFMPEG_WASM_X264_LOOKAHEAD_THREAD_COUNT : 0);
     ret = avcodec_open2(stream->enc_ctx, encoder, &encoder_options);
     av_dict_free(&encoder_options);
     if (ret < 0) {
@@ -622,6 +650,7 @@ static int init_filter(StreamContext *stream, const char *filter_spec)
     AVFilterInOut *outputs = avfilter_inout_alloc();
     AVFilterInOut *inputs = avfilter_inout_alloc();
     AVFilterGraph *graph = avfilter_graph_alloc();
+    if (graph && FFMPEG_WASM_PTHREADS) graph->nb_threads = 1;
     const AVFilter *buffersrc = NULL;
     const AVFilter *buffersink = NULL;
     AVFilterContext *src_ctx = NULL;

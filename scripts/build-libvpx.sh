@@ -5,17 +5,25 @@ require_libvpx_env
 print_toolchain "libvpx"
 
 JOBS="${JOBS:-$(nproc)}"
+THREADING_MODE="${THREADING_MODE:-single-thread}"
+thread_config=(--disable-multithread)
+thread_flags=""
+if [[ "$THREADING_MODE" == "multi-thread" ]]; then
+  thread_config=(--enable-multithread)
+  thread_flags="-pthread"
+fi
+export LDFLAGS="${LDFLAGS:-} $thread_flags"
 clone_exact_commit "$LIBVPX_REPOSITORY" "$LIBVPX_FALLBACK_REPOSITORY" "$LIBVPX_COMMIT" "$SRC_DIR/libvpx"
 
 pushd "$SRC_DIR/libvpx" >/dev/null
 log "Building libvpx $LIBVPX_REF ($LIBVPX_COMMIT) for WebAssembly"
-# Encoder-only, VP9-only and single-threaded keeps the Browser Kitty core compact.
+# Encoder-only and VP9-only; pthreads are enabled only for the explicit MT variant.
 emconfigure ./configure \
   --prefix="$INSTALL_DIR" \
   --target=generic-gnu \
   --disable-shared \
   --enable-static \
-  --disable-multithread \
+  "${thread_config[@]}" \
   --disable-runtime-cpu-detect \
   --enable-small \
   --disable-spatial-resampling \
@@ -35,7 +43,7 @@ emconfigure ./configure \
   --enable-vp9-encoder \
   --disable-webm-io \
   --disable-libyuv \
-  --extra-cflags="-O3 -fPIC"
+  --extra-cflags="-O3 -fPIC $thread_flags"
 emmake make -j"$JOBS"
 emmake make install
 popd >/dev/null

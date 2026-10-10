@@ -52,10 +52,12 @@ ARG LIBVPX_REPOSITORY
 ARG LIBVPX_FALLBACK_REPOSITORY
 ARG LIBVPX_REF
 ARG LIBVPX_COMMIT
+ARG THREADING_MODE=single-thread
 ENV LIBVPX_REPOSITORY=${LIBVPX_REPOSITORY} \
     LIBVPX_FALLBACK_REPOSITORY=${LIBVPX_FALLBACK_REPOSITORY} \
     LIBVPX_REF=${LIBVPX_REF} \
-    LIBVPX_COMMIT=${LIBVPX_COMMIT}
+    LIBVPX_COMMIT=${LIBVPX_COMMIT} \
+    THREADING_MODE=${THREADING_MODE}
 COPY scripts/docker-common.sh scripts/build-libvpx.sh /workspace/scripts/
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-libvpx.sh
 
@@ -65,10 +67,12 @@ ARG LIBOPUS_REPOSITORY
 ARG LIBOPUS_FALLBACK_REPOSITORY
 ARG LIBOPUS_REF
 ARG LIBOPUS_COMMIT
+ARG THREADING_MODE=single-thread
 ENV LIBOPUS_REPOSITORY=${LIBOPUS_REPOSITORY} \
     LIBOPUS_FALLBACK_REPOSITORY=${LIBOPUS_FALLBACK_REPOSITORY} \
     LIBOPUS_REF=${LIBOPUS_REF} \
-    LIBOPUS_COMMIT=${LIBOPUS_COMMIT}
+    LIBOPUS_COMMIT=${LIBOPUS_COMMIT} \
+    THREADING_MODE=${THREADING_MODE}
 COPY scripts/docker-common.sh scripts/build-libopus.sh /workspace/scripts/
 RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/build-libopus.sh
 
@@ -97,7 +101,7 @@ RUN chmod +x /workspace/scripts/*.sh && /workspace/scripts/fetch-ffmpeg.sh
 
 # Common profile build inputs. This stage deliberately does not copy x264.
 FROM toolchain-base AS wasm-common
-ARG BUILDER_VERSION=1.10.2
+ARG BUILDER_VERSION=1.10.3
 ARG FFMPEG_REPOSITORY
 ARG FFMPEG_REF
 ARG FFMPEG_COMMIT

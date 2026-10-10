@@ -216,7 +216,7 @@ if ($runtimeText.Contains("pthreadWorkerJsText") -or $runtimeText.Contains("pthr
 
 $videoRunnerText = [IO.File]::ReadAllText($videoRunner)
 if ($videoRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video runner must not call pthread APIs." }
-Require-Text $videoRunner '#define RUNNER_VERSION "1.6.0"' "Video runner version must be 1.6.0."
+Require-Text $videoRunner '#define RUNNER_VERSION "1.10.3"' "Video runner version must be 1.10.3."
 Require-Text $videoProfile "--enable-encoder=libvpx_vp9" "FFmpeg configure must use the libvpx_vp9 component name."
 $videoProfileFlagsText = [IO.File]::ReadAllText($videoProfile)
 if ($videoProfileFlagsText.Contains("--enable-encoder=libvpx-vp9")) { throw "FFmpeg configure must not use the runtime codec name libvpx-vp9." }
@@ -586,7 +586,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.2$') { throw "Builder version must be 1.10.2." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.3$') { throw "Builder version must be 1.10.3." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -705,7 +705,7 @@ if ($node) {
     & node --check $timingScript
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
   }
-  & node --test $timingReaderTests $filterTimingOracleTests
+  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs")
   if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }

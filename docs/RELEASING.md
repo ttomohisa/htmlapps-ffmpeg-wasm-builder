@@ -71,3 +71,8 @@ Recommended consumer flow:
 6. keep runtime delivery offline when the application requires fully local processing.
 
 A local Builder checkout remains useful for development, but production/release builds should be reproducible from a tagged release asset and its checksum.
+
+
+## Video Compressor 1.10.3 compatibility
+
+Publish both `ffmpeg-wasm-video-compressor-single-thread-v1.10.3.zip` and `ffmpeg-wasm-video-compressor-multi-thread-v1.10.3.zip`, with their BUILDINFO files. The packer retains `ffmpeg-wasm-video-compressor-v1.10.3.zip` as a byte-identical ST alias so old consuming apps can update their version pin without changing asset names. Check both variants' actual browser smoke results before an owner-approved `git tag -a v1.10.3` release. No tag or release is created by the feature PR.

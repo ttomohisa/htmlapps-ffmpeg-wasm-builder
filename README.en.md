@@ -1,5 +1,8 @@
 # FFmpeg WASM Builder
 
+> Builder 1.10.3 adds explicit Video Compressor ST/MT runtimes with MP4 and WebM output. The existing Compressor release filename remains the portable ST alias. See [Compressor threading](profiles/video-compressor/README.md#threading-variants-builder-1103).
+
+
 ## Video Audio Extractor Phase 4 MP3 / LAME
 
 `video-audio-extractor` keeps the stream-copy matrix plus AAC/M4A and PCM16/WAV conversion, and Phase 4 adds MP3 encoding through pinned LAME 4.0 / libmp3lame. MP3 supports 128 / 192 / 256 / 320 kbps and mono/stereo output. Large browser `File`/`Blob` inputs continue to use WORKERFS. LAME is built and linked only for this profile. AC-3 and E-AC-3 remain deferred.
@@ -12,7 +15,7 @@ Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg a
 
 ## v1.9.7 profiles
 
-Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
+Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
 
 `ffmpeg-filter-builder` is the first dual-runtime profile. Its initial MT contract prewarms an 8-worker pthread pool and limits codec work to 4 threads. One build produces:
 

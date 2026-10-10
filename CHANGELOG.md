@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.10.3
+
+- Add explicit Video Compressor ST/MT builds while retaining H.264/AAC MP4 and VP9/Opus WebM.
+- Bound video decoder, encoder and x264 lookahead threads; keep audio and filters within the shared worker budget.
+- Compile libvpx/Opus for each variant and enable VP9 row multithreading in MT.
+- Keep the legacy Compressor ST release asset name as a byte-identical alias; publish explicit ST/MT assets and smoke-test both.
+- Preserve the portable Builder demo by selecting the single-thread subdirectory.
+
+
 ## 1.10.2 - 2026-10-07
 
 - Fixed shortened final video-frame durations in both Filter Builder input paths and threading variants, including original/VFR, one-frame, explicit-FPS and app-generated constant-speed output.

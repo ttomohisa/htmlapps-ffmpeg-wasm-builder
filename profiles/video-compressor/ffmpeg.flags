@@ -1,6 +1,6 @@
 # Public-library browser runner.
-# No fftools/ffmpeg program is linked. FFmpeg/x264 threading is disabled so the
-# generated WASM does not require SharedArrayBuffer.
+# No fftools/ffmpeg program is linked. The standard variant stays single-threaded;
+# the explicit multi-thread variant requires SharedArrayBuffer and isolation.
 --enable-gpl
 --enable-small
 --disable-everything
