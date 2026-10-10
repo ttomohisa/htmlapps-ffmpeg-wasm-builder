@@ -216,7 +216,7 @@ if ($runtimeText.Contains("pthreadWorkerJsText") -or $runtimeText.Contains("pthr
 
 $videoRunnerText = [IO.File]::ReadAllText($videoRunner)
 if ($videoRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video runner must not call pthread APIs." }
-Require-Text $videoRunner '#define RUNNER_VERSION "1.6.0"' "Video runner version must be 1.6.0."
+Require-Text $videoRunner '#define RUNNER_VERSION "1.10.3"' "Video runner version must be 1.10.3."
 Require-Text $videoProfile "--enable-encoder=libvpx_vp9" "FFmpeg configure must use the libvpx_vp9 component name."
 $videoProfileFlagsText = [IO.File]::ReadAllText($videoProfile)
 if ($videoProfileFlagsText.Contains("--enable-encoder=libvpx-vp9")) { throw "FFmpeg configure must not use the runtime codec name libvpx-vp9." }

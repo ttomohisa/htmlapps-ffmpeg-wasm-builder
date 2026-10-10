@@ -15,7 +15,7 @@ Build small, task-specific browser FFmpeg WebAssembly cores from pinned FFmpeg a
 
 ## v1.9.7 profiles
 
-Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-compressor`, `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
+Existing profiles remain single-threaded and keep their previous `dist/<profile>/` contract: `video-speed-changer`, `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp`.
 
 `ffmpeg-filter-builder` is the first dual-runtime profile. Its initial MT contract prewarms an 8-worker pthread pool and limits codec work to 4 threads. One build produces:
 

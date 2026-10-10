@@ -32,7 +32,7 @@ pinned FFmpeg / Emscripten / optional x264 / libvpx / Opus / libwebp
        real browser smoke test
 ```
 
-- 既存profileは従来どおりsingle-thread / SharedArrayBuffer不要
+- 明示的なdual-runtime profile以外は従来どおりsingle-thread / SharedArrayBuffer不要
 - `ffmpeg-filter-builder` はsingle-thread + multi-threadを同時生成
 - single-thread版はCOOP / COEP不要で`file://`単一HTML向け
 - multi-thread版はSharedArrayBuffer + cross-origin isolation（COOP / COEP）が必要

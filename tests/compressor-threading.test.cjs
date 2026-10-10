@@ -65,3 +65,7 @@ test('aggregate source validation expects the same Builder version', () => {
   const version = /^BUILDER_VERSION=(.+)$/m.exec(read('versions.env'))[1];
   assert.ok(read('scripts/check-repository.ps1').includes(`Builder version must be ${version}.`));
 });
+test('aggregate validation accepts the actual Compressor runner version',()=>{
+ const version=/#define RUNNER_VERSION "([^"]+)"/.exec(read('runners/video-compressor.c'))[1];
+ assert.ok(read('scripts/check-repository.ps1').includes(`Video runner version must be ${version}.`));
+});
