@@ -69,3 +69,8 @@ test('aggregate validation accepts the actual Compressor runner version',()=>{
  const version=/#define RUNNER_VERSION "([^"]+)"/.exec(read('runners/video-compressor.c'))[1];
  assert.ok(read('scripts/check-repository.ps1').includes(`Video runner version must be ${version}.`));
 });
+test('libvpx uses its supported linker environment instead of an unknown configure flag',()=>{
+ const s=read('scripts/build-libvpx.sh');
+ assert.doesNotMatch(s,/--extra-ldflags/);
+ assert.match(s,/export LDFLAGS=.*thread_flags/);
+});

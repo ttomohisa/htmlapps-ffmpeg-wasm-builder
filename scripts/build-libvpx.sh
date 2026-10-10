@@ -12,6 +12,7 @@ if [[ "$THREADING_MODE" == "multi-thread" ]]; then
   thread_config=(--enable-multithread)
   thread_flags="-pthread"
 fi
+export LDFLAGS="${LDFLAGS:-} $thread_flags"
 clone_exact_commit "$LIBVPX_REPOSITORY" "$LIBVPX_FALLBACK_REPOSITORY" "$LIBVPX_COMMIT" "$SRC_DIR/libvpx"
 
 pushd "$SRC_DIR/libvpx" >/dev/null
@@ -42,8 +43,7 @@ emconfigure ./configure \
   --enable-vp9-encoder \
   --disable-webm-io \
   --disable-libyuv \
-  --extra-cflags="-O3 -fPIC $thread_flags" \
-  --extra-ldflags="$thread_flags"
+  --extra-cflags="-O3 -fPIC $thread_flags"
 emmake make -j"$JOBS"
 emmake make install
 popd >/dev/null
