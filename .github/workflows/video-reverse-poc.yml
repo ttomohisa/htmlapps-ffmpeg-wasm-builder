@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/video-reverse-poc.yml"
       - "runners/video-reverse.c"
+      - "runners/video-reverse-join.inc"
       - "profiles/video-reverse/**"
       - "tests/smoke-tests/video-reverse.js"
   workflow_dispatch:

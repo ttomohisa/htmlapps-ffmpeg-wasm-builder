@@ -20,6 +20,8 @@
 #include "ffmpeg-filter-builder.c"
 #undef main
 
+#include "video-reverse-join.inc"
+
 #define REVERSE_MAX_DURATION 2.0
 #define REVERSE_MAX_BUFFER_MIB 96.0
 
@@ -49,6 +51,9 @@ static int parse_finite(const char *text, double low, double high, double *out)
 
 int main(int argc, char **argv)
 {
+    if (argc > 1 && !strcmp(argv[1], "--concat"))
+        return reverse_join_chunks(argc, argv);
+
     const char *input = NULL, *output = NULL;
     const char *start_text = NULL, *duration_text = NULL;
     double start = 0, duration = 0, width = 0, height = 0, fps = 0, crf = 30;
