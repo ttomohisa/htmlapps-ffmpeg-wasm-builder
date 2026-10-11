@@ -31,6 +31,8 @@ HEVC decoding here is performed by FFmpeg in Wasm; it does not depend on whether
 --count 12                              # 12 / 24 / 48
 --thumb-size 320                        # 96..640
 --columns 4                             # optional
+--partition-count 2                     # optional: 1 (default) or 2
+--partition-index 0                     # optional: 0 (default) or 1, less than partition count
 ```
 
 The JSON metadata contains duration, codec, detected quarter-turn rotation, grid/cell dimensions, and target/actual sample timestamps.
@@ -40,6 +42,24 @@ The JSON metadata contains duration, codec, detected quarter-turn rotation, grid
 Targets are evenly distributed from the beginning to the end of the video. For inter-frame codecs, the runner seeks backward to a keyframe and decodes forward until it reaches the target timestamp. This avoids decoding the entire movie just to obtain a small number of thumbnails.
 
 The final end target is nudged slightly before EOF to avoid requesting a timestamp beyond the last decodable frame.
+
+### Independent sample partitions
+
+Two ordinary single-thread Worker instances can divide extraction without pthreads,
+SharedArrayBuffer, or cross-origin isolation. Both receive the original `--count`
+and geometry. Partition `p` extracts global sample indexes where `index % 2 == p`;
+it does not split the duration or recalculate target times using a smaller count.
+Each returned PPM keeps the complete sheet dimensions, with unowned cells black.
+Its JSON contains only owned samples, retaining global indexes and target/actual
+times, plus `partitionCount` and `partitionIndex`. A caller must validate both
+partitions and merge their owned cell rectangles before presenting a complete sheet.
+
+Omitting partition options preserves the existing output and metadata contract.
+The manifest advertises `partitionSampling: true` and `maxPartitionCount: 2`.
+Progress is local to the selected partition and reaches 1 after its own samples.
+Each Worker has its own decoder, Wasm heap and output buffer: cap concurrent
+instances at two, keep WORKERFS, and use a one-Worker fallback on constrained devices.
+Partition support does not establish any particular speedup; measure on the target device.
 
 ## Browser/memory behavior
 

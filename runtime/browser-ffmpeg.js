@@ -203,6 +203,7 @@
         this.activeRuns.add(operation);
         if (signal) signal.addEventListener("abort", onAbort, { once: true });
         worker.onmessage = (event) => {
+          if (settled) return;
           const message = event.data;
           if (message?.type === "log") { rememberLog({ stream: message.stream, message: message.message }); return; }
           if (message?.type === "progress") { onProgress(message.progress); return; }
@@ -219,12 +220,15 @@
           }
         };
         worker.onerror = (event) => fail(event.error || new Error(event.message || "FFmpeg WASM worker failed."));
+        worker.onmessageerror = () => fail(new Error("FFmpeg WASM worker message could not be deserialized."));
         if (signal?.aborted) { onAbort(); return; }
-        worker.postMessage({
-          wasmBytes: wasmForRun, args, files, outputs,
-          coreJsText: this.coreJsText,
-          threading: this.threading
-        }, transfer);
+        try {
+          worker.postMessage({
+            wasmBytes: wasmForRun, args, files, outputs,
+            coreJsText: this.coreJsText,
+            threading: this.threading
+          }, transfer);
+        } catch (error) { fail(error); }
       });
     }
     dispose() {
@@ -398,6 +402,14 @@
     }
     if (options.metadataOutput) {
       args.push("--metadata-output", String(options.metadataOutput));
+    }
+    if (options.partitionCount !== undefined || options.partitionIndex !== undefined) {
+      const partitionCount = options.partitionCount ?? 1;
+      const partitionIndex = options.partitionIndex ?? 0;
+      if (!Number.isInteger(partitionCount) || partitionCount < 1 || partitionCount > 2 ||
+          !Number.isInteger(partitionIndex) || partitionIndex < 0 || partitionIndex >= partitionCount)
+        throw new RangeError("Video Contact Sheet partitionCount must be 1 or 2, with a valid zero-based partitionIndex.");
+      args.push("--partition-count", String(partitionCount), "--partition-index", String(partitionIndex));
     }
     return args;
   };
