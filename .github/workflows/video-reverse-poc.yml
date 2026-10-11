@@ -1,0 +1,50 @@
+name: Verify video-reverse PoC only
+
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - ".github/workflows/video-reverse-poc.yml"
+      - "runners/video-reverse.c"
+      - "profiles/video-reverse/**"
+      - "tests/smoke-tests/video-reverse.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reverse-poc:
+    name: Build and browser-smoke video-reverse (experimental only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Prepare Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Install browser
+        uses: browser-actions/setup-chrome@v2.2.0
+        id: chrome
+      - name: Source checks
+        shell: pwsh
+        run: ./scripts/check-repository.ps1
+      - name: Build just video-reverse and run actual WASM smoke test
+        shell: bash
+        env:
+          FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          chmod +x ./build.sh ./scripts/*.sh
+          ./build.sh video-reverse
+      - name: Show generated manifest
+        if: success()
+        run: cat dist/video-reverse/manifest.json
+      - name: Upload experimental WASM artifacts
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: experimental-video-reverse-wasm-${{ github.sha }}
+          path: dist/video-reverse/
+          if-no-files-found: error
+          retention-days: 7
