@@ -30,8 +30,9 @@ static void reverse_usage(void)
     fprintf(stderr,
             "Experimental video-reverse single-chunk runner\n"
             "Usage: --input FILE --output MP4 --start-time SECONDS --duration SECONDS\n"
-            "       --width EVEN --height EVEN --fps INTEGER [--crf 0..51]\n"
+            "       --width EVEN --height EVEN --fps INTEGER [--frames COUNT] [--crf 0..51]\n"
             "  duration: 0.1..2.0 seconds; one chunk only; output H.264 MP4, no audio.\n"
+            "  --frames forces exact output count (2..120, matching fps*duration).\n"
             "  estimate of cached YUV420 frames must not exceed 96 MiB.\n"
             "  input source codec/rotation and actual peak RAM are not guaranteed.\n");
 }
@@ -49,6 +50,40 @@ static int parse_finite(const char *text, double low, double high, double *out)
     return 0;
 }
 
+
+/* Count encoded H.264 packets instead of trusting container duration.
+ * Abort and delete chunks that are a frame short/long. */
+static int verify_reverse_frame_count(const char *file, int expected)
+{
+    AVFormatContext *ctx = NULL;
+    AVPacket *pkt = NULL;
+    int index = -1, actual = 0, ret;
+    if (!file || expected <= 0) return AVERROR(EINVAL);
+    ret = avformat_open_input(&ctx, file, NULL, NULL);
+    if (ret < 0) goto end;
+    ret = avformat_find_stream_info(ctx, NULL);
+    if (ret < 0) goto end;
+    index = av_find_best_stream(ctx, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
+    if (index < 0) { ret = index; goto end; }
+    pkt = av_packet_alloc();
+    if (!pkt) { ret = AVERROR(ENOMEM); goto end; }
+    while ((ret = av_read_frame(ctx, pkt)) >= 0) {
+        if (pkt->stream_index == index) actual++;
+        av_packet_unref(pkt);
+        if (actual > 120) { ret = AVERROR_INVALIDDATA; break; }
+    }
+    if (ret == AVERROR_EOF) ret = 0;
+    if (ret >= 0 && actual != expected) {
+        av_log(NULL, AV_LOG_ERROR, "Reverse frame count mismatch: expected=%d actual=%d.\n",
+               expected, actual);
+        ret = AVERROR_INVALIDDATA;
+    }
+end:
+    av_packet_free(&pkt);
+    avformat_close_input(&ctx);
+    return ret;
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--concat"))
@@ -56,7 +91,7 @@ int main(int argc, char **argv)
 
     const char *input = NULL, *output = NULL;
     const char *start_text = NULL, *duration_text = NULL;
-    double start = 0, duration = 0, width = 0, height = 0, fps = 0, crf = 30;
+    double start = 0, duration = 0, width = 0, height = 0, fps = 0, crf = 30, frames = 0;
     char filter[256], fps_text[16], crf_text[16];
     int i;
 
@@ -86,6 +121,8 @@ int main(int argc, char **argv)
             if (parse_finite(value, 1, 60, &fps) < 0) return 2;
         } else if (!strcmp(flag, "--crf")) {
             if (parse_finite(value, 0, 51, &crf) < 0) return 2;
+        } else if (!strcmp(flag, "--frames")) {
+            if (parse_finite(value, 2, 120, &frames) < 0) return 2;
         } else {
             fprintf(stderr, "Unsupported reverse option: %s\n", flag);
             return 2;
@@ -97,7 +134,8 @@ int main(int argc, char **argv)
         parse_finite(duration_text, 0.1, REVERSE_MAX_DURATION, &duration) < 0 ||
         width != (int)width || height != (int)height ||
         ((int)width % 2) || ((int)height % 2) ||
-        fps != (int)fps || crf != (int)crf) {
+        fps != (int)fps || crf != (int)crf || frames != (int)frames ||
+        (frames > 0 && fabs(frames - fps * duration) > 0.05)) {
         reverse_usage();
         return 2;
     }
@@ -120,8 +158,15 @@ int main(int argc, char **argv)
      * final fps (from --fps) -> format/encoder. Scaling + fps BEFORE reverse
      * bound stored frame size/count; the final fps fixes frame durations.
      */
-    snprintf(filter, sizeof(filter), "scale=%d:%d:flags=bicubic,fps=fps=%d,reverse,setpts=PTS-STARTPTS",
-             (int)width, (int)height, (int)fps);
+    if (frames > 0) {
+        snprintf(filter, sizeof(filter),
+                 "scale=%d:%d:flags=bicubic,fps=fps=%d,trim=end_frame=%d,reverse,setpts=PTS-STARTPTS",
+                 (int)width, (int)height, (int)fps, (int)frames);
+    } else {
+        snprintf(filter, sizeof(filter),
+                 "scale=%d:%d:flags=bicubic,fps=fps=%d,reverse,setpts=PTS-STARTPTS",
+                 (int)width, (int)height, (int)fps);
+    }
     snprintf(fps_text, sizeof(fps_text), "%d", (int)fps);
     snprintf(crf_text, sizeof(crf_text), "%d", (int)crf);
 
@@ -130,5 +175,9 @@ int main(int argc, char **argv)
         "--start-time", (char *)start_text, "--duration", (char *)duration_text,
         "--video-filter", filter, "--fps", fps_text, "--crf", crf_text, "--no-audio"
     };
-    return filter_builder_main((int)(sizeof(delegated) / sizeof(delegated[0])), delegated);
+    int ret = filter_builder_main((int)(sizeof(delegated) / sizeof(delegated[0])), delegated);
+    if (ret == 0 && frames > 0)
+        ret = verify_reverse_frame_count(output, (int)frames) < 0 ? 1 : 0;
+    if (ret != 0) remove(output); /* Never expose incomplete or miscounted segments. */
+    return ret;
 }

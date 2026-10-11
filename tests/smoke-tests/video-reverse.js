@@ -10,7 +10,7 @@ const result = await runner.run({
   outputs: [path],
   args: ["--input","/workerfs/input.mp4","--output",path,
          "--start-time","0.1","--duration","0.4",
-         "--width","160","--height","90","--fps","10","--crf","34"],
+         "--width","160","--height","90","--fps","10","--frames","4","--crf","34"],
   onProgress: value => { progress = Math.max(progress,value); append("progress="+value.toFixed(3)); },
   onLog: ({message}) => append(message)
 });
@@ -44,7 +44,7 @@ try {
       outputs:["/reverse-chunk.mp4"],
       args:["--input","/workerfs/input.mp4","--output","/reverse-chunk.mp4",
         "--start-time",String(startTime),"--duration","0.2",
-        "--width","160","--height","90","--fps","10","--crf","34"]
+        "--width","160","--height","90","--fps","10","--frames","2","--crf","34"]
     });
     if (chunk.exitCode !== 0 || !chunk.files?.length) throw new Error("WASM chunk render failed");
     return chunk.files[0].data;
@@ -58,7 +58,7 @@ try {
     ],
     outputs:["/joined.mp4"],
     args:["--concat","--input","/later.mp4","--input","/earlier.mp4",
-      "--output","/joined.mp4"],
+      "--output","/joined.mp4","--expected-frames","4"],
     onLog:({message})=>append(message)
   });
   const joined=concat.files?.[0]?.data;

@@ -45,3 +45,11 @@ The adapter has a second, narrowly scoped entrypoint:
 The caller must encode **up to 8** individually reversed chunks using the same width, height, FPS, and x264 profile, provide them in *reverse chronological order*, and feed the completed MP4 chunk bytes to the virtual filesystem. The public-libav remuxer verifies H.264 video-only stream and identical codec parameter/extradata; rejects mismatched geometry, absent timestamps and non-monotonic DTS; adjusts DTS/PTS across chunk boundaries; writes **one MP4** with no re-encoding in the join phase. Per-chunk reverse still caps buffering at 96 MiB estimated YUV420 (actual WASM heap higher). Testing must include real decoded frame order, exact frame counts, MP4 duration, VFR source and rotation; this initial smoke only verifies an actual WASM concatenation produces browser-playable video.
 
 **Do not market this as stable 5s/10s export** until those measurements and Android/iOS real-device results exist. No audio or ping-pong in this release line.
+
+## Frame-exact experimental contract (10-second preparation)
+
+A caller can pass **`--frames N`** when creating each short reverse chunk. This requires `N` to be a whole number from 2 to 120 and agree with `fps × duration` within input rounding. The runner inserts `trim=end_frame=N` **after the pre-reverse FPS filter**; after encoding it reopens the output with public libavformat, counts H.264 video packets and **deletes the output on mismatch** instead of returning an MP4 with a wrong frame count.
+
+The remux path optionally accepts **`--expected-frames N`** (2–960), counts each video packet across joined chunks and rejects an incomplete result; source codec extradata/timebases must still agree. These checks do not infer the original source frame identities. Frame-order verification remains a separate test using synthetic numbered/color-coded media.
+
+This avoids failures found when simply expanding the app's 5-second limit: for non-frame-aligned selections, earlier unbounded FFmpeg FPS graphs sometimes added 1–2 frames. The external app must supply the exact frame plan. Android mobile performance and long-input codec compatibility remain subject to physical tests.

@@ -38,6 +38,7 @@ static int reverse_join_chunks(int argc, char **argv)
     const char *inputs[REVERSE_JOIN_MAX_CHUNKS] = {0};
     const char *output = NULL;
     int n = 0, i, ret = 0;
+    int expected_frames = 0, written_total = 0;
     int64_t presentation_end = 0;
     int64_t previous_dts = INT64_MIN;
     AVFormatContext *ofmt = NULL, *ifmt = NULL;
@@ -56,6 +57,14 @@ static int reverse_join_chunks(int argc, char **argv)
         } else if (!strcmp(argv[i], "--output") && i + 1 < argc) {
             if (output) return 2;
             output = argv[++i];
+        } else if (!strcmp(argv[i], "--expected-frames") && i + 1 < argc) {
+            char *end = NULL;
+            long count;
+            if (expected_frames) return 2;
+            errno = 0;
+            count = strtol(argv[++i], &end, 10);
+            if (errno || !end || *end || count < 2 || count > 960) return 2;
+            expected_frames = (int)count;
         } else {
             fprintf(stderr, "Invalid reverse-concat argument: %s\n", argv[i]);
             return 2;
@@ -179,6 +188,7 @@ static int reverse_join_chunks(int argc, char **argv)
             av_packet_unref(pkt);
             if (ret < 0) goto done;
             ++written;
+            ++written_total;
             if (written > 150) {
                 av_log(NULL, AV_LOG_ERROR,
                        "Reverse chunk has more than 150 video packets.\n");
@@ -197,6 +207,13 @@ static int reverse_join_chunks(int argc, char **argv)
         fflush(stdout);
     }
 
+    if (expected_frames && expected_frames != written_total) {
+        av_log(NULL, AV_LOG_ERROR,
+               "Reverse joined frame mismatch: expected=%d actual=%d.\n",
+               expected_frames, written_total);
+        ret = AVERROR_INVALIDDATA;
+        goto done;
+    }
     ret = av_write_trailer(ofmt);
     if (ret >= 0)
         av_log(NULL, AV_LOG_INFO, "Reverse MP4 joined: %d chunks.\n", n);
@@ -210,7 +227,9 @@ done:
         avformat_free_context(ofmt);
     }
     avcodec_parameters_free(&reference);
-    if (ret < 0)
+    if (ret < 0) {
+        if (output) remove(output);
         av_log(NULL, AV_LOG_ERROR, "Reverse MP4 concat failed: %s\n", av_err2str(ret));
+    }
     return ret < 0 ? 1 : 0;
 }
