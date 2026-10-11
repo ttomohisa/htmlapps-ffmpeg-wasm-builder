@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.10.4 - 2026-10-11
 
 - Add optional, bounded two-way Video Contact Sheet sample partitions while preserving global sampling times and the default single-thread output contract.
 - Advertise partition support and verify byte-identical merged pixels plus timestamp/geometry parity for all 12/24/48 frame choices in the real-browser smoke test.
