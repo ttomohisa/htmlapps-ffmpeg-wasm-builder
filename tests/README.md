@@ -9,6 +9,16 @@ The generic `tests/smoke-test.template.html` embeds the generated JS/Wasm and in
 
 A build is not considered successful until the selected profile passes in a real headless browser.
 
+## Contact Sheet sample partitions
+
+`contact-sheet-partition.test.cjs` checks the backward-compatible runtime argument
+helper and compiles the actual C argument parser plus partition helpers when `cc`
+is available. The browser smoke uses actual generated Wasm and WORKERFS to compare
+one full run with two concurrent partitions for all 12/24/48 choices. Every RGB
+output byte, target/actual timestamp, global sample index and geometry field must
+match, and unowned cells must remain black. This is correctness coverage, not a
+benchmark or a claim about browser peak memory.
+
 ## Final-frame timing regressions
 
 The Compressor, GIF, and WebP browser smoke tests also run the shared

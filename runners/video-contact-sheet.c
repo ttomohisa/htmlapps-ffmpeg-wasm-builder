@@ -32,6 +32,8 @@
 #include <libavutil/rational.h>
 #include <libswscale/swscale.h>
 
+#include "video-contact-sheet-partition.h"
+
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
 #define RUNNER_VERSION "1.5.0"
 #define DEFAULT_COUNT 12
@@ -46,6 +48,8 @@ typedef struct RunnerOptions {
     int count;
     int columns;
     int thumb_size;
+    int partition_count;
+    int partition_index;
 } RunnerOptions;
 
 typedef struct SheetGeometry {
@@ -72,6 +76,8 @@ static void print_usage(const char *program)
         "  --thumb-size PX           Long edge of each thumbnail, %d-%d (default %d)\n"
         "  --columns N               Override grid column count (default 4/6/8)\n"
         "  --metadata-output PATH    Optional JSON metadata/sample-time output\n"
+        "  --partition-count N       Independent sample partitions: 1 or 2 (default 1)\n"
+        "  --partition-index N       Zero-based partition to extract (default 0)\n"
         "  --version                 Print runner/FFmpeg version\n"
         "  --help                    Show this help\n\n"
         "The output image is binary PPM (P6/RGB24). Browser code can convert it\n"
@@ -86,7 +92,7 @@ static int parse_int(const char *value, int min_value, int max_value, int *out)
 
     errno = 0;
     parsed = strtol(value, &end, 10);
-    if (errno || !end || *end != '\0' || parsed < min_value || parsed > max_value)
+    if (errno || !end || end == value || *end != '\0' || parsed < min_value || parsed > max_value)
         return AVERROR(EINVAL);
     *out = (int)parsed;
     return 0;
@@ -111,6 +117,7 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
     memset(options, 0, sizeof(*options));
     options->count = DEFAULT_COUNT;
     options->thumb_size = DEFAULT_THUMB_SIZE;
+    options->partition_count = 1;
 
     for (i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -138,6 +145,16 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
                 fprintf(stderr, "--count must be 12, 24, or 48.\n");
                 return AVERROR(EINVAL);
             }
+        } else if (!strcmp(arg, "--partition-count")) {
+            if (parse_int(value, 1, 2, &options->partition_count) < 0) {
+                fprintf(stderr, "--partition-count must be 1 or 2.\n");
+                return AVERROR(EINVAL);
+            }
+        } else if (!strcmp(arg, "--partition-index")) {
+            if (parse_int(value, 0, 1, &options->partition_index) < 0) {
+                fprintf(stderr, "--partition-index must be 0 or 1.\n");
+                return AVERROR(EINVAL);
+            }
         } else if (!strcmp(arg, "--columns")) {
             if (parse_int(value, 1, 16, &options->columns) < 0) {
                 fprintf(stderr, "--columns must be between 1 and 16.\n");
@@ -161,6 +178,10 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
     }
     if (!valid_count(options->count)) {
         fprintf(stderr, "--count must be 12, 24, or 48.\n");
+        return AVERROR(EINVAL);
+    }
+    if (!contact_sheet_partition_valid(options->partition_index, options->partition_count)) {
+        fprintf(stderr, "--partition-index must be less than --partition-count.\n");
         return AVERROR(EINVAL);
     }
     if (options->columns == 0)
@@ -556,6 +577,7 @@ static int write_ppm(const char *path, const SheetGeometry *geometry, const uint
 }
 
 static int write_metadata_json(const char *path,
+                               const RunnerOptions *options,
                                const AVFormatContext *format,
                                const AVStream *stream,
                                const SheetGeometry *geometry,
@@ -579,7 +601,7 @@ static int write_metadata_json(const char *path,
             "\"format\":\"%s\",\"codec\":\"%s\","
             "\"durationSeconds\":%.6f,\"count\":%d,\"columns\":%d,\"rows\":%d,"
             "\"rotationDegrees\":%d,\"cellWidth\":%d,\"cellHeight\":%d,"
-            "\"sheetWidth\":%d,\"sheetHeight\":%d,\"samples\":[",
+            "\"sheetWidth\":%d,\"sheetHeight\":%d,",
             RUNNER_VERSION,
             format->iformat && format->iformat->name ? format->iformat->name : "",
             codec_name ? codec_name : "unknown",
@@ -588,9 +610,14 @@ static int write_metadata_json(const char *path,
             geometry->rotation, geometry->cell_width, geometry->cell_height,
             geometry->sheet_width, geometry->sheet_height);
 
-    for (i = 0; i < geometry->count; i++) {
+    if (options->partition_count > 1)
+        fprintf(out, "\"partitionCount\":%d,\"partitionIndex\":%d,",
+                options->partition_count, options->partition_index);
+    fputs("\"samples\":[", out);
+
+    for (i = options->partition_index; i < geometry->count; i += options->partition_count) {
         double actual_seconds;
-        if (i) fputc(',', out);
+        if (i != options->partition_index) fputc(',', out);
         if (actual_ts[i] == AV_NOPTS_VALUE)
             actual_seconds = (double)target_us[i] / AV_TIME_BASE;
         else
@@ -639,6 +666,9 @@ static int run_contact_sheet(const RunnerOptions *options)
     int video_index;
     int ret = 0;
     int i;
+    int completed = 0;
+    int partition_size = contact_sheet_partition_size(options->count, options->partition_index,
+                                                     options->partition_count);
 
     ret = avformat_open_input(&format, options->input_path, NULL, NULL);
     if (ret < 0) {
@@ -738,6 +768,9 @@ static int run_contact_sheet(const RunnerOptions *options)
         int64_t target_us;
         int64_t target_ts;
 
+        if (!contact_sheet_partition_owns(i, options->partition_index, options->partition_count))
+            continue;
+
         if (options->count == 1)
             target_us = duration_us / 2;
         else
@@ -765,7 +798,7 @@ static int run_contact_sheet(const RunnerOptions *options)
             goto end;
         }
         av_frame_unref(sample);
-        emit_progress(i + 1, options->count);
+        emit_progress(++completed, partition_size);
     }
 
     ret = write_ppm(options->output_path, &geometry, sheet);
@@ -773,7 +806,7 @@ static int run_contact_sheet(const RunnerOptions *options)
         av_log(NULL, AV_LOG_ERROR, "Could not write contact sheet: %s\n", av_err2str(ret));
         goto end;
     }
-    ret = write_metadata_json(options->metadata_output_path, format, video_stream,
+    ret = write_metadata_json(options->metadata_output_path, options, format, video_stream,
                               &geometry, duration_us, targets_us, actual_ts);
     if (ret < 0) {
         av_log(NULL, AV_LOG_ERROR, "Could not write contact-sheet metadata: %s\n", av_err2str(ret));

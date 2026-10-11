@@ -44,6 +44,8 @@ $cutterRunner = Require-File "runners/lossless-video-cutter.c"
 $inspectorRunner = Require-File "runners/media-inspector.c"
 $extractorRunner = Require-File "runners/video-audio-extractor.c"
 $contactRunner = Require-File "runners/video-contact-sheet.c"
+$contactPartitionHeader = Require-File "runners/video-contact-sheet-partition.h"
+$contactPartitionTests = Require-File "tests/contact-sheet-partition.test.cjs"
 $videoProfile = Require-File "profiles/video-compressor/ffmpeg.flags"
 $videoProfileEnv = Require-File "profiles/video-compressor/profile.env"
 $speedProfile = Require-File "profiles/video-speed-changer/ffmpeg.flags"
@@ -705,7 +707,7 @@ if ($node) {
     & node --check $timingScript
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
   }
-  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs")
+  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") $contactPartitionTests
   if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
