@@ -1,4 +1,4 @@
-name: Verify video-reverse PoC only
+name: Verify video-reverse ST and MT PoC
 
 on:
   push:
@@ -38,9 +38,26 @@ jobs:
         run: |
           chmod +x ./build.sh ./scripts/*.sh
           ./build.sh video-reverse
-      - name: Show generated manifest
+      - name: Validate separate ST and MT manifests
         if: success()
-        run: cat dist/video-reverse/manifest.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib
+          root = pathlib.Path('dist/video-reverse')
+          for mode in ('single-thread','multi-thread'):
+              folder = root / mode
+              manifest = json.loads((folder/'manifest.json').read_text())
+              assert manifest['profile']=='video-reverse', mode
+              assert manifest['runtime']['threading']==mode, mode
+              assert bool(manifest['runtime']['requiresCrossOriginIsolation']) == (mode == 'multi-thread')
+              assert bool(manifest['runtime']['requiresSharedArrayBuffer']) == (mode == 'multi-thread')
+              assert bool(manifest['runtime']['fileProtocolSingleHtml']) == (mode == 'single-thread')
+              for fname in ('ffmpeg.js','ffmpeg.wasm','ffmpeg.js.gz','ffmpeg.wasm.gz','smoke-test.html'):
+                  assert (folder/fname).stat().st_size>0, (mode,fname)
+              print('[OK]',mode,manifest['runtime']['threading'])
+          PY
       - name: Upload experimental WASM artifacts
         if: success()
         uses: actions/upload-artifact@v7

@@ -53,3 +53,11 @@ A caller can pass **`--frames N`** when creating each short reverse chunk. This 
 The remux path optionally accepts **`--expected-frames N`** (2–960), counts each video packet across joined chunks and rejects an incomplete result; source codec extradata/timebases must still agree. These checks do not infer the original source frame identities. Frame-order verification remains a separate test using synthetic numbered/color-coded media.
 
 This avoids failures found when simply expanding the app's 5-second limit: for non-frame-aligned selections, earlier unbounded FFmpeg FPS graphs sometimes added 1–2 frames. The external app must supply the exact frame plan. Android mobile performance and long-input codec compatibility remain subject to physical tests.
+
+## Separate single-thread + multi-thread artifacts
+
+The `video-reverse` profile now requests both `PROFILE_THREADING_VARIANTS="single-thread,multi-thread"`, following the proven FFmpeg Filter Builder pattern. The actual compiler and Chromium smoke run twice: ST from `file://`, MT from an HTTP localhost page with COOP `same-origin` and COEP `require-corp`. The generated JS/WASM binaries are **not** interchangeable; ship and hash each pair separately. `dist/video-reverse/single-thread/` and `dist/video-reverse/multi-thread/` contain their own manifest with `runtime.threading` and isolation requirements.
+
+An MT consumer must call `BrowserFFmpeg.loadEmbedded({coreJsText,wasmBytes,threading:'multi-thread'})` and run in a cross-origin-isolated context with `SharedArrayBuffer`. The Browser Kitty MT route must supply the headers server-side. A GitHub Pages MT variant instead needs a same-origin COI Service Worker because Pages cannot set the headers; ST remains the ordinary root route and downloaded file:// option. Neither path uploads videos.
+
+Until a permanent corresponding-source GPL release is packaged, both are experimental CI outputs only. Android/Windows MT performance is **not** established by the existence of the dual build; the old ST phone test remains separate evidence.
