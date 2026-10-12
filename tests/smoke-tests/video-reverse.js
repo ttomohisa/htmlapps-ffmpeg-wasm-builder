@@ -2,7 +2,7 @@
 // This test proves one short H.264 MP4 reverse-chunk export is possible;
 // it does NOT yet prove reversed frame identity, iOS/Android performance,
 // orientation, audio, stitching, or long-video memory stability.
-const runner = await BrowserFFmpeg.loadEmbedded({coreJsText, wasmBytes});
+const runner = await BrowserFFmpeg.loadEmbedded({coreJsText, wasmBytes, threading: threadingMode});
 const path = "/reverse-chunk.mp4";
 let progress = 0;
 const result = await runner.run({
