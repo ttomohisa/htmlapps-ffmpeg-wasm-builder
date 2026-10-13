@@ -10,6 +10,7 @@ on:
       - "runners/video-reverse-join.inc"
       - "profiles/video-reverse/**"
       - "tests/smoke-tests/video-reverse.js"
+      - "scripts/prepare-release.sh"
   workflow_dispatch:
 
 permissions:
