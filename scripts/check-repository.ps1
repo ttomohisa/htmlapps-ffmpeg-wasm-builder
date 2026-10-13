@@ -46,6 +46,7 @@ $extractorRunner = Require-File "runners/video-audio-extractor.c"
 $contactRunner = Require-File "runners/video-contact-sheet.c"
 $contactPartitionHeader = Require-File "runners/video-contact-sheet-partition.h"
 $contactPartitionTests = Require-File "tests/contact-sheet-partition.test.cjs"
+$contactResolutionTests = Require-File "tests/contact-sheet-resolution.test.cjs"
 $videoProfile = Require-File "profiles/video-compressor/ffmpeg.flags"
 $videoProfileEnv = Require-File "profiles/video-compressor/profile.env"
 $speedProfile = Require-File "profiles/video-speed-changer/ffmpeg.flags"
@@ -269,7 +270,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $contactRunnerText = [IO.File]::ReadAllText($contactRunner)
 if ($contactRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Contact Sheet runner must not call pthread APIs." }
-Require-Text $contactRunner '#define RUNNER_VERSION "1.5.0"' "Video Contact Sheet runner version must remain 1.5.0 when unchanged."
+Require-Text $contactRunner '#define RUNNER_VERSION "1.6.0"' "Video Contact Sheet must identify its bounded high-resolution contract."
 Require-Text $contactRunner "av_seek_frame" "Video Contact Sheet must seek between sample points."
 Require-Text $contactRunner "avcodec_send_packet" "Video Contact Sheet must decode selected frames."
 Require-Text $contactRunner "avcodec_receive_frame" "Video Contact Sheet decode loop is missing."
@@ -588,7 +589,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.4$') { throw "Builder version must be 1.10.4." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.5$') { throw "Builder version must be 1.10.5." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -707,7 +708,7 @@ if ($node) {
     & node --check $timingScript
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
   }
-  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") $contactPartitionTests
+  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") $contactPartitionTests $contactResolutionTests
   if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
