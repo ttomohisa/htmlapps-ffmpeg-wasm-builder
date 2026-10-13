@@ -136,7 +136,7 @@ try {
   const inspect=await runner.run({
     files:[{name:"/workerfs/source.mp4",data:aacFile,workerfs:true}],
     outputs:["/metadata.json"],
-    args:["--input","/workerfs/source.mp4","--inspect-output","/metadata.json"]
+    args:["--inspect-audio","--input","/workerfs/source.mp4","--output","/metadata.json"]
   });
   const info=inspect?.files?.[0]?.data;
   if(inspect.exitCode!==0 || !info) throw new Error("Source audio inspection failed.");
@@ -159,7 +159,48 @@ try {
       throw new Error("Experimental "+direction+" source-audio AAC transform failed.");
     append("real AAC "+direction+" bytes="+bytes.length);
   }
-  pass("video_reverse_join_pingpong_and_aac_audio_segment_ST_MT");
+  const makeAudio=async(direction,extras=[])=>{
+    const rendered=await runner.run({
+      files:[{name:"/workerfs/source.mp4",data:aacFile,workerfs:true}],
+      outputs:["/candidate-audio.mp4"],
+      args:["--audio-segment","--input","/workerfs/source.mp4",
+        "--output","/candidate-audio.mp4","--start-time","0.1",
+        "--duration","0.4","--direction",direction,...extras],
+      onLog:({message})=>append("audio "+direction+": "+message)
+    });
+    const b=rendered?.files?.[0]?.data;
+    if(rendered.exitCode!==0||!b||!containsAscii(b,"mp4a"))
+      throw new Error("Audio "+direction+" candidate missing AAC");
+    return b;
+  };
+  const muxAudio=async(videoData,audioData,count,seconds)=>{
+    const result=await runner.run({
+      files:[{name:"/v.mp4",data:videoData},{name:"/a.mp4",data:audioData}],
+      outputs:["/final-av.mp4"],
+      args:["--mux-audio","--video","/v.mp4","--audio","/a.mp4",
+        "--output","/final-av.mp4","--expected-frames",String(count),
+        "--expected-duration",String(seconds)],
+      onLog:({message})=>append("A/V mux: "+message)
+    });
+    const bytes=result.files?.[0]?.data;
+    if(result.exitCode!==0||!bytes||bytes.length<800||
+       !containsAscii(bytes,"mp4a")||!containsAscii(bytes,"avc1"))
+      throw new Error("Actual H.264+AAC MP4 mux failed for "+seconds+"s");
+    const url=URL.createObjectURL(new Blob([bytes],{type:"video/mp4"}));
+    try{
+      const v=document.createElement("video");
+      const d=await new Promise((resolve,reject)=>{
+        const t=setTimeout(()=>reject(new Error("A/V preview timeout")),10000);
+        v.onloadedmetadata=()=>{clearTimeout(t);resolve(v.duration)};
+        v.onerror=()=>{clearTimeout(t);reject(new Error("A/V MP4 unplayable"))};
+        v.src=url;
+      });
+      if(Math.abs(d-seconds)>.15)throw new Error("Unexpected A/V duration "+d);
+    }finally{URL.revokeObjectURL(url)}
+  };
+  await muxAudio(joined,await makeAudio("reverse"),4,.4);
+  await muxAudio(pingBytes,await makeAudio("pingpong",["--fps","10","--frames","4"]),6,.6);
+  pass("video_reverse_pingpong_actual_AAC_MP4_mux_ST_MT");
 } finally {
   URL.revokeObjectURL(url);
   runner.dispose();

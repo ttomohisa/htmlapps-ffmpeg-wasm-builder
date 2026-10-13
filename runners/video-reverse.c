@@ -34,7 +34,8 @@ static void reverse_usage(void)
             "       --width EVEN --height EVEN --fps INTEGER [--frames COUNT] [--crf 0..51]\n"
             "       [--direction reverse|forward] (default reverse)\n"
             "       --audio-segment --input FILE --output MP4 --start-time S\n"
-            "         --duration 0.25..10 --direction reverse|forward\n"
+            "         --duration 0.25..10 --direction reverse|forward|pingpong\n"
+            "         pingpong additionally requires --fps N --frames N\n"
             "         Requires actual AAC-compatible source audio; produces\n"
             "         experimental AAC and disposable tiny H.264 temp video.\n"
             "       --inspect-audio --input FILE --output META.json\n"
@@ -143,8 +144,8 @@ static int reverse_audio_segment(int argc, char **argv)
 {
     const char *input = NULL, *output = NULL, *start_txt = NULL;
     const char *duration_txt = NULL, *direction = "reverse";
-    double start = 0.0, duration = 0.0;
-    char filter[256];
+    double start = 0.0, duration = 0.0, frames = 0.0, fps = 0.0;
+    char filter[800];
     int i;
     for (i = 2; i < argc; ++i) {
         const char *flag = argv[i], *value;
@@ -155,8 +156,13 @@ static int reverse_audio_segment(int argc, char **argv)
         else if (!strcmp(flag, "--start-time")) start_txt = value;
         else if (!strcmp(flag, "--duration")) duration_txt = value;
         else if (!strcmp(flag, "--direction")) {
-            if (strcmp(value, "reverse") && strcmp(value, "forward")) return 2;
+            if (strcmp(value, "reverse") && strcmp(value, "forward") &&
+                strcmp(value, "pingpong")) return 2;
             direction = value;
+        } else if (!strcmp(flag, "--fps")) {
+            if (parse_finite(value, 1, 60, &fps)<0 || floor(fps)!=fps)return 2;
+        } else if (!strcmp(flag, "--frames")) {
+            if (parse_finite(value, 4, 600, &frames)<0 || floor(frames)!=frames)return 2;
         } else {
             fprintf(stderr, "Unsupported audio-segment option: %s\n", flag);
             return 2;
@@ -167,15 +173,26 @@ static int reverse_audio_segment(int argc, char **argv)
         parse_finite(start_txt, 0, 2592000, &start) < 0 ||
         parse_finite(duration_txt, 0.25, 10.0, &duration) < 0)
         return 2;
-    /*
-     * A small 8ms ramp at each edge reduces audible click discontinuities;
-     * this is not yet a guarantee of artifact-free ping-pong joins.
-     */
-    snprintf(filter, sizeof(filter),
-             "%sasetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.008,"
-             "afade=t=out:st=%.6f:d=0.008",
-             !strcmp(direction, "reverse") ? "areverse," : "",
-             duration - .008);
+    /* Buffer at most 10s of decoded audio. Two 8ms ramps guard joins. */
+    if (!strcmp(direction,"pingpong")) {
+        if(fps<1||frames<4||fabs(duration*fps-frames)>.05)return 2;
+        const double skipped=1.0/fps, return_duration=(frames-2.0)/fps;
+        snprintf(filter,sizeof(filter),
+                 "asplit=2[forward][return_input];"
+                 "[return_input]areverse,asetpts=PTS-STARTPTS,"
+                 "atrim=start=%.6f:duration=%.6f,asetpts=PTS-STARTPTS,"
+                 "afade=t=in:st=0:d=0.008[back];"
+                 "[forward]afade=t=out:st=%.6f:d=0.008[fwd];"
+                 "[fwd][back]concat=n=2:v=0:a=1,asetpts=PTS-STARTPTS",
+                 skipped,return_duration,duration-.008);
+    } else {
+        if(fps>0||frames>0)return 2;
+        snprintf(filter, sizeof(filter),
+                 "%sasetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.008,"
+                 "afade=t=out:st=%.6f:d=0.008",
+                 !strcmp(direction, "reverse") ? "areverse," : "",
+                 duration - .008);
+    }
     char *delegated[] = {
         argv[0], "--input", (char *)input, "--output", (char *)output,
         "--start-time", (char *)start_txt, "--duration", (char *)duration_txt,
