@@ -61,3 +61,12 @@ The `video-reverse` profile now requests both `PROFILE_THREADING_VARIANTS="singl
 An MT consumer must call `BrowserFFmpeg.loadEmbedded({coreJsText,wasmBytes,threading:'multi-thread'})` and run in a cross-origin-isolated context with `SharedArrayBuffer`. The Browser Kitty MT route must supply the headers server-side. A GitHub Pages MT variant instead needs a same-origin COI Service Worker because Pages cannot set the headers; ST remains the ordinary root route and downloaded file:// option. Neither path uploads videos.
 
 Until a permanent corresponding-source GPL release is packaged, both are experimental CI outputs only. Android/Windows MT performance is **not** established by the existence of the dual build; the old ST phone test remains separate evidence.
+
+
+## Ping-pong forward chunks (v0.4 experiment)
+
+The dedicated `video-reverse` runner now accepts `--direction forward|reverse` (default: reverse, for backward compatibility). Forward chunks follow the exact same scale, output FPS, duration-bounded trim and H.264 settings but omit the `reverse` filter. The MP4 join accepts **2–16** compatible video-only chunks in caller order, with `--expected-frames` accounting; it never concatenates MP4 bytes or silently adds audio.
+
+For source frame indices `0...N-1`, the intended seamless-loop sequence is `0..N-1, N-2..1`, or **2N−2 frames**. The return leg omits both endpoints by selecting an exact interior input range; it does not drop encoded packets from a compressed GOP. There is no repeated frame at the turn or at the loop seam. Each individual forward/reverse chunk is at most two seconds (96MiB minimum YUV estimate) and shares the same codec parameters.
+
+A real ST/MT browser smoke exercises a 4-frame forward section and 2-frame return, remuxed into a playable **6-frame** silent H.264 MP4. Chrome/Android physical performance, longer-VFR orientation and peak memory are still unverified. This is still an **experimental Actions build**, not a versioned GPL corresponding-source release, and does not authorize Browser Kitty integration or merging.

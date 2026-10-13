@@ -84,6 +84,50 @@ try {
     URL.revokeObjectURL(combinedUrl);
   }
 
+  // Ping-pong must produce real forward frames followed by reversed frames,
+  // skipping both endpoints on the return to avoid a pause at the turn/loop.
+  const pingInput = new File([input], "pingpong-fixture.mp4", {type:"video/mp4"});
+  const pingPart = async (direction,start,duration,frames) => {
+    const part = await runner.run({
+      files:[{name:"/workerfs/input.mp4",data:pingInput,workerfs:true}],
+      outputs:["/ping-part.mp4"],
+      args:["--input","/workerfs/input.mp4","--output","/ping-part.mp4",
+        "--start-time",String(start),"--duration",String(duration),
+        "--width","160","--height","90","--fps","10","--frames",String(frames),
+        "--crf","34","--direction",direction]
+    });
+    if (part.exitCode!==0 || !part.files?.[0]?.data?.length)
+      throw new Error("Ping-pong "+direction+" chunk failed");
+    return part.files[0].data;
+  };
+  const forward=await pingPart("forward",0,.4,4);
+  const backward=await pingPart("reverse",.1,.2,2);  // f2, f1 (no f3 or f0).
+  const stitched=await runner.run({
+    files:[{name:"/forward.mp4",data:forward},{name:"/backward.mp4",data:backward}],
+    outputs:["/pingpong.mp4"],
+    args:["--concat","--input","/forward.mp4","--input","/backward.mp4",
+      "--output","/pingpong.mp4","--expected-frames","6"]
+  });
+  const pingBytes=stitched.files?.[0]?.data;
+  if(stitched.exitCode!==0 || !pingBytes || pingBytes.byteLength<700 ||
+     String.fromCharCode(...pingBytes.slice(4,8))!=="ftyp" ||
+     !containsAscii(pingBytes,"avc1") || containsAscii(pingBytes,"mp4a"))
+    throw new Error("Ping-pong forward + reverse MP4 is invalid");
+  const pingUrl=URL.createObjectURL(new Blob([pingBytes],{type:"video/mp4"}));
+  try {
+    const pingVideo=document.createElement("video");
+    pingVideo.preload="metadata";
+    const pingDuration=await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>reject(new Error("Ping-pong MP4 metadata timeout")),8000);
+      pingVideo.onloadedmetadata=()=>{clearTimeout(timer);resolve(pingVideo.duration);};
+      pingVideo.onerror=()=>{clearTimeout(timer);reject(new Error("Ping-pong MP4 is unplayable"));};
+      pingVideo.src=pingUrl;
+    });
+    if(!(pingDuration>=.5 && pingDuration<=.75))
+      throw new Error("Expected 6 frame ping-pong duration ~=0.6s, got "+pingDuration);
+    pass("video_pingpong_forward_reverse_no_audio="+pingDuration.toFixed(3));
+  }finally{URL.revokeObjectURL(pingUrl);}
+
 } finally {
   URL.revokeObjectURL(url);
   runner.dispose();

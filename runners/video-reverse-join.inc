@@ -1,10 +1,10 @@
 /*
- * Experimental join mode for video-reverse chunks.
+ * Experimental join mode for video-reverse and ping-pong chunks.
  * All inputs MUST be encoded by the same profile at the same geometry,
  * fps and codec parameters. MP4 is remuxed, not byte-concatenated.
  * Public libavformat/libavcodec API only. No FFmpeg CLI.
  */
-#define REVERSE_JOIN_MAX_CHUNKS 8
+#define REVERSE_JOIN_MAX_CHUNKS 16
 
 static int reverse_join_compatible(const AVCodecParameters *first,
                                    const AVCodecParameters *next)
@@ -31,7 +31,9 @@ static int reverse_join_compatible(const AVCodecParameters *first,
  * CLI:
  * --concat --input /chunk-last.mp4 --input /chunk-first.mp4
  *          [--input more.mp4 ...] --output /joined.mp4
- * Caller already ordered the chunks in reversed chronological order.
+ * Caller supplies the exact presentation order: reverse-only chunks in
+ * reversed chronology or ping-pong forward chunks followed by return chunks.
+ * At most 16 chunks, with an exact expected total frame count.
  */
 static int reverse_join_chunks(int argc, char **argv)
 {
@@ -71,7 +73,7 @@ static int reverse_join_chunks(int argc, char **argv)
         }
     }
     if (n < 2 || !output || !*output) {
-        fprintf(stderr, "Reverse concat requires 2..8 --input paths and one --output path.\n");
+        fprintf(stderr, "Reverse concat requires 2..16 --input paths and one --output path.\n");
         return 2;
     }
     for (i = 0; i < n; ++i) {

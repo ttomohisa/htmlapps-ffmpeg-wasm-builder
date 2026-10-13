@@ -58,6 +58,16 @@ jobs:
                   assert (folder/fname).stat().st_size>0, (mode,fname)
               print('[OK]',mode,manifest['runtime']['threading'])
           PY
+      - name: Print SHA-256 pins for downstream experimental consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            dist/video-reverse/single-thread/ffmpeg.js \
+            dist/video-reverse/single-thread/ffmpeg.wasm \
+            dist/video-reverse/multi-thread/ffmpeg.js \
+            dist/video-reverse/multi-thread/ffmpeg.wasm \
+            runtime/browser-ffmpeg.js
       - name: Upload experimental WASM artifacts
         if: success()
         uses: actions/upload-artifact@v7

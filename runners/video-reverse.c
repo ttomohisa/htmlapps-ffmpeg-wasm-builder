@@ -1,10 +1,11 @@
 /*
- * Experimental, video-only, memory-bounded reverse chunk runner.
+ * Experimental, video-only, memory-bounded reverse / forward chunk runner.
  * Reuses the public-libav Filter Builder core (no upstream ffmpeg CLI).
  *
  * This adapter is deliberately narrow: one input, one short reversed chunk,
- * H.264 MP4, and no audio. The caller is responsible for joining multiple
- * chunks in reverse order after frame/timestamp checks.
+ * H.264 MP4, and no audio. --direction forward emits a short forward
+ * chunk for ping-pong composition; default reverse behavior is unchanged.
+ * The caller orders and joins chunks after frame/timestamp checks.
  *
  * The embedded core remains the FFmpeg/x264 GPL-2.0-or-later binary.
  * NO mobile/WASM feasibility has been established by the existence of this file.
@@ -31,6 +32,7 @@ static void reverse_usage(void)
             "Experimental video-reverse single-chunk runner\n"
             "Usage: --input FILE --output MP4 --start-time SECONDS --duration SECONDS\n"
             "       --width EVEN --height EVEN --fps INTEGER [--frames COUNT] [--crf 0..51]\n"
+            "       [--direction reverse|forward] (default reverse)\n"
             "  duration: 0.1..2.0 seconds; one chunk only; output H.264 MP4, no audio.\n"
             "  --frames forces exact output count (2..120, matching fps*duration).\n"
             "  estimate of cached YUV420 frames must not exceed 96 MiB.\n"
@@ -91,6 +93,7 @@ int main(int argc, char **argv)
 
     const char *input = NULL, *output = NULL;
     const char *start_text = NULL, *duration_text = NULL;
+    const char *direction = "reverse";
     double start = 0, duration = 0, width = 0, height = 0, fps = 0, crf = 30, frames = 0;
     char filter[256], fps_text[16], crf_text[16];
     int i;
@@ -110,6 +113,13 @@ int main(int argc, char **argv)
         if (i + 1 >= argc) { reverse_usage(); return 2; }
         value = argv[++i];
         if (!strcmp(flag, "--input")) input = value;
+        else if (!strcmp(flag, "--direction")) {
+            if (strcmp(value, "reverse") && strcmp(value, "forward")) {
+                fprintf(stderr, "Only reverse and forward chunk directions are supported.\n");
+                return 2;
+            }
+            direction = value;
+        }
         else if (!strcmp(flag, "--output")) output = value;
         else if (!strcmp(flag, "--start-time")) start_text = value;
         else if (!strcmp(flag, "--duration")) duration_text = value;
@@ -158,14 +168,22 @@ int main(int argc, char **argv)
      * final fps (from --fps) -> format/encoder. Scaling + fps BEFORE reverse
      * bound stored frame size/count; the final fps fixes frame durations.
      */
+    /*
+     * Identical scale/fps/trim/PTS chain and x264 settings for both
+     * directions. For ping-pong, the caller removes return-leg endpoint
+     * frames by choosing a frame-exact source window (not packet deletion).
+     */
+    const char *direction_filter = !strcmp(direction, "reverse")
+                                      ? ",reverse,setpts=PTS-STARTPTS"
+                                      : ",setpts=PTS-STARTPTS";
     if (frames > 0) {
         snprintf(filter, sizeof(filter),
-                 "scale=%d:%d:flags=bicubic,fps=fps=%d,trim=end_frame=%d,reverse,setpts=PTS-STARTPTS",
-                 (int)width, (int)height, (int)fps, (int)frames);
+                 "scale=%d:%d:flags=bicubic,fps=fps=%d,trim=end_frame=%d%s",
+                 (int)width, (int)height, (int)fps, (int)frames, direction_filter);
     } else {
         snprintf(filter, sizeof(filter),
-                 "scale=%d:%d:flags=bicubic,fps=fps=%d,reverse,setpts=PTS-STARTPTS",
-                 (int)width, (int)height, (int)fps);
+                 "scale=%d:%d:flags=bicubic,fps=fps=%d%s",
+                 (int)width, (int)height, (int)fps, direction_filter);
     }
     snprintf(fps_text, sizeof(fps_text), "%d", (int)fps);
     snprintf(crf_text, sizeof(crf_text), "%d", (int)crf);
