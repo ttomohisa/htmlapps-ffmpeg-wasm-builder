@@ -11,6 +11,14 @@ source "$ROOT/versions.env"
 fail() { printf '\n[ERROR] %s\n' "$*" >&2; exit 1; }
 log() { printf '\n[release] %s\n' "$*"; }
 
+# Optional review-only source-complete packaging for the unfinished Reverse Clip
+# profile. The normal release list and tagged release path remain unchanged.
+case "${RELEASE_PROFILE_SELECTION:-}" in
+  "") ;;
+  "video-reverse") RELEASE_PROFILES=(video-reverse) ;;
+  *) fail "RELEASE_PROFILE_SELECTION must be empty or video-reverse." ;;
+esac
+
 EXPECTED_TAG="v${BUILDER_VERSION}"
 [[ "$TAG" == "$EXPECTED_TAG" ]] || fail "Release tag $TAG does not match BUILDER_VERSION=$BUILDER_VERSION (expected $EXPECTED_TAG)."
 
@@ -364,11 +372,13 @@ for profile in "${RELEASE_PROFILES[@]}"; do
   done
 done
 
-# Preserve the existing ST asset name for downstream consumers.
-cp "$RELEASE_DIR/ffmpeg-wasm-video-compressor-single-thread-v${BUILDER_VERSION}.zip" \
-   "$RELEASE_DIR/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip"
-cp "$RELEASE_DIR/BUILDINFO-video-compressor-single-thread.txt" \
-   "$RELEASE_DIR/BUILDINFO-video-compressor.txt"
+# Only the normal release contains the Video Compressor compatibility alias.
+if [[ -z "${RELEASE_PROFILE_SELECTION:-}" ]]; then
+  cp "$RELEASE_DIR/ffmpeg-wasm-video-compressor-single-thread-v${BUILDER_VERSION}.zip" \
+     "$RELEASE_DIR/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip"
+  cp "$RELEASE_DIR/BUILDINFO-video-compressor-single-thread.txt" \
+     "$RELEASE_DIR/BUILDINFO-video-compressor.txt"
+fi
 
 SOURCE_ROOT="$WORK_DIR/source-bundle"
 mkdir -p "$SOURCE_ROOT"
@@ -406,16 +416,10 @@ This archive contains:
 - the FFmpeg WASM Builder recipe at version $BUILDER_VERSION
 - profile-specific BUILDINFO files
 
-Published binary profiles:
-- video-compressor
-- video-speed-changer
-- lossless-video-cutter
-- media-inspector
-- video-audio-extractor
-- video-contact-sheet
-- video-to-gif
-- video-to-webp
-- ffmpeg-filter-builder (single-thread + multi-thread)
+Published binary profiles in THIS prepared bundle:
+$(for profile in "${RELEASE_PROFILES[@]}"; do
+    printf -- '- %s (%s)\n' "$profile" "$(profile_threading_variants "$profile")"
+  done)
 EOF_README
 
 SOURCE_TGZ="$RELEASE_DIR/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
