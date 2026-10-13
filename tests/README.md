@@ -5,6 +5,7 @@
 The generic `tests/smoke-test.template.html` embeds the generated JS/Wasm and injects `tests/smoke-tests/<profile>.js`.
 
 - `video-compressor.js` performs real H.264/AAC MP4 and VP9/Opus WebM transcodes in both threading variants, and checks rotation and timing.
+- `video-speed-changer.js` runs both explicit threading variants, observes actual shared WASM memory and nested pthread Worker construction, checks inspect and bounded codec threads, cancels after encoder startup and retries successfully, then covers all nine rates plus pitch-shift/audio-removal boundary rates and silent input.
 - `lossless-video-cutter.js` performs a real stream-copy cut, validates MP4/H.264/AAC preservation, verifies output shrank, and checks the runner's keyframe-aligned start report.
 
 A build is not considered successful until the selected profile passes in a real headless browser.
@@ -87,3 +88,7 @@ Every matrix cell runs even if an earlier one fails. The new tests do not change
 existing app oracles, profile/dependency pins, or the older timing readers. Node
 and native-runner evidence supplement the required Docker build and browser ST/MT
 runs; they do not establish a released Wasm artifact is fixed.
+
+## Speed Changer threading
+
+`node --test tests/speed-changer-threading.test.cjs` checks profile/release contracts and compiles the actual runner's decoder/encoder/filter thread assignments for ST and MT. The native test uses minimal FFmpeg type stubs; it is not a real transcode. Canonical `./build.sh video-speed-changer` remains mandatory for both actual Wasm cores and real browser/WORKERFS behavior.
