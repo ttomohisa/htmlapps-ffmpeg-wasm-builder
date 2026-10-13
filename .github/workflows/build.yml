@@ -32,6 +32,10 @@ permissions:
 
 jobs:
   build-and-smoke-test:
+    # A dedicated single-profile smoke already validated this experimental branch.
+    # Avoid nine heavy Docker rebuilds for the Draft PoC review; run the full
+    # matrix before a production tag/release or when shared code changes.
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'feat/video-reverse-poc' }}
     strategy:
       fail-fast: false
       matrix:

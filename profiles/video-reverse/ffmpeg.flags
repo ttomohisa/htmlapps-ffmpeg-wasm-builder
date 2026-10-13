@@ -1,0 +1,32 @@
+# Experimental video-only reverse chunk. No upstream ffmpeg CLI.
+--enable-gpl
+--enable-small
+--disable-everything
+--enable-libx264
+--enable-encoder=libx264
+--enable-decoder=h264
+--enable-decoder=hevc
+--enable-decoder=vp8
+--enable-decoder=vp9
+--enable-decoder=av1
+--enable-decoder=mpeg4
+--enable-decoder=mjpeg
+--enable-demuxer=mov
+--enable-demuxer=matroska
+--enable-muxer=mp4
+--enable-parser=h264
+--enable-parser=hevc
+--enable-parser=av1
+--enable-parser=vp9
+--enable-protocol=file
+# libavfilter buffersrc/buffersink are registered manually.
+--enable-filter=scale
+--enable-filter=fps
+--enable-filter=reverse
+--enable-filter=trim
+--enable-filter=setpts
+--enable-filter=transpose
+--enable-filter=hflip
+--enable-filter=vflip
+--enable-filter=format
+--enable-filter=setsar

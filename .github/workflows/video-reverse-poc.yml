@@ -1,0 +1,79 @@
+name: Verify video-reverse ST and MT PoC
+
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - ".github/workflows/video-reverse-poc.yml"
+      - "runners/video-reverse.c"
+      - "runners/video-reverse-join.inc"
+      - "profiles/video-reverse/**"
+      - "tests/smoke-tests/video-reverse.js"
+      - "scripts/prepare-release.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reverse-poc:
+    name: Build and browser-smoke video-reverse (experimental only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Prepare Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Install browser
+        uses: browser-actions/setup-chrome@v2.2.0
+        id: chrome
+      - name: Source checks
+        shell: pwsh
+        run: ./scripts/check-repository.ps1
+      - name: Build just video-reverse and run actual WASM smoke test
+        shell: bash
+        env:
+          FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          chmod +x ./build.sh ./scripts/*.sh
+          ./build.sh video-reverse
+      - name: Validate separate ST and MT manifests
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib
+          root = pathlib.Path('dist/video-reverse')
+          for mode in ('single-thread','multi-thread'):
+              folder = root / mode
+              manifest = json.loads((folder/'manifest.json').read_text())
+              assert manifest['profile']=='video-reverse', mode
+              assert manifest['runtime']['threading']==mode, mode
+              assert bool(manifest['runtime']['requiresCrossOriginIsolation']) == (mode == 'multi-thread')
+              assert bool(manifest['runtime']['requiresSharedArrayBuffer']) == (mode == 'multi-thread')
+              assert bool(manifest['runtime']['fileProtocolSingleHtml']) == (mode == 'single-thread')
+              for fname in ('ffmpeg.js','ffmpeg.wasm','ffmpeg.js.gz','ffmpeg.wasm.gz','smoke-test.html'):
+                  assert (folder/fname).stat().st_size>0, (mode,fname)
+              print('[OK]',mode,manifest['runtime']['threading'])
+          PY
+      - name: Print SHA-256 pins for downstream experimental consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            dist/video-reverse/single-thread/ffmpeg.js \
+            dist/video-reverse/single-thread/ffmpeg.wasm \
+            dist/video-reverse/multi-thread/ffmpeg.js \
+            dist/video-reverse/multi-thread/ffmpeg.wasm \
+            runtime/browser-ffmpeg.js
+      - name: Upload experimental WASM artifacts
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: experimental-video-reverse-wasm-${{ github.sha }}
+          path: dist/video-reverse/
+          if-no-files-found: error
+          retention-days: 7
