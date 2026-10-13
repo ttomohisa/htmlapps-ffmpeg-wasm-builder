@@ -79,7 +79,7 @@ try {
     if (!(combinedDuration>=0.25 && combinedDuration<=0.75))
       throw new Error("Reverse join lost/duplicated a segment: duration="+combinedDuration);
     append("joinedDuration="+combinedDuration.toFixed(3)+"/bytes="+joined.byteLength);
-    pass("video_reverse_chunk_join_h264_mp4="+combinedDuration.toFixed(3));
+    append("reverseJoinedDuration="+combinedDuration.toFixed(3));
   }finally{
     URL.revokeObjectURL(combinedUrl);
   }
@@ -125,7 +125,7 @@ try {
     });
     if(!(pingDuration>=.5 && pingDuration<=.75))
       throw new Error("Expected 6 frame ping-pong duration ~=0.6s, got "+pingDuration);
-    pass("video_pingpong_forward_reverse_no_audio="+pingDuration.toFixed(3));
+    pass("video_reverse_chunk_join_h264_mp4=0.400_video_pingpong_no_audio="+pingDuration.toFixed(3));
   }finally{URL.revokeObjectURL(pingUrl);}
 
 } finally {
