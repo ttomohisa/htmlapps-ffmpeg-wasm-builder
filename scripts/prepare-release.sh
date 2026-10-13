@@ -417,9 +417,20 @@ This archive contains:
 - profile-specific BUILDINFO files
 
 Published binary profiles in THIS prepared bundle:
-$(for profile in "${RELEASE_PROFILES[@]}"; do
-    printf -- '- %s (%s)\n' "$profile" "$(profile_threading_variants "$profile")"
-  done)
+$(if [[ "${RELEASE_PROFILE_SELECTION:-}" == "video-reverse" ]]; then
+  printf '%s\n' '- video-reverse (single-thread + multi-thread)'
+else
+  printf '%s\n' \
+    '- video-compressor' \
+    '- video-speed-changer' \
+    '- lossless-video-cutter' \
+    '- media-inspector' \
+    '- video-audio-extractor' \
+    '- video-contact-sheet' \
+    '- video-to-gif' \
+    '- video-to-webp' \
+    '- ffmpeg-filter-builder (single-thread + multi-thread)'
+fi)
 EOF_README
 
 SOURCE_TGZ="$RELEASE_DIR/ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
