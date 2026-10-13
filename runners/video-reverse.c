@@ -63,12 +63,19 @@ static int parse_finite(const char *text, double low, double high, double *out)
 
 /* Count encoded H.264 packets instead of trusting container duration.
  * Abort and delete chunks that are a frame short/long. */
-static int verify_reverse_frame_count(const char *file, int expected)
+/*
+ * Per-segment reversal remains capped at 120 frames. A joined video can
+ * legitimately contain up to 960, and ping-pong uses 2*N-2 frames; sharing
+ * the old 120-frame limit incorrectly rejected valid long AAC MP4 exports.
+ * Pass the intended bound explicitly instead of weakening chunk safety.
+ */
+static int verify_reverse_frame_count(const char *file, int expected, int max_frames)
 {
     AVFormatContext *ctx = NULL;
     AVPacket *pkt = NULL;
     int index = -1, actual = 0, ret;
-    if (!file || expected <= 0) return AVERROR(EINVAL);
+    if (!file || expected <= 0 || max_frames < expected || max_frames > 960)
+        return AVERROR(EINVAL);
     ret = avformat_open_input(&ctx, file, NULL, NULL);
     if (ret < 0) goto end;
     ret = avformat_find_stream_info(ctx, NULL);
@@ -80,7 +87,12 @@ static int verify_reverse_frame_count(const char *file, int expected)
     while ((ret = av_read_frame(ctx, pkt)) >= 0) {
         if (pkt->stream_index == index) actual++;
         av_packet_unref(pkt);
-        if (actual > 120) { ret = AVERROR_INVALIDDATA; break; }
+        if (actual > max_frames) {
+            av_log(NULL, AV_LOG_ERROR,
+                   "MP4 video frame count exceeded expected bound %d.\n", max_frames);
+            ret = AVERROR_INVALIDDATA;
+            break;
+        }
     }
     if (ret == AVERROR_EOF) ret = 0;
     if (ret >= 0 && actual != expected) {
@@ -396,7 +408,7 @@ static int reverse_mux_audio(int argc, char **argv)
     }
     ret=av_write_trailer(ofmt);
     if(ret>=0){
-        if(verify_reverse_frame_count(output,frame_limit)<0 ||
+        if(verify_reverse_frame_count(output,frame_limit,960)<0 ||
            verify_audio_segment(output)<0)
             ret=AVERROR_INVALIDDATA;
     }
@@ -527,7 +539,7 @@ int main(int argc, char **argv)
     };
     int ret = filter_builder_main((int)(sizeof(delegated) / sizeof(delegated[0])), delegated);
     if (ret == 0 && frames > 0)
-        ret = verify_reverse_frame_count(output, (int)frames) < 0 ? 1 : 0;
+        ret = verify_reverse_frame_count(output, (int)frames, 120) < 0 ? 1 : 0;
     if (ret != 0) remove(output); /* Never expose incomplete or miscounted segments. */
     return ret;
 }
