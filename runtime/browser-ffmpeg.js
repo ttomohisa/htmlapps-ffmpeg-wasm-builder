@@ -388,7 +388,7 @@
     const count = Number(options.count ?? 12);
     const thumbSize = Number(options.thumbSize ?? 320);
     if (![12, 24, 48].includes(count)) throw new RangeError("Video Contact Sheet count must be 12, 24, or 48.");
-    if (!Number.isInteger(thumbSize) || thumbSize < 96 || thumbSize > 640) throw new RangeError("Video Contact Sheet thumbSize must be an integer from 96 to 640.");
+    if (!Number.isInteger(thumbSize) || thumbSize < 96 || thumbSize > 960) throw new RangeError("Video Contact Sheet thumbSize must be an integer from 96 to 960.");
     const args = [
       "--input", options.input || "/workerfs/input.mp4",
       "--output", options.output || "/contact-sheet.ppm",

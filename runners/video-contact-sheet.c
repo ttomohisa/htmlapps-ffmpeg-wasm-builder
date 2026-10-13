@@ -35,11 +35,13 @@
 #include "video-contact-sheet-partition.h"
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.5.0"
+#define RUNNER_VERSION "1.6.0"
 #define DEFAULT_COUNT 12
 #define DEFAULT_THUMB_SIZE 320
 #define MIN_THUMB_SIZE 96
-#define MAX_THUMB_SIZE 640
+#define MAX_THUMB_SIZE 960
+/* Preserve every legacy <=640 px grid, including a partially filled last row. */
+#define MAX_SHEET_PIXELS INT64_C(25000000)
 
 typedef struct RunnerOptions {
     const char *input_path;
@@ -296,6 +298,13 @@ static int compute_geometry(const RunnerOptions *options,
     sheet_h = (int64_t)geometry->rows * geometry->cell_height;
     if (sheet_w <= 0 || sheet_h <= 0 || sheet_w > INT32_MAX || sheet_h > INT32_MAX)
         return AVERROR(EINVAL);
+    /* Check the whole PPM, including unowned partition cells and empty slots,
+     * before decoder/output allocation. Division also avoids product overflow. */
+    if (sheet_w > MAX_SHEET_PIXELS / sheet_h) {
+        fprintf(stderr, "Contact sheet exceeds the %" PRId64 " pixel limit; reduce --thumb-size or --columns.\n",
+                MAX_SHEET_PIXELS);
+        return AVERROR(EINVAL);
+    }
     geometry->sheet_width = (int)sheet_w;
     geometry->sheet_height = (int)sheet_h;
     return 0;

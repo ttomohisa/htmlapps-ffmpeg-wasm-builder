@@ -19,6 +19,14 @@ output byte, target/actual timestamp, global sample index and geometry field mus
 match, and unowned cells must remain black. This is correctness coverage, not a
 benchmark or a claim about browser peak memory.
 
+`contact-sheet-resolution.test.cjs` exercises the actual native parser/geometry
+with stubbed FFmpeg metadata access, plus the JS argument helper. It covers
+960/840/660 px, invalid bounds, portrait rotation, all legacy <=640 px grids,
+empty last-row allocation and the 25-million-pixel guard. Real-browser smoke
+extracts all three high-resolution presets, compares exact sampling timestamps,
+checks every tile for decoded content and proves direct C rejection of 961 px
+and an oversized sheet. The 25M limit is per PPM, not aggregate browser memory.
+
 ## Final-frame timing regressions
 
 The Compressor, GIF, and WebP browser smoke tests also run the shared

@@ -76,3 +76,20 @@ A local Builder checkout remains useful for development, but production/release 
 ## Video Compressor 1.10.3 compatibility
 
 Publish both `ffmpeg-wasm-video-compressor-single-thread-v1.10.3.zip` and `ffmpeg-wasm-video-compressor-multi-thread-v1.10.3.zip`, with their BUILDINFO files. The packer retains `ffmpeg-wasm-video-compressor-v1.10.3.zip` as a byte-identical ST alias so old consuming apps can update their version pin without changing asset names. Check both variants' actual browser smoke results before an owner-approved `git tag -a v1.10.3` release. No tag or release is created by the feature PR.
+
+## Video Contact Sheet 1.10.5 release gate
+
+The bounded high-resolution change prepares Builder 1.10.5 and Contact Sheet
+runner 1.6.0. It is separate from the experimental Reverse Clip branch. After
+the owner merges the reviewed PR and all nine matrix jobs on that exact `main`
+commit succeed, an owner-approved annotated `v1.10.5` tag triggers the existing
+release workflow. Merging alone does not publish a release. Do not tag a branch
+that includes unreviewed experimental profiles.
+
+Before updating a consumer, verify `ffmpeg-wasm-video-contact-sheet-v1.10.5.zip`,
+its `BUILDINFO-video-contact-sheet.txt`, `SHA256SUMS.txt` and the matching
+`ffmpeg-wasm-sources-v1.10.5.tar.gz`. Check the manifest's 960 px / 25,000,000 px
+limits, applicable notices and exact source revisions, then pin the asset and
+source hashes in the consuming app. Temporary CI artifacts are development
+evidence, not a released dependency. This feature PR does not create a tag,
+publish a release or merge itself.

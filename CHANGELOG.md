@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.5 - unreleased
+
+- Expand Video Contact Sheet thumbnail long edges to 960 px, preserving the 320 px default and all existing <=640 px grid configurations.
+- Bound each complete RGB sheet to 25,000,000 pixels before allocation; recommend one Worker for PC-oriented 960/840/660 px presets at 12/24/48 samples.
+- Advertise the limits and update the Contact Sheet runner to 1.6.0, with native boundary/geometry tests and real-browser high-resolution extraction checks.
+- Keep dependency pins, release profile set, ST/MT behavior and corresponding-source packaging unchanged.
+
 ## 1.10.4 - 2026-10-11
 
 - Add optional, bounded two-way Video Contact Sheet sample partitions while preserving global sampling times and the default single-thread output contract.
