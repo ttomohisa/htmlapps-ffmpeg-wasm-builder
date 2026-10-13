@@ -2,24 +2,34 @@ name: Prepare video-reverse source-complete bundle (manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      reuse_verified_wasm:
+        description: 'Use SHA-pinned ST/MT Builder smoke artifact (expires 2026-10-20); disable to rebuild'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
-      - name: Checkout selected Builder commit
+      - name: Checkout exact Builder source used for pinned ST/MT WASM
         uses: actions/checkout@v7
         with:
+          ref: d1feee021aae6feb53eab1084664123f602c2085
           fetch-depth: 0
 
       - name: Set up Docker Buildx
+        if: ${{ !inputs.reuse_verified_wasm }}
         uses: docker/setup-buildx-action@v4
 
       - name: Set up Chrome
+        if: ${{ !inputs.reuse_verified_wasm }}
         id: chrome
         uses: browser-actions/setup-chrome@v2.2.0
 
@@ -37,13 +47,55 @@ jobs:
         shell: pwsh
         run: ./scripts/check-repository.ps1
 
-      - name: Build and smoke both video-reverse WASM variants
+      - name: Rebuild and browser-smoke ST/MT from exact pinned source
+        if: ${{ !inputs.reuse_verified_wasm }}
         shell: bash
         env:
           FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           chmod +x ./build.sh ./scripts/*.sh
           ./build.sh video-reverse
+
+      - name: Download real ST/MT browser-smoke artifact (temporary)
+        if: ${{ inputs.reuse_verified_wasm }}
+        uses: actions/download-artifact@v4
+        with:
+          repository: ttomohisa/htmlapps-ffmpeg-wasm-builder
+          run-id: 38357268611
+          name: experimental-video-reverse-wasm-d1feee021aae6feb53eab1084664123f602c2085
+          github-token: ${{ github.token }}
+          path: dist/video-reverse
+
+      - name: Fail closed unless source, threading and all four WASM assets match reviewed lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d1feee021aae6feb53eab1084664123f602c2085
+          printf '%s  %s\n' \
+            4a85934acca9afb09ec90be83958002040d100674fee7c7903e5a59ed1d8a74c dist/video-reverse/single-thread/ffmpeg.js \
+            4b8d462196b50dd7bbe51e1b329df3d53afa01022ebf5eea2ca23a65c3386b51 dist/video-reverse/single-thread/ffmpeg.wasm \
+            e88f95f77ee94acc8df3cef559e48e76cbf78a6175e831d712a471a48d614007 dist/video-reverse/multi-thread/ffmpeg.js \
+            42ee5317ca6ce2cc139c481bb8de8182f9e1e4315c855718cf307f9d8afb2958 dist/video-reverse/multi-thread/ffmpeg.wasm \
+            | sha256sum -c -
+          printf '%s  %s\n' \
+            34c29442c74d9d178666d9788f5ba9f74bb1c56e2052dc0f94dc417ccb427d43 runtime/browser-ffmpeg.js \
+            | sha256sum -c -
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for variant in ('single-thread', 'multi-thread'):
+              directory=Path('dist/video-reverse')/variant
+              meta=json.loads((directory/'manifest.json').read_text())
+              assert meta['profile']=='video-reverse'
+              assert meta['builderVersion']=='1.10.4'
+              run=meta['runtime']
+              assert run['threading']==variant
+              assert bool(run['requiresCrossOriginIsolation']) == (variant=='multi-thread')
+              assert bool(run['requiresSharedArrayBuffer']) == (variant=='multi-thread')
+              for path in ('ffmpeg.js','ffmpeg.wasm','ffmpeg.js.gz','ffmpeg.wasm.gz','smoke-test.html'):
+                  assert (directory/path).stat().st_size>0, (variant,path)
+              print('Verified',variant,'original ST/MT smoke files')
+          PY
 
       - name: Prepare matching binary and GPL corresponding-source archives
         shell: bash

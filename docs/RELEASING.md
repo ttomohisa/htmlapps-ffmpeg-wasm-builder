@@ -1,5 +1,11 @@
 # Releasing
 
+> The experimental Reverse Clip `video-reverse` profile has a separate,
+> **unpublished** ST/MT corresponding-source distribution gate. See
+> [Video Reverse release review](VIDEO_REVERSE_RELEASE_REVIEW.md). Do not
+> mistake an expiring Actions binary for a permanent, source-complete GPL
+> release. Both Draft PRs remain unmerged.
+
 `main` builds and smoke-tests every profile listed in `.github/workflows/build.yml`. Do not tag a release until all matrix jobs are green.
 
 v1.10.2 is a patch release for the merged Filter Builder frame-duration and half-open preview repair in both ST and MT runtimes. It keeps the v1.10.1 profile set and dependency pins.
