@@ -37,6 +37,9 @@ static void reverse_usage(void)
             "         --duration 0.25..10 --direction reverse|forward\n"
             "         Requires actual AAC-compatible source audio; produces\n"
             "         experimental AAC and disposable tiny H.264 temp video.\n"
+            "       --inspect-audio --input FILE --output META.json\n"
+            "       --mux-audio --video JOINED.mp4 --audio AUDIO_CANDIDATE.mp4\n"
+            "         --output AV.mp4 --expected-frames N --expected-duration S\n"
             "  duration: 0.1..2.0 seconds; one chunk only; output H.264 MP4, no audio.\n"
             "  --frames forces exact output count (2..120, matching fps*duration).\n"
             "  estimate of cached YUV420 frames must not exceed 96 MiB.\n"
@@ -187,8 +190,217 @@ static int reverse_audio_segment(int argc, char **argv)
     return ret;
 }
 
+/*
+ * Inspect only the container headers and stream descriptors, not every media
+ * packet. Unlike Filter Builder's detailed --inspect-output, this is safe
+ * for very large Android WORKERFS sources with a selected short trim.
+ */
+static int inspect_source_audio(int argc, char **argv)
+{
+    const char *input = NULL, *output = NULL;
+    AVFormatContext *ctx = avformat_alloc_context();
+    FILE *result = NULL;
+    int ret, aidx, vidx, i;
+    if (!ctx) return 1;
+    for (i=2;i<argc;++i) {
+        const char *arg=argv[i], *value;
+        if (++i>=argc) { ret=AVERROR(EINVAL); goto done; }
+        value=argv[i];
+        if(!strcmp(arg,"--input")) input=value;
+        else if(!strcmp(arg,"--output")) output=value;
+        else { ret=AVERROR(EINVAL); goto done; }
+    }
+    if(!input || !*input || !output || !*output || !strcmp(input,output)){
+        ret=AVERROR(EINVAL);goto done;
+    }
+    ctx->probesize=1024*1024;
+    ctx->max_analyze_duration=2*AV_TIME_BASE;
+    ret=avformat_open_input(&ctx,input,NULL,NULL);
+    if(ret<0)goto done;
+    ret=avformat_find_stream_info(ctx,NULL);
+    if(ret<0)goto done;
+    vidx=av_find_best_stream(ctx,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
+    if(vidx<0){ret=vidx;goto done;}
+    aidx=av_find_best_stream(ctx,AVMEDIA_TYPE_AUDIO,-1,vidx,NULL,0);
+    result=fopen(output,"wb");
+    if(!result){ret=AVERROR(errno);goto done;}
+    fprintf(result,"{\"video\":\"%s\",\"audio\":",
+            avcodec_get_name(ctx->streams[vidx]->codecpar->codec_id));
+    if(aidx<0) fputs("null",result);
+    else fprintf(result,"{\"codec\":\"%s\",\"channels\":%d}",
+           avcodec_get_name(ctx->streams[aidx]->codecpar->codec_id),
+           ctx->streams[aidx]->codecpar->ch_layout.nb_channels);
+    fputs("}\n",result);
+    ret=ferror(result)?AVERROR(EIO):0;
+done:
+    if(result)fclose(result);
+    avformat_close_input(&ctx);
+    if(ret<0 && output)remove(output);
+    return ret<0?1:0;
+}
+
+/*
+ * Safe, no-reencode MP4 video+AAC remux. The --audio source contains an
+ * experimental tiny 16px temporary video which is deliberately ignored:
+ * only its AAC stream is added to the *real* reverse/ping-pong H.264 result.
+ * Requires exact caller video-frame count and bounded nominal duration.
+ */
+static int reverse_mux_audio(int argc, char **argv)
+{
+    const char *vfile=NULL,*afile=NULL,*output=NULL;
+    int frame_limit=0,i,ret=0,vindex=-1,aindex=-1;
+    int frames=0,sound_packets=0;
+    double nominal_seconds=0;
+    AVFormatContext *vfmt=NULL,*afmt=NULL,*ofmt=NULL;
+    AVStream *srcv=NULL,*srca=NULL,*outv=NULL,*outa=NULL;
+    AVPacket *packet=NULL;
+    for(i=2;i<argc;++i) {
+        const char *key=argv[i],*val;
+        if(i+1>=argc)return 2;
+        val=argv[++i];
+        if(!strcmp(key,"--video")) vfile=val;
+        else if(!strcmp(key,"--audio")) afile=val;
+        else if(!strcmp(key,"--output")) output=val;
+        else if(!strcmp(key,"--expected-frames")) {
+            double number;
+            if(parse_finite(val,2,960,&number)<0 || floor(number)!=number)return 2;
+            frame_limit=(int)number;
+        }else if(!strcmp(key,"--expected-duration")) {
+            if(parse_finite(val,.25,20.0,&nominal_seconds)<0)return 2;
+        }else return 2;
+    }
+    if(!vfile||!*vfile||!afile||!*afile||!output||!*output||
+       !strcmp(vfile,afile)||!strcmp(vfile,output)||
+       !strcmp(afile,output)||!frame_limit||!nominal_seconds)return 2;
+    ret=avformat_open_input(&vfmt,vfile,NULL,NULL);
+    if(ret<0)goto done;
+    ret=avformat_find_stream_info(vfmt,NULL);
+    if(ret<0)goto done;
+    ret=avformat_open_input(&afmt,afile,NULL,NULL);
+    if(ret<0)goto done;
+    ret=avformat_find_stream_info(afmt,NULL);
+    if(ret<0)goto done;
+    vindex=av_find_best_stream(vfmt,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
+    aindex=av_find_best_stream(afmt,AVMEDIA_TYPE_AUDIO,-1,-1,NULL,0);
+    if(vindex<0||aindex<0){ret=AVERROR_STREAM_NOT_FOUND;goto done;}
+    srcv=vfmt->streams[vindex];
+    srca=afmt->streams[aindex];
+    if(srcv->codecpar->codec_id!=AV_CODEC_ID_H264||
+       srca->codecpar->codec_id!=AV_CODEC_ID_AAC||
+       srca->codecpar->ch_layout.nb_channels<1||
+       srca->codecpar->ch_layout.nb_channels>2){
+        ret=AVERROR_INVALIDDATA;goto done;
+    }
+    /* Untrusted imported MP4s must not silently deliver unrelated durations. */
+    if(srca->duration>0){
+        double actual=srca->duration*av_q2d(srca->time_base);
+        if(!isfinite(actual)||fabs(actual-nominal_seconds)>.20){
+            av_log(NULL,AV_LOG_ERROR,"AAC duration %.3f differs from video %.3f\n",
+                   actual,nominal_seconds);
+            ret=AVERROR_INVALIDDATA;goto done;
+        }
+    }
+    ret=avformat_alloc_output_context2(&ofmt,NULL,"mp4",output);
+    if(ret<0||!ofmt){ret=AVERROR(ENOMEM);goto done;}
+    outv=avformat_new_stream(ofmt,NULL);
+    outa=avformat_new_stream(ofmt,NULL);
+    if(!outv||!outa){ret=AVERROR(ENOMEM);goto done;}
+    ret=avcodec_parameters_copy(outv->codecpar,srcv->codecpar);
+    if(ret<0)goto done;
+    ret=avcodec_parameters_copy(outa->codecpar,srca->codecpar);
+    if(ret<0)goto done;
+    outv->codecpar->codec_tag=0;
+    outa->codecpar->codec_tag=0;
+    outv->time_base=srcv->time_base;
+    outa->time_base=srca->time_base;
+    /* With at most 20 seconds the entire packet queue stays bounded and
+     * FFmpeg can interleave chronologically even if streams are read apart. */
+    ofmt->max_interleave_delta=0;
+    ret=avio_open(&ofmt->pb,output,AVIO_FLAG_WRITE);
+    if(ret<0)goto done;
+    ret=avformat_write_header(ofmt,NULL);
+    if(ret<0)goto done;
+    packet=av_packet_alloc();
+    if(!packet){ret=AVERROR(ENOMEM);goto done;}
+    for(int side=0;side<2;side++){
+        AVFormatContext *src=side?afmt:vfmt;
+        AVStream *srcstream=side?srca:srcv;
+        AVStream *dststream=side?outa:outv;
+        int selected=side?aindex:vindex;
+        int64_t origin=(srcstream->start_time!=AV_NOPTS_VALUE)?
+                       srcstream->start_time:0;
+        int64_t prev=INT64_MIN;
+        while((ret=av_read_frame(src,packet))>=0){
+            if(packet->stream_index!=selected){
+                av_packet_unref(packet);continue;
+            }
+            if(packet->pts==AV_NOPTS_VALUE||packet->dts==AV_NOPTS_VALUE){
+                ret=AVERROR_INVALIDDATA;
+                av_packet_unref(packet);goto done;
+            }
+            packet->pts-=origin;
+            packet->dts-=origin;
+            av_packet_rescale_ts(packet,srcstream->time_base,dststream->time_base);
+            if(packet->dts<=prev){
+                ret=AVERROR_INVALIDDATA;
+                av_packet_unref(packet);goto done;
+            }
+            prev=packet->dts;
+            if(packet->duration<=0){
+                AVRational time=side?(AVRational){1024,srca->codecpar->sample_rate}:
+                    av_inv_q(av_guess_frame_rate(vfmt,srcv,NULL));
+                if(time.den<=0||time.num<=0){
+                    ret=AVERROR_INVALIDDATA;
+                    av_packet_unref(packet);goto done;
+                }
+                packet->duration=av_rescale_q(1,time,dststream->time_base);
+                if(packet->duration<=0){
+                    ret=AVERROR_INVALIDDATA;
+                    av_packet_unref(packet);goto done;
+                }
+            }
+            packet->pos=-1;
+            packet->stream_index=dststream->index;
+            ret=av_interleaved_write_frame(ofmt,packet);
+            av_packet_unref(packet);
+            if(ret<0)goto done;
+            if(side) sound_packets++;
+            else frames++;
+            if(frames>960||sound_packets>1200){
+                ret=AVERROR_INVALIDDATA;goto done;
+            }
+        }
+        if(ret!=AVERROR_EOF)goto done;
+    }
+    if(frames!=frame_limit||sound_packets<1){
+        av_log(NULL,AV_LOG_ERROR,"AV remux packet mismatch %d/%d frames, %d audio\n",
+               frames,frame_limit,sound_packets);
+        ret=AVERROR_INVALIDDATA;goto done;
+    }
+    ret=av_write_trailer(ofmt);
+    if(ret>=0){
+        if(verify_reverse_frame_count(output,frame_limit)<0 ||
+           verify_audio_segment(output)<0)
+            ret=AVERROR_INVALIDDATA;
+    }
+done:
+    av_packet_free(&packet);
+    avformat_close_input(&vfmt);
+    avformat_close_input(&afmt);
+    if(ofmt){
+        if(ofmt->pb)avio_closep(&ofmt->pb);
+        avformat_free_context(ofmt);
+    }
+    if(ret<0){if(output)remove(output);return 1;}
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc > 1 && !strcmp(argv[1], "--inspect-audio"))
+        return inspect_source_audio(argc, argv);
+    if (argc > 1 && !strcmp(argv[1], "--mux-audio"))
+        return reverse_mux_audio(argc, argv);
     if (argc > 1 && !strcmp(argv[1], "--audio-segment"))
         return reverse_audio_segment(argc, argv);
     if (argc > 1 && !strcmp(argv[1], "--concat"))

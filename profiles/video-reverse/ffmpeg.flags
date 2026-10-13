@@ -40,3 +40,5 @@
 --enable-filter=areverse
 --enable-filter=aresample
 --enable-filter=afade
+--enable-filter=asplit
+--enable-filter=concat
