@@ -1,0 +1,90 @@
+name: Prepare video-reverse source-complete bundle (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout selected Builder commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2.2.0
+
+      - name: Validate source and release script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-release.sh
+          test -s profiles/video-reverse/profile.env
+          test -s profiles/video-reverse/ffmpeg.flags
+          test -s runners/video-reverse.c
+          test -s runners/video-reverse-join.inc
+
+      - name: Check Builder source
+        shell: pwsh
+        run: ./scripts/check-repository.ps1
+
+      - name: Build and smoke both video-reverse WASM variants
+        shell: bash
+        env:
+          FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          chmod +x ./build.sh ./scripts/*.sh
+          ./build.sh video-reverse
+
+      - name: Prepare matching binary and GPL corresponding-source archives
+        shell: bash
+        env:
+          RELEASE_PROFILE_SELECTION: video-reverse
+        run: |
+          set -euo pipefail
+          source ./versions.env
+          ./scripts/prepare-release.sh "v${BUILDER_VERSION}"
+
+      - name: Validate all prepared files and notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          source ./versions.env
+          cd release
+          sha256sum -c SHA256SUMS.txt
+          test -s "ffmpeg-wasm-video-reverse-single-thread-v${BUILDER_VERSION}.zip"
+          test -s "ffmpeg-wasm-video-reverse-multi-thread-v${BUILDER_VERSION}.zip"
+          test -s "ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
+          test -s BUILDINFO-video-reverse-single-thread.txt
+          test -s BUILDINFO-video-reverse-multi-thread.txt
+          for name in single-thread multi-thread; do
+            zip="ffmpeg-wasm-video-reverse-${name}-v${BUILDER_VERSION}.zip"
+            unzip -Z1 "${zip}" > "list-${name}.txt"
+            for expected in ffmpeg.wasm ffmpeg.js browser-ffmpeg.js \
+                LICENSES/x264-COPYING LICENSES/FFmpeg-COPYING.GPLv2 \
+                LICENSES/Emscripten-LICENSE BUILDINFO.txt; do
+              grep -Fx "${expected}" "list-${name}.txt"
+            done
+            rm "list-${name}.txt"
+          done
+          tar -tzf "ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz" > source-list.txt
+          grep -Fx 'source-bundle/README.txt' source-list.txt
+          rm source-list.txt
+          echo "Source-complete candidate verified. No GitHub Release created."
+
+      - name: Upload review-only release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: video-reverse-source-complete-candidate-${{ github.sha }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
