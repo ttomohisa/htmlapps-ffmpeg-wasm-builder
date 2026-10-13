@@ -1,6 +1,13 @@
 # Changelog
 
-## 1.10.5 - unreleased
+## 1.10.6 - unreleased
+
+- Add explicit Video Speed Changer single-thread and multi-thread cores with the existing public-libav speed/audio/inspect API.
+- Bound the MT pthread pool to 8, video decoding to 2, H.264 encoding to 4, and x264 lookahead to 1; audio and filter graphs stay single-threaded.
+- Observe actual shared memory and nested pthread workers in both browser smoke variants; cancel a live initialized core and verify successful retry, all preset rates and audio modes.
+- Publish explicit ST/MT ZIPs and BUILDINFO while retaining the legacy ZIP/BUILDINFO as byte-identical ST aliases, with unchanged GPL notices and matching corresponding-source packaging.
+
+## 1.10.5 - 2026-10-13
 
 - Expand Video Contact Sheet thumbnail long edges to 960 px, preserving the 320 px default and all existing <=640 px grid configurations.
 - Bound each complete RGB sheet to 25,000,000 pixels before allocation; recommend one Worker for PC-oriented 960/840/660 px presets at 12/24/48 samples.

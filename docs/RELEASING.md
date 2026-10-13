@@ -93,3 +93,9 @@ limits, applicable notices and exact source revisions, then pin the asset and
 source hashes in the consuming app. Temporary CI artifacts are development
 evidence, not a released dependency. This feature PR does not create a tag,
 publish a release or merge itself.
+
+## Video Speed Changer 1.10.6 compatibility
+
+The tag workflow builds and real-browser smoke-tests both Video Speed Changer variants. Publish `ffmpeg-wasm-video-speed-changer-single-thread-v1.10.6.zip`, `ffmpeg-wasm-video-speed-changer-multi-thread-v1.10.6.zip`, and their `BUILDINFO-video-speed-changer-{single-thread,multi-thread}.txt` files. The legacy `ffmpeg-wasm-video-speed-changer-v1.10.6.zip` and `BUILDINFO-video-speed-changer.txt` are byte-identical ST aliases. All files receive SHA-256 entries, and both variants share the same exact corresponding-source bundle and GPL notices.
+
+No tag or release is created by the feature PR. Release only after owner approval and successful real Docker builds/browser smoke for both variants; the consuming app must pin the genuine released bytes and their hashes.

@@ -290,7 +290,7 @@ Require-Text $speedRunner "--rate" "Video Speed Changer runner must expose a bou
 Require-Text $runtime "videoSpeedChangerArgs" "Browser runtime must expose Video Speed Changer helper."
 $speedRunnerText = [IO.File]::ReadAllText($speedRunner)
 if ($speedRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Speed Changer runner must not call pthread APIs." }
-Require-Text $speedRunner '#define RUNNER_VERSION "1.8.0"' "Video Speed Changer runner remains 1.8.0; Builder v1.9.x keeps the Video Speed Changer runner unchanged while evolving the Filter Builder runtime architecture."
+Require-Text $speedRunner '#define RUNNER_VERSION "1.10.6"' "Video Speed Changer runner must identify its explicit ST/MT contract."
 Require-Text $speedRunner "setpts=PTS/" "Video Speed Changer runner must adjust video timestamps."
 Require-Text $speedRunner "stream->enc_ctx->time_base = input_stream->time_base" "Video Speed Changer must preserve a high-resolution input time base when available."
 Require-Text $speedRunner "frame_rate = av_mul_q(source_frame_rate, speed_q)" "Video Speed Changer must scale encoder frame rate with playback rate to avoid duplicate PTS."
@@ -589,7 +589,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.5$') { throw "Builder version must be 1.10.5." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.6$') { throw "Builder version must be 1.10.6." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',
@@ -708,7 +708,7 @@ if ($node) {
     & node --check $timingScript
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
   }
-  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") $contactPartitionTests $contactResolutionTests
+  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") (Join-Path $Root "tests/speed-changer-threading.test.cjs") $contactPartitionTests $contactResolutionTests
   if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }
