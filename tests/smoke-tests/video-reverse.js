@@ -125,9 +125,41 @@ try {
     });
     if(!(pingDuration>=.5 && pingDuration<=.75))
       throw new Error("Expected 6 frame ping-pong duration ~=0.6s, got "+pingDuration);
-    pass("video_reverse_chunk_join_h264_mp4=0.400_video_pingpong_no_audio="+pingDuration.toFixed(3));
+    append("video_reverse_chunk_join_h264_mp4=0.400");
+    append("video_pingpong_no_audio="+pingDuration.toFixed(3));
   }finally{URL.revokeObjectURL(pingUrl);}
 
+  // Separate AAC PoC: extract only a bounded selected source interval.
+  // The tiny disposable H.264 placeholder is NOT the export video;
+  // the later mux milestone must use only the AAC track.
+  const aacFile = new File([input],"synthetic-camera-audio.mp4",{type:"video/mp4"});
+  const inspect=await runner.run({
+    files:[{name:"/workerfs/source.mp4",data:aacFile,workerfs:true}],
+    outputs:["/metadata.json"],
+    args:["--input","/workerfs/source.mp4","--inspect-output","/metadata.json"]
+  });
+  const info=inspect?.files?.[0]?.data;
+  if(inspect.exitCode!==0 || !info) throw new Error("Source audio inspection failed.");
+  const inspected=JSON.parse(new TextDecoder().decode(info));
+  if(!inspected.audio || inspected.audio.codec!=="aac")
+    throw new Error("Expected a genuine source AAC stream for the audio smoke test.");
+  for(const direction of ["forward","reverse"]){
+    const run=await runner.run({
+      files:[{name:"/workerfs/source.mp4",data:aacFile,workerfs:true}],
+      outputs:["/audio-pass.mp4"],
+      args:["--audio-segment","--input","/workerfs/source.mp4",
+            "--output","/audio-pass.mp4","--start-time","0.4",
+            "--duration","1","--direction",direction],
+      onLog:({message})=>append("audio-"+direction+": "+message)
+    });
+    const bytes=run?.files?.[0]?.data;
+    if(run.exitCode!==0 || !bytes || bytes.byteLength<500 ||
+       String.fromCharCode(...bytes.slice(4,8))!=="ftyp" ||
+       !containsAscii(bytes,"mp4a"))
+      throw new Error("Experimental "+direction+" source-audio AAC transform failed.");
+    append("real AAC "+direction+" bytes="+bytes.length);
+  }
+  pass("video_reverse_join_pingpong_and_aac_audio_segment_ST_MT");
 } finally {
   URL.revokeObjectURL(url);
   runner.dispose();

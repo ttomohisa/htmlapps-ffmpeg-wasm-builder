@@ -33,6 +33,10 @@ static void reverse_usage(void)
             "Usage: --input FILE --output MP4 --start-time SECONDS --duration SECONDS\n"
             "       --width EVEN --height EVEN --fps INTEGER [--frames COUNT] [--crf 0..51]\n"
             "       [--direction reverse|forward] (default reverse)\n"
+            "       --audio-segment --input FILE --output MP4 --start-time S\n"
+            "         --duration 0.25..10 --direction reverse|forward\n"
+            "         Requires actual AAC-compatible source audio; produces\n"
+            "         experimental AAC and disposable tiny H.264 temp video.\n"
             "  duration: 0.1..2.0 seconds; one chunk only; output H.264 MP4, no audio.\n"
             "  --frames forces exact output count (2..120, matching fps*duration).\n"
             "  estimate of cached YUV420 frames must not exceed 96 MiB.\n"
@@ -86,8 +90,107 @@ end:
     return ret;
 }
 
+/*
+ * v0.5 audio-only candidate extraction:
+ * Filter Builder's proven AAC path can encode a short selected audio span.
+ * Until a separate libav-only audio pipeline is ready, this also encodes a
+ * disposable 16x16/1fps video stream in the temporary MP4. The application
+ * must ONLY use the AAC stream when joining it with its real reverse result.
+ * Do not claim this is memory-optimal or expose the discarded placeholder.
+ *
+ * The filter and all options are selected internally: there is no general
+ * ffmpeg command execution and no arbitrary filter syntax accepted.
+ */
+static int verify_audio_segment(const char *path)
+{
+    AVFormatContext *ctx = NULL;
+    AVPacket *packet = NULL;
+    int idx, count = 0, ret;
+    ret = avformat_open_input(&ctx, path, NULL, NULL);
+    if (ret < 0) goto done;
+    ret = avformat_find_stream_info(ctx, NULL);
+    if (ret < 0) goto done;
+    idx = av_find_best_stream(ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
+    if (idx < 0 || ctx->streams[idx]->codecpar->codec_id != AV_CODEC_ID_AAC) {
+        av_log(NULL, AV_LOG_ERROR,
+               "Selected source has no decodable audio, or output lacks AAC.\n");
+        ret = AVERROR_STREAM_NOT_FOUND;
+        goto done;
+    }
+    if (ctx->streams[idx]->codecpar->ch_layout.nb_channels < 1 ||
+        ctx->streams[idx]->codecpar->ch_layout.nb_channels > 2) {
+        ret = AVERROR_INVALIDDATA;
+        goto done;
+    }
+    packet = av_packet_alloc();
+    if (!packet) { ret = AVERROR(ENOMEM); goto done; }
+    while ((ret = av_read_frame(ctx, packet)) >= 0) {
+        if (packet->stream_index == idx) count++;
+        av_packet_unref(packet);
+    }
+    if (ret == AVERROR_EOF) ret = 0;
+    if (ret >= 0 && count < 1) ret = AVERROR_INVALIDDATA;
+done:
+    av_packet_free(&packet);
+    avformat_close_input(&ctx);
+    return ret;
+}
+
+static int reverse_audio_segment(int argc, char **argv)
+{
+    const char *input = NULL, *output = NULL, *start_txt = NULL;
+    const char *duration_txt = NULL, *direction = "reverse";
+    double start = 0.0, duration = 0.0;
+    char filter[256];
+    int i;
+    for (i = 2; i < argc; ++i) {
+        const char *flag = argv[i], *value;
+        if (i + 1 >= argc) return 2;
+        value = argv[++i];
+        if (!strcmp(flag, "--input")) input = value;
+        else if (!strcmp(flag, "--output")) output = value;
+        else if (!strcmp(flag, "--start-time")) start_txt = value;
+        else if (!strcmp(flag, "--duration")) duration_txt = value;
+        else if (!strcmp(flag, "--direction")) {
+            if (strcmp(value, "reverse") && strcmp(value, "forward")) return 2;
+            direction = value;
+        } else {
+            fprintf(stderr, "Unsupported audio-segment option: %s\n", flag);
+            return 2;
+        }
+    }
+    if (!input || !*input || !output || !*output || !start_txt ||
+        !duration_txt || !strcmp(input, output) ||
+        parse_finite(start_txt, 0, 2592000, &start) < 0 ||
+        parse_finite(duration_txt, 0.25, 10.0, &duration) < 0)
+        return 2;
+    /*
+     * A small 8ms ramp at each edge reduces audible click discontinuities;
+     * this is not yet a guarantee of artifact-free ping-pong joins.
+     */
+    snprintf(filter, sizeof(filter),
+             "%sasetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.008,"
+             "afade=t=out:st=%.6f:d=0.008",
+             !strcmp(direction, "reverse") ? "areverse," : "",
+             duration - .008);
+    char *delegated[] = {
+        argv[0], "--input", (char *)input, "--output", (char *)output,
+        "--start-time", (char *)start_txt, "--duration", (char *)duration_txt,
+        "--video-filter", "scale=16:16:flags=bicubic",
+        "--fps", "1", "--crf", "43", "--audio-bitrate", "96",
+        "--audio-filter", filter
+    };
+    int ret = filter_builder_main((int)(sizeof(delegated)/sizeof(delegated[0])), delegated);
+    if (ret == 0)
+        ret = verify_audio_segment(output) < 0 ? 1 : 0;
+    if (ret != 0) remove(output);
+    return ret;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc > 1 && !strcmp(argv[1], "--audio-segment"))
+        return reverse_audio_segment(argc, argv);
     if (argc > 1 && !strcmp(argv[1], "--concat"))
         return reverse_join_chunks(argc, argv);
 

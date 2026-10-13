@@ -4,8 +4,13 @@
 --disable-everything
 --enable-libx264
 --enable-encoder=libx264
+--enable-encoder=aac
 --enable-decoder=h264
 --enable-decoder=hevc
+--enable-decoder=aac
+--enable-decoder=mp3
+--enable-decoder=opus
+--enable-decoder=flac
 --enable-decoder=vp8
 --enable-decoder=vp9
 --enable-decoder=av1
@@ -30,3 +35,8 @@
 --enable-filter=vflip
 --enable-filter=format
 --enable-filter=setsar
+--enable-filter=atrim
+--enable-filter=asetpts
+--enable-filter=areverse
+--enable-filter=aresample
+--enable-filter=afade

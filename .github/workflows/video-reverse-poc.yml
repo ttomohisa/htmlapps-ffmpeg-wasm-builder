@@ -29,6 +29,19 @@ jobs:
       - name: Install browser
         uses: browser-actions/setup-chrome@v2.2.0
         id: chrome
+      - name: Generate synthetic camera-like H.264 + AAC media (no external downloads)
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg && command -v ffprobe
+          ffmpeg -hide_banner -loglevel error -y \
+            -f lavfi -i 'testsrc2=size=160x90:rate=15:duration=2.4' \
+            -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=2.4' \
+            -map 0:v:0 -map 1:a:0 -c:v libx264 -preset ultrafast \
+            -crf 25 -pix_fmt yuv420p -c:a aac -b:a 96k \
+            tests/fixtures/smoke-reverse-audio.mp4
+          ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
+            -of default=nw=1 tests/fixtures/smoke-reverse-audio.mp4 | grep -Fx codec_name=aac
       - name: Source checks
         shell: pwsh
         run: ./scripts/check-repository.ps1
