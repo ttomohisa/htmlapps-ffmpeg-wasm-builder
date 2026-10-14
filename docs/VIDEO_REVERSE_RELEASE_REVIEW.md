@@ -1,7 +1,7 @@
 # Video Reverse ST/MT — corresponding-source release review (not published)
 
 **Date:** 2026-10-14 (JST)  
-**Status:** Review-only packaging path staged. **No GPL corresponding-source archive, permanent public release, version tag or legal sign-off has been produced.** Do not ship the temporary binary as if it had permanent matching sources.
+**Status:** A review-only ST/MT binary + corresponding-source **candidate archive has been successfully created and independently integrity-checked**. **No permanent public GitHub Release, version tag, legal/GPL compliance sign-off or Android Gate G2 approval has been produced.** Do not ship the temporary candidate as a production version.
 
 ## Source / binary evidence verified
 
@@ -26,7 +26,17 @@ The common MIT wrapper `runtime/browser-ffmpeg.js` is pinned to `34c29442c74d9d1
 4. Run existing `scripts/prepare-release.sh` with `RELEASE_PROFILE_SELECTION=video-reverse` to prepare ST and MT ZIPs, BUILDINFO, license notices, checksum list and the matching FFmpeg/x264/Emscripten/Builder source archive.
 5. Validate required asset names, notices and SHA256SUMS then upload an **expiring review-only Actions artifact (7 days)**; inspect it before any release decision.
 
-**Not executed yet:** the manual packaging workflow may only be invokable once GitHub makes this workflow available from the default branch. It currently exists only in an unmerged Draft branch; do **not** claim the source archive has been created. Review the exact workflow permissions and Actions quota before running. If the pinned artifact expires on October 20, use the full rebuild fallback on the exact source commit (more expensive), not a mutable or unverified substitute.
+**Executed once, on the Draft branch:** [review-only Builder Actions #38494235345](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38494235345) succeeded without any FFmpeg Docker rebuild. The special one-time branch-push trigger was removed afterward, so normal Draft PR updates no longer execute expensive corresponding-source packaging. The remaining `workflow_dispatch` path may require availability of this workflow on the default branch for manual reuse. Once original compiled artifact expires October 20, a new compile with exact source (and fresh hashes) is needed; never silently substitute binaries.
+
+## 2026-10-14 actual candidate archive — integrity review PASS, distribution gate OPEN
+
+- **Workflow:** [Builder run #38494235345](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38494235345), exact source checked out at `d1feee021aae6feb53eab1084664123f602c2085`.
+- **Review-only artifact:** `11862943520`, name `video-reverse-source-complete-candidate-aca6c0718ec3bd6a21cd3cf17410c71cc84b8fc1`, **74,598,505 bytes**, expires **2026-10-21 01:10:58 UTC** (one week after generation).
+- **Packaging result:** 2 binary ZIPs (ST and MT), matching source archive, both BUILDINFO files, SHA256SUMS (6 files total including the checksum list). Artifact is not a GitHub Release and has no immutable public distribution link.
+- **Independent integrity checks outside GitHub Actions:** all five SHA256SUMS entries matched their archived bytes; the two binary ZIPs contained the exact four locked `ffmpeg.js`/`ffmpeg.wasm` hashes above and the common SHA-pinned `browser-ffmpeg.js`. Both ZIPs included FFmpeg/x264/Emscripten notices and licenses and their per-profile build metadata; both manifest threading/isolation modes matched expectation.
+- **Source archive check:** `ffmpeg-wasm-sources-v1.10.4.tar.gz`, SHA-256 `0e957f10e93c7834e4ab39c39fc5ccab0efdd0462926c8c08fbeb8aac7a594fc`, contains **26,553 tar entries** including pinned FFmpeg `n9.0.1`, x264 `31e19f92f00c`, Emscripten `6.0.6`, and the full Builder 1.10.4 source/recipe (`build.sh`, `versions.env`, `profiles/video-reverse`, dedicated runner, common runtime). Additional source trees are present for libvpx, libwebp, Opus and LAME, inherited from the common Builder packaging path.
+- Exact **binary ZIP SHA-256** (for future archival review, not approval to change the consumer lock): ST `e34eb78774e361e58eb76729b2eeab6949da39100532ebaba24ccf2208ad964d`; MT `6e24addde15476f061c43dcda1487fe4048d082812f051068c68834a1be75ed1`.
+- **Still pending:** independent GPL/legal obligations review, public immutable release naming/version decision, confirmation that a public corresponding-source archive remains accessible for the required period, Android/G2 performance and audio quality, consumer re-lock and ST/MT release regression. This checklist/integrity check is **not** a legal opinion or production sign-off.
 
 ## Before any immutable public release
 

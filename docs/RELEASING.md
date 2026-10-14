@@ -6,6 +6,14 @@
 > mistake an expiring Actions binary for a permanent, source-complete GPL
 > release. Both Draft PRs remain unmerged.
 
+The video-reverse **review-only corresponding-source archive**
+was successfully generated in [Builder Actions #38494235345](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38494235345),
+artifact `11862943520` (expires 2026-10-21). Its checksums, ST/MT
+binary hashes, license notices and pinned source trees were verified;
+**no public immutable Release, approval or tagged release occurred**.
+The temporary one-time branch-push trigger was removed immediately
+after success. See [the exact candidate audit](VIDEO_REVERSE_RELEASE_REVIEW.md).
+
 `main` builds and smoke-tests every profile listed in `.github/workflows/build.yml`. Do not tag a release until all matrix jobs are green.
 
 v1.10.2 is a patch release for the merged Filter Builder frame-duration and half-open preview repair in both ST and MT runtimes. It keeps the v1.10.1 profile set and dependency pins.
