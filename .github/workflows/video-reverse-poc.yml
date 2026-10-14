@@ -6,6 +6,8 @@ on:
       - feat/video-reverse-poc
     paths:
       - ".github/workflows/video-reverse-poc.yml"
+      - "versions.env"
+      - "scripts/check-repository.ps1"
       - "runners/video-reverse.c"
       - "runners/video-reverse-join.inc"
       - "profiles/video-reverse/**"
