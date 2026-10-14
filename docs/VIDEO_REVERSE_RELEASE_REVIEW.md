@@ -3,6 +3,15 @@
 **Date:** 2026-10-14 (JST)  
 **Status:** A review-only ST/MT binary + corresponding-source **candidate archive has been successfully created and independently integrity-checked**. **No permanent public GitHub Release, version tag, legal/GPL compliance sign-off or Android Gate G2 approval has been produced.** Do not ship the temporary candidate as a production version.
 
+## 2026-10-15 — verified *review-only* 1.10.6 source bundle (not a Release)
+
+- Actual review-only GitHub Actions [run #38617100332](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38617100332) **SUCCESS**; [artifact 11920042823](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38617100332) contains six files in a 74,607,448-byte ZIP, expiring **2026-10-21 18:41:00 UTC**.
+- Independently inspected the ZIP outside GitHub Actions: all **five** SHA256SUMS entries matched, including the Builder 1.10.6 ST/MT runtime ZIPs, corresponding source tarball and two BUILDINFO files. Both variant ZIPs contain FFmpeg/x264/Emscripten license files, notices and exact matching `browser-ffmpeg.js`.
+- Independent archive checksums: ST ZIP `9087bf4d03b29d141e78c93e9de62a237f2d408f24b43caeef26072e6d3b21b0`, MT ZIP `b577be491754ecfa96d0b86021184b82b2fc280f8881bd73cb5d52d83914d3bd`, corresponding-source tar.gz `9ceb47a5f46fb3484f8b1f6a8fa37e6d0dc4144aa09d78939ac9d23e8ab5ce92`.
+- Matching inner asset SHA256: ST JS `4a85934acca9afb09ec90be83958002040d100674fee7c7903e5a59ed1d8a74c`, ST WASM `b12598c46d9e98f4f46f5c510476261b9d226ae0de01dc8bd8859d9eeacb108b`; MT JS `0f41f937b6535d92159bfafbe063735286e8c693475c4ede856f0df7e8168fa4`, MT WASM `8a9e45ce28d06d9dfde734d41d9af022d1158798b4967bb1e05ee41c20cd193c`; embedded MIT browser wrapper `32edec91e98e93ef10496a4daaed7e42cabf33ab705df4ca287376ab96cf1ce4`. These match app `reverse-runtime.lock.json` under Draft PR #2.
+- Source archive has **26,555** entries including complete pinned FFmpeg 9.0.1, x264, Emscripten 6.0.6 trees and Builder 1.10.6 recipes, specifically the new `runners/video-reverse-pthread-shutdown.post.js`, `runtime/browser-ffmpeg.js`, `runners/video-reverse.c` and `scripts/build-ffmpeg.sh`.
+- Removed the one-time auto-trigger after successful packaging. The archived candidate is not an immutable public Release and does **not** constitute licensing/legal sign-off or prove physical-device memory stability. A permanent publicly retrievable source-complete release with new semantic version remains separately gated.
+
 ## New 1.10.6 experimental pthread cleanup (NOT released)
 
 During exact 37.806s/39-frame H.264 High ST/MT testing with the 1.10.5
