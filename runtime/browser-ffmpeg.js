@@ -44,6 +44,7 @@
         }
         self.postMessage({ type: "log", stream, message });
       };
+      let core = null;
       try {
         if (typeof createFFmpegCore !== "function") throw new Error("createFFmpegCore factory was not found.");
         if (threading === "multi-thread" && (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer !== "function")) {
@@ -57,7 +58,7 @@
         const mainScriptUrlOrBlob = threading === "multi-thread"
           ? new Blob([coreJsText], { type: "text/javascript;charset=utf-8" })
           : null;
-        const core = await createFFmpegCore({
+        core = await createFFmpegCore({
           // Emscripten's generated loader normally resolves ffmpeg.wasm
           // relative to the JS script.  Our JS runs inside a blob Worker, where
           // that relative URL is invalid.  Instantiate directly from the bytes
@@ -102,9 +103,27 @@
           resultFiles.push({ name, data: copy });
           transfer.push(copy);
         }
+        // Shutdown the native nested pthread worker pool *before* signalling
+        // completion: otherwise each independent chunk can leave a 128+ MiB
+        // SharedArrayBuffer memory mapping alive after its wrapper Worker is
+        // terminated, exhausting memory during long/repeated MT exports.
+        if (threading === "multi-thread") {
+          if (typeof core.shutdownPthreadWorkers !== "function") {
+            throw new Error("MT reverse WASM lacks required pthread cleanup hook.");
+          }
+          core.shutdownPthreadWorkers();
+        }
         self.postMessage({ type: "done", exitCode, files: resultFiles }, transfer);
       } catch (error) {
         self.postMessage({ type: "error", name: error?.name || "Error", message: error?.message || String(error), stack: error?.stack || "" });
+      } finally {
+        // Also shut down pthreads on decoder errors and partial reads.
+        // Hard AbortSignal cancellation terminates the outer Worker
+        // immediately, so the app must still treat it as a separate
+        // resource-pressure scenario until physically tested.
+        if (threading === "multi-thread" && typeof core?.shutdownPthreadWorkers === "function") {
+          try { core.shutdownPthreadWorkers(); } catch (_) {}
+        }
       }
     };
     })();

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.10.6 — experimental video-reverse pthread lifetime cleanup (development; not released)
+
+- Fix a second issue exposed by real isolated Chrome ST/MT regression:
+  after the 1.10.5 sparse-frame timeline fix, an MT conversion of a
+  39-frame/37.806s H.264 High input at source 1920×1080 failed in
+  chunk 3/5 with `WebAssembly.Memory(): could not allocate memory`
+  when the same browser session had converted many prior clips.
+- The video-reverse MT core now exposes an Emscripten post-JS
+  `shutdownPthreadWorkers` entry point scoped inside the MODULARIZE
+  factory; the embedded browser wrapper calls it **after reading
+  MP4 bytes and before notifying its parent that a chunk succeeded**.
+  Also attempt teardown on decoder errors. Retain all frame and quality
+  guards. No worker/network API changes for ST.
+- The post-JS hook is compiled only for the `video-reverse` MT
+  profile, not other FFmpeg profiles; this build also changes the common
+  browser wrapper and will require a fresh SHA-pinned importer.
+- **Do not claim memory-leak resolution until the rebuilt MT browser
+  performs the 10-second HD sparse-VFR regression and repeat runs.**
+  Existing permanent GPL source/release gates remain open.
+
+
 ## 1.10.5 — experimental video-reverse sparse-VFR frame-window fix (development; not released)
 
 - For video-reverse chunks supplied with an exact frame count, first normalize

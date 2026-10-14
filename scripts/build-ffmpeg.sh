@@ -195,6 +195,13 @@ else
   thread_link_flags=(-sINITIAL_HEAP=67108864)
 fi
 
+post_js_flags=()
+if [[ "$PROFILE" == "video-reverse" && "$THREADING_MODE" == "multi-thread" ]]; then
+  pthread_cleanup_post_js="/workspace/runners/video-reverse-pthread-shutdown.post.js"
+  [[ -s "$pthread_cleanup_post_js" ]] || fail "Video-reverse pthread cleanup post-JS is missing."
+  post_js_flags=(--post-js "$pthread_cleanup_post_js")
+fi
+
 emcc "$RUNNER_SOURCE" \
   -I. -I"$INSTALL_DIR/include" \
   "${thread_defines[@]}" \
@@ -208,6 +215,7 @@ emcc "$RUNNER_SOURCE" \
   -sALLOW_MEMORY_GROWTH=1 \
   -sMAXIMUM_MEMORY=2147483648 \
   "${thread_link_flags[@]}" \
+  "${post_js_flags[@]}" \
   "${profile_link_flags[@]}" \
   -sSTACK_SIZE=5242880 \
   -sENVIRONMENT=worker \

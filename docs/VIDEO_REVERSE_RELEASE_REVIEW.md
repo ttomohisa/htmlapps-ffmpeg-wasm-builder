@@ -3,6 +3,29 @@
 **Date:** 2026-10-14 (JST)  
 **Status:** A review-only ST/MT binary + corresponding-source **candidate archive has been successfully created and independently integrity-checked**. **No permanent public GitHub Release, version tag, legal/GPL compliance sign-off or Android Gate G2 approval has been produced.** Do not ship the temporary candidate as a production version.
 
+## New 1.10.6 experimental pthread cleanup (NOT released)
+
+During exact 37.806s/39-frame H.264 High ST/MT testing with the 1.10.5
+timeline fix, the 2-second tests passed, and ST could render the full
+10-second reverse and ping-pong. An MT high-resolution 10-second
+attempt failed in chunk 3/5 with `WebAssembly.Memory(): could not
+allocate memory` after earlier chunk jobs. This is an actual Chrome
+resource failure and remains G2-blocking until repeat+isolation tests
+pass. It is not proof of Android OOM or a permanently leaked buffer.
+
+A targeted v1.10.6 candidate adds explicit Emscripten nested pthread
+pool teardown before returning each MT segment's MP4 bytes. Emscripten
+`-sMODULARIZE=1` supports `--post-js` code inside its factory;
+the video-reverse MT profile exports a scoped shutdown hook and the
+browser runtime invokes it on success and failure. The ST path is
+left unchanged. This is a **hypothesis-directed cleanup candidate**:
+do not claim it fixed actual device memory behavior without rebuild,
+actual browser and physical-device validation.
+
+The 1.10.4 **review-only corresponding-source ZIP** is historical and
+does not cover v1.10.5 or v1.10.6. Fresh matching source archives and
+a reviewed immutable release remain mandatory before stable publication.
+
 ## New 1.10.5 experimental bugfix (NOT covered by the 1.10.4 review bundle)
 
 On 2026-10-14 the owner reported an H.264 High source at 1920x1080,
