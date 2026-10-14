@@ -1,6 +1,13 @@
 name: Prepare video-reverse source-complete bundle (manual)
 
+# One-time source-candidate creation on this isolated Draft branch:
+# after review this push trigger must be removed to preserve Actions minutes.
 on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - .github/workflows/prepare-video-reverse-release.yml
   workflow_dispatch:
     inputs:
       reuse_verified_wasm:
@@ -25,11 +32,11 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Docker Buildx
-        if: ${{ !inputs.reuse_verified_wasm }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.reuse_verified_wasm }}
         uses: docker/setup-buildx-action@v4
 
       - name: Set up Chrome
-        if: ${{ !inputs.reuse_verified_wasm }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.reuse_verified_wasm }}
         id: chrome
         uses: browser-actions/setup-chrome@v2.2.0
 
@@ -48,7 +55,7 @@ jobs:
         run: ./scripts/check-repository.ps1
 
       - name: Rebuild and browser-smoke ST/MT from exact pinned source
-        if: ${{ !inputs.reuse_verified_wasm }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.reuse_verified_wasm }}
         shell: bash
         env:
           FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
@@ -57,7 +64,7 @@ jobs:
           ./build.sh video-reverse
 
       - name: Download real ST/MT browser-smoke artifact (temporary)
-        if: ${{ inputs.reuse_verified_wasm }}
+        if: ${{ github.event_name == 'push' || inputs.reuse_verified_wasm }}
         uses: actions/download-artifact@v4
         with:
           repository: ttomohisa/htmlapps-ffmpeg-wasm-builder
@@ -104,6 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           source ./versions.env
+          chmod +x ./scripts/prepare-release.sh
           ./scripts/prepare-release.sh "v${BUILDER_VERSION}"
 
       - name: Validate all prepared files and notices
