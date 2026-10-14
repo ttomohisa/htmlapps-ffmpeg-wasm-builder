@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.10.5 — experimental video-reverse sparse-VFR frame-window fix (development; not released)
+
+- For video-reverse chunks supplied with an exact frame count, first normalize
+  the original source presentation timeline to the target FPS; only then select
+  the requested `start_frame:end_frame` window and reverse those bounded
+  frames. This fixes cutting a sparse WebCodecs frame span before FPS sampling.
+  A source with ~39 encoded frames across 37.806 seconds can legitimately
+  represent many seconds of static content; pre-trimming to a partial window
+  may lose the preceding frame and produce fewer than the expected output.
+- Decode only through the requested segment end (+existing demux reorder guard),
+  while retaining the existing 2-second / 120-frame and 96MiB *estimated
+  reverse-buffer* limits and independent strict output-frame-count verification.
+  Unframed legacy video-reverse usage retains its original processing path.
+- Native FFmpeg exact-filter trials of a 39-sample, 37.806s, H.264 High
+  VFR sample with long per-sample durations yielded the correct 30-frame
+  first segment, 28-frame nonzero-start return segment, and 30-frame
+  subsequent static interval. Actual rebuilt ST/MT browser results must be
+  checked before treating this experimental change as fixed on devices.
+- Existing 1.10.4 binary/source review artifact is **not** a versioned
+  release for this 1.10.5 code. A fresh rebuild, app binary pins, regression
+  suite and matching GPL corresponding sources are mandatory.
+
+
 ## 1.10.4 - 2026-10-11
 
 - Add optional, bounded two-way Video Contact Sheet sample partitions while preserving global sampling times and the default single-thread output contract.

@@ -3,6 +3,39 @@
 **Date:** 2026-10-14 (JST)  
 **Status:** A review-only ST/MT binary + corresponding-source **candidate archive has been successfully created and independently integrity-checked**. **No permanent public GitHub Release, version tag, legal/GPL compliance sign-off or Android Gate G2 approval has been produced.** Do not ship the temporary candidate as a production version.
 
+## New 1.10.5 experimental bugfix (NOT covered by the 1.10.4 review bundle)
+
+On 2026-10-14 the owner reported an H.264 High source at 1920x1080,
+37.806089 seconds, about **39 video samples** (avg 877500/850637 fps,
+r_frame_rate 13/4, timebase 1/90000). ST succeeded while MT failed
+with `Reverse frame count mismatch: expected=30 actual=24`.
+
+Inspection of the public Presentation Video Maker source showed its fast
+WebCodecs export stores **explicitly variable sample durations** (static
+slide holds) in MP4. A synthetic source with matching sample count,
+codec, average fps, duration, and 90k timestamp scale provoked a
+related real ST WASM regression: a Ping-pong return chunk beginning at
+0.067s expected 28 frames and produced only 9 (App CI #38527422037).
+This proves the pre-FPS subclip trim does not reliably preserve long
+display spans; it does **not by itself prove the user's MT 30->24
+case is fully fixed**.
+
+The experimental Builder version 1.10.5 branch now changes the ordering
+to **source-timeline FPS normalization, then exact frame-index window,
+then bounded Reverse**, without weakening frame-count validation. It
+retains the 2s/120-frame reverse buffer guard and decodes source only
+through the interval's end. Native FFmpeg filter trials for 0–2s,
+0.067–1.933s and 6–8s produced correct 30/28/30 frames from that
+fixture. **Fresh ST/MT WASM compilation, real browser regressions,
+matching immutable source/binary release and actual Android acceptance
+remain outstanding until independently verified.**
+
+The previously generated **1.10.4 review artifact 11862943520**
+is a source-complete candidate for the old 1.10.4 binaries only; it
+must **not** be used as corresponding source for a new 1.10.5 binary.
+The preparation workflow in this branch intentionally remains locked
+to the historical 1.10.4 build and cannot attest to 1.10.5.
+
 ## Source / binary evidence verified
 
 - The selected exact compiled source commit is `d1feee021aae6feb53eab1084664123f602c2085` (Builder `BUILDER_VERSION=1.10.4`).

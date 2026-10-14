@@ -439,7 +439,7 @@ int main(int argc, char **argv)
     const char *start_text = NULL, *duration_text = NULL;
     const char *direction = "reverse";
     double start = 0, duration = 0, width = 0, height = 0, fps = 0, crf = 30, frames = 0;
-    char filter[256], fps_text[16], crf_text[16];
+    char filter[256], fps_text[16], crf_text[16], decode_end_text[64];
     int i;
 
     if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
@@ -507,24 +507,51 @@ int main(int argc, char **argv)
     }
 
     /*
-     * Filter Builder prepends precise trim and display-matrix autorotation.
-     * Decode -> trim -> autorotate -> scale -> fps -> reverse -> reset PTS ->
-     * final fps (from --fps) -> format/encoder. Scaling + fps BEFORE reverse
-     * bound stored frame size/count; the final fps fixes frame durations.
-     */
-    /*
-     * Identical scale/fps/trim/PTS chain and x264 settings for both
-     * directions. For ping-pong, the caller removes return-leg endpoint
-     * frames by choosing a frame-exact source window (not packet deletion).
+     * The input may be genuinely sparse WebCodecs VFR (e.g. 39 video samples
+     * across 37.806 seconds, with one static slide frame displayed for
+     * several seconds). Filtering to [start,start+duration) BEFORE fps loses
+     * that frame when the segment begins in the middle of its display span.
+     * In pthread MT mode it can also finish the graph early with fewer
+     * output samples than ST. The correct order is:
+     *
+     * decode timeline from time zero -> autorotate -> bounded-size scale ->
+     * fps normalization of the ORIGINAL presentation timeline -> select the
+     * frame-exact requested window -> reverse only THAT short window ->
+     * reset PTS -> enforce output fps and frame-count.
+     *
+     * Decode may examine earlier source frames, but the reverse filter still
+     * receives at most 'frames' <=120 and has the existing 96MiB budget.
+     * Keep Filter Builder's early demux stop by delegating a timeline duration
+     * equal to the requested interval END, without applying a nonzero
+     * timeline start before fps. This avoids decoding an entire long video.
+     * Never pad an incomplete MP4 at the join stage or weaken validation.
      */
     const char *direction_filter = !strcmp(direction, "reverse")
                                       ? ",reverse,setpts=PTS-STARTPTS"
                                       : ",setpts=PTS-STARTPTS";
+    const char *decode_start_text = start_text;
+    const char *decode_duration_text = duration_text;
     if (frames > 0) {
+        const double start_grid = start * fps;
+        const int64_t start_frame = (int64_t)llround(start_grid);
+        const int64_t end_frame = start_frame + (int64_t)frames;
+        if (!isfinite(start_grid) || fabs(start_grid - (double)start_frame) > 0.015 ||
+            start_frame < 0 || end_frame <= start_frame) {
+            fprintf(stderr, "Reverse chunk start must align with the output fps frame grid.\n");
+            return 2;
+        }
+        /* The filter graph timeline starts at zero, not at the requested
+         * segment start; trimming happens ONLY after fps normalization. */
         snprintf(filter, sizeof(filter),
-                 "scale=%d:%d:flags=bicubic,fps=fps=%d,trim=end_frame=%d%s",
-                 (int)width, (int)height, (int)fps, (int)frames, direction_filter);
+                 "scale=%d:%d:flags=bicubic,fps=fps=%d,"
+                 "trim=start_frame=%lld:end_frame=%lld%s",
+                 (int)width, (int)height, (int)fps,
+                 (long long)start_frame, (long long)end_frame, direction_filter);
+        snprintf(decode_end_text, sizeof(decode_end_text), "%.6f", start + duration);
+        decode_start_text = "0";
+        decode_duration_text = decode_end_text;
     } else {
+        /* Legacy caller without --frames keeps its original behavior. */
         snprintf(filter, sizeof(filter),
                  "scale=%d:%d:flags=bicubic,fps=fps=%d%s",
                  (int)width, (int)height, (int)fps, direction_filter);
@@ -534,7 +561,8 @@ int main(int argc, char **argv)
 
     char *delegated[] = {
         argv[0], "--input", (char *)input, "--output", (char *)output,
-        "--start-time", (char *)start_text, "--duration", (char *)duration_text,
+        "--start-time", (char *)decode_start_text,
+        "--duration", (char *)decode_duration_text,
         "--video-filter", filter, "--fps", fps_text, "--crf", crf_text, "--no-audio"
     };
     int ret = filter_builder_main((int)(sizeof(delegated) / sizeof(delegated[0])), delegated);
