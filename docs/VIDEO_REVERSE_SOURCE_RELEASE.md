@@ -70,6 +70,36 @@ compilation from the sources, or permanent downloadable publication;
 these remain separate P0 tasks. No original media or user data was
 involved, and no release/tag/merge was performed.
 
+## 2026-10-17 — independent repeatable archive verification (PASS; still NOT published)
+
+Committed `scripts/verify-video-reverse-review-bundle.py` to verify the exact
+**original** pinned Actions archive offline: its **outer ZIP SHA-256**,
+the five `SHA256SUMS.txt` entries, inner ST/MT `ffmpeg.js`, `ffmpeg.wasm`
+and `browser-ffmpeg.js` digests, both manifests' threading and isolation
+values, minimum GPL license/notice files and required corresponding-source
+archive members. There is no extraction, network access or build execution
+in the Python verifier itself.
+
+Run with a locally retained copy:
+
+```bash
+python3 scripts/verify-video-reverse-review-bundle.py /path/to/reverse-clip-builder-v1.10.6-source-review.zip
+```
+
+[Lightweight independent review CI #38953891704](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38953891704)
+**SUCCESS**: downloaded the same existing Actions artifact without rebuilding,
+verified the outer ZIP, all five hashes, exact ST/MT/loader byte digests and
+**26,555 source entries**. The verifier is intentionally pinned to this
+review candidate and will reject other archives, versions or unexpected
+bits. If recompiled bytes change, separately re-review and create a new
+audit record rather than bypassing the check.
+
+**Scope:** byte integrity and source *presence* only. No independent rebuild
+reproduction, legal GPL opinion, permanent URL, tag or final release
+authorization. The temporary source artifact still expires on
+**2026-10-21T18:41Z**; a local retained copy does not by itself satisfy
+ongoing public corresponding-source availability.
+
 ## Next owner-reviewed release tasks
 
 1. Review the run artifact **before its expiry**, `SHA256SUMS.txt`,
