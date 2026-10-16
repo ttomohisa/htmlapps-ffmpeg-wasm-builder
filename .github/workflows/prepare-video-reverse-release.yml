@@ -1,7 +1,10 @@
 name: Prepare pinned 1.10.6 video-reverse GPL review bundle
 
-# Review-only bundle created in run #38617100332.
-# No push trigger remains; future expensive packages require manual dispatch.
+# Source-complete candidate created in run #38617100332.
+# This workflow is MANUAL and produces review artifacts only: no tag,
+# GitHub Release, merge, or publication. The pinned binary may expire;
+# set reuse_verified_wasm=false for an explicitly approved expensive rebuild.
+# Retain review assets longer than seven days so the owner can inspect them.
 on:
   workflow_dispatch:
     inputs:
@@ -142,4 +145,4 @@ jobs:
           name: video-reverse-source-complete-candidate-${{ github.sha }}
           path: release/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30

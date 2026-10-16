@@ -1,0 +1,60 @@
+# Video Reverse v1.10.6 — corresponding-source review & preservation
+
+**Status (2026-10-17): REVIEW CANDIDATE EXISTS; NO PERMANENT RELEASE.**
+
+This document records exactly what has been verified and what has **not**
+been authorized for Reverse Clip v0.9.0. The profile is GPL-2.0-or-later
+because it links FFmpeg's GPL code and x264. Builder's root MIT license does
+not replace those upstream licenses.
+
+## Currently verified evidence
+
+- Exact Builder source used by Reverse Clip's runtime:
+  `8e60da7cf9de644ce3f6cce9c007b17e6a385c53`.
+- Locked Builder version: `1.10.6`; application lock:
+  `ttomohisa/htmlapps-reverse-clip/reverse-runtime.lock.json`.
+- [Review workflow #38617100332](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38617100332)
+  **PASS**. Its temporary source-complete review artifact
+  `video-reverse-source-complete-candidate-52b97b2757140c3b5c9968df227b5af23f6c29ca`
+  (artifact ID `11920042823`) was approximately 74.6 MB and is
+  scheduled to expire **2026-10-21T18:41:00Z**. GitHub artifact expiry is
+  evidence that **permanent availability is not yet satisfied**.
+- Review workflow checks the exact pinned source, ST and MT runtime
+  SHA-256, correct `video-reverse` manifests/COI semantics, packaged
+  license notices, source archive, build info, and `release/SHA256SUMS.txt`.
+  Source-archive verification is **packaging validation**, not legal advice
+  or proof that the material has been published permanently.
+
+## Next owner-reviewed release tasks
+
+1. Review the run artifact **before its expiry**, `SHA256SUMS.txt`,
+   `BUILDINFO-video-reverse-single-thread.txt`,
+   `BUILDINFO-video-reverse-multi-thread.txt`, ST/MT ZIPs and matching
+   `ffmpeg-wasm-sources-v1.10.6.tar.gz`. Compare all four binary hashes
+   with the application runtime lock and check build recipe and notices.
+2. If that artifact has expired, manually dispatch
+   [Prepare pinned 1.10.6 video-reverse GPL review bundle](../../.github/workflows/prepare-video-reverse-release.yml)
+   with `reuse_verified_wasm=false` to build again **at explicit cost**.
+   Do not silently claim a rebuilt binary is identical; the workflow
+   currently fails closed if the SHA-256 does not match.
+3. Decide on a versioned **immutable GitHub Release or equivalently
+   durable public distribution** for exact ST/MT JS+WASM, browser runtime,
+   GPL/license texts, build info, hashes, matching FFmpeg/x264/Emscripten
+   corresponding sources and build/install scripts. The existing normal
+   `release.yml` profile list does not yet publish `video-reverse`.
+4. Update Reverse Clip's runtime acquisition/lock **only after** the
+   reviewed permanent assets exist. Re-run its actual ST/MT Chrome
+   standalone builds and no-network tests; do not turn the app's
+   `temporary-not-release` status to release-ready earlier.
+5. Record the legally relevant notice/source review separately from
+   functional G2/G3 device testing. The user performs PR merges.
+   **No release/tag is created in this checklist.**
+
+## Workflow retention policy
+
+This branch increases **future manual review artifact** retention from
+7 to **30 days**, not permanent retention. The old artifact ID and
+expiry remain unchanged. This reduces review churn and avoids
+automatically re-running the costly Docker+WASM build. Stable
+publication still requires the durable matching binary/source assets
+and independent review.
