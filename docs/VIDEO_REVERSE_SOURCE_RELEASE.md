@@ -28,7 +28,12 @@ not replace those upstream licenses.
 ## 2026-10-17 — manual technical audit of existing source bundle
 
 The existing candidate ZIP artifact ID `11920042823` was downloaded
-and inspected independently of GitHub Actions. Technical checks only:
+and inspected independently of GitHub Actions. A second retrieval on
+2026-10-17 produced a valid outer ZIP with SHA-256
+`7b3101d3ad67108354de46c158428f6eeff81b995e4d6aff8008bbffcf2307bb`;
+all five internal SHA256SUMS entries were rechecked as **OK**. This
+extra review copy is **not** a durable public release and may not be
+available to downstream users. Technical checks only:
 
 - Extracted all **six** outer files: 2 binary ZIPs, 2 `BUILDINFO`
   files, `ffmpeg-wasm-sources-v1.10.6.tar.gz` and `SHA256SUMS.txt`.
