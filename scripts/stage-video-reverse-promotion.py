@@ -16,7 +16,18 @@ import re
 import shutil
 import zipfile
 
-from verify_video_reverse_review_bundle import audit, VERSION
+import importlib.util
+
+# The already-audited verifier has a hyphenated filename. Load that exact
+# script instead of copying or weakening its integrity checks here.
+verifier_path = Path(__file__).with_name("verify-video-reverse-review-bundle.py")
+spec = importlib.util.spec_from_file_location("reverse_review_verifier", verifier_path)
+if spec is None or spec.loader is None:
+    raise RuntimeError("Could not load exact review verifier")
+verifier = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(verifier)
+audit = verifier.audit
+VERSION = verifier.VERSION
 
 # A profile-specific versioned tag avoids colliding with the already-existing
 # Builder-wide "v1.10.6" tag and its release assets. This is a publication
