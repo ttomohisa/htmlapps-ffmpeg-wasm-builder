@@ -63,7 +63,22 @@ def sha(path):
 
 
 def verify(directory):
-    require(directory.is_dir(), f"Staging folder missing: {directory}")
+    require(directory.is_dir() and not directory.is_symlink(),
+            f"Staging folder missing or linked: {directory}")
+    # Refuse undocumented/executable extras in a release-review bundle.
+    # This protects a future publisher from uploading arbitrary files by glob.
+    approved_names = FILES | {
+        stager.CHECKSUM_ASSET,
+        stager.SUPPLEMENT_NAME,
+        "VIDEO_REVERSE_PROMOTION_MANIFEST.json",
+        "REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json",
+        OPTIONAL_RESTAGE_METADATA,
+    }
+    entries = list(directory.iterdir())
+    unexpected = {p.name for p in entries} - approved_names
+    require(not unexpected, f"Unreviewed extra payloads: {sorted(unexpected)}")
+    require(all(p.is_file() and not p.is_symlink() for p in entries),
+            "Review artifact contains a directory or symbolic link")
     stage_file = directory / "VIDEO_REVERSE_PROMOTION_MANIFEST.json"
     info = json.loads(stage_file.read_text(encoding="utf-8"))
     require(info.get("schemaVersion") == 1, "Wrong staging schema")
