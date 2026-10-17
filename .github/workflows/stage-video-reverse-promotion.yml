@@ -10,6 +10,7 @@ on:
       - "scripts/stage-video-reverse-promotion.py"
       - "scripts/propose-video-reverse-app-lock.py"
       - "scripts/verify-video-reverse-review-bundle.py"
+      - "scripts/verify-video-reverse-staged-promotion.py"
       - "docs/VIDEO_REVERSE_LICENSE_ADDENDUM.md"
       - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/stage-video-reverse-promotion.yml"
@@ -32,8 +33,9 @@ jobs:
           python3 -m py_compile \
             scripts/verify-video-reverse-review-bundle.py \
             scripts/stage-video-reverse-promotion.py \
-            scripts/propose-video-reverse-app-lock.py
-      - name: Download exact originally audited review artifact
+            scripts/propose-video-reverse-app-lock.py \
+            scripts/verify-video-reverse-staged-promotion.py
+      - name: Download preserved audited review stage (original artifact may expire)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,9 +44,12 @@ jobs:
           curl -fLsS --retry 3 --retry-delay 2 \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/11920042823/zip" \
-            -o /tmp/rc-review-artifact.zip
-          test "$(wc -c </tmp/rc-review-artifact.zip)" -gt 70000000
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/12091513054/zip" \
+            -o /tmp/rc-preserved-review.zip
+          test "$(wc -c </tmp/rc-preserved-review.zip)" -gt 70000000
+          mkdir -p /tmp/rc-preserved-review
+          unzip -q /tmp/rc-preserved-review.zip -d /tmp/rc-preserved-review
+          python3 scripts/verify-video-reverse-staged-promotion.py /tmp/rc-preserved-review
       - name: Ensure proposed profile-specific tag has NOT been published
         shell: bash
         env:
@@ -60,11 +65,33 @@ jobs:
             exit 1
           fi
           echo 'No existing video-reverse-v1.10.6 tag; publication still requires owner approval.'
-      - name: Independently audit and stage exact ST/MT binaries and corresponding source
+      - name: Independently re-stage exact preserved binary, source, GPL notice and lock proposal
         shell: bash
         run: |
-          python3 scripts/stage-video-reverse-promotion.py \
-            /tmp/rc-review-artifact.zip --output release-candidate
+          set -euo pipefail
+          mkdir -p release-candidate
+          cp -a /tmp/rc-preserved-review/. release-candidate/
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('release-candidate')
+          meta={
+              'schemaVersion': 1,
+              'status': 'review-only-not-published',
+              'sourceStageArtifactId': 12091513054,
+              'originalBuilderSourceCommit': '8e60da7cf9de644ce3f6cce9c007b17e6a385c53',
+              'tagPublished': False,
+              'artifactRetainedForReviewOnly': True
+          }
+          target=root/'REVIEW_RESTAGING_PROVENANCE.json'
+          if target.exists():
+              existing=json.loads(target.read_text())
+              if existing!=meta:
+                  raise ValueError('Previous restaging provenance differs; review required')
+          else:
+              target.write_text(json.dumps(meta,indent=2,sort_keys=True)+'\n')
+          PY
+          python3 scripts/verify-video-reverse-staged-promotion.py release-candidate
           cd release-candidate
           sha256sum -c SHA256SUMS.txt
           python3 - <<'PY'
@@ -103,8 +130,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/propose-video-reverse-app-lock.py release-candidate \
-            --output release-candidate/REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json
+          # The original proposal was generated from immutable audited bytes.
+          # This rerun must be identical. Do NOT activate a release status.
+          python3 scripts/verify-video-reverse-staged-promotion.py release-candidate
           python3 - <<'PY'
           import hashlib, json
           from pathlib import Path
@@ -150,7 +178,8 @@ jobs:
             echo '## Review-only Reverse Clip Builder candidate'
             echo '- Five byte-identical binary/source/BUILDINFO artifacts rechecked.'
             echo '- Proposed separate tag: `video-reverse-v1.10.6` (not created).'
-            echo '- Original SHA256SUMS, independently hashed GPL addendum and proposed app Release-lock metadata attached.'
+            echo '- Original ZIP/source SHA pins, GPL addendum and non-installable app lock verified from preserved staging artifact 12091513054.'
+            echo '- Original Actions artifact 11920042823 is NOT required for this review-stage refresh.'
             echo '- The proposal has intentionally unsupported kind/status; it cannot be used to activate a release.'
             echo '- Still required: legal/source review; owner approval; permanent GitHub Release; public SHA recheck; app release lock update; final ST/MT browser QA.'
             echo '- Do not merge/tag/publish from this workflow.'
