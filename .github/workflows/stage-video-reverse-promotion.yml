@@ -9,6 +9,8 @@ on:
     paths:
       - "scripts/stage-video-reverse-promotion.py"
       - "scripts/verify-video-reverse-review-bundle.py"
+      - "docs/VIDEO_REVERSE_LICENSE_ADDENDUM.md"
+      - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/stage-video-reverse-promotion.yml"
   workflow_dispatch:
 
@@ -64,7 +66,7 @@ jobs:
           cd release-candidate
           sha256sum -c SHA256SUMS.txt
           python3 - <<'PY'
-          import json, pathlib
+          import hashlib, io, json, pathlib, zipfile
           root=pathlib.Path('.')
           manifest=json.loads((root/'VIDEO_REVERSE_PROMOTION_MANIFEST.json').read_text())
           assert manifest['publicReleaseApproved'] is False
@@ -73,8 +75,27 @@ jobs:
           assert manifest['proposedDistinctReleaseTag']=='video-reverse-v1.10.6'
           assert len(manifest['assets']) == 5
           for asset in manifest['assets']:
-              assert (root/asset['name']).stat().st_size == asset['bytes']
-          print('PASS staged five exact release files + original SHA256SUMS and independent review manifest')
+              path=root/asset['name']
+              assert path.stat().st_size == asset['bytes']
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == asset['sha256']
+          notice=manifest['additionalNotice']
+          notice_path=root/notice['name']
+          assert notice_path.name=='VIDEO_REVERSE_LICENSE_ADDENDUM.md'
+          assert notice_path.stat().st_size==notice['bytes']
+          assert hashlib.sha256(notice_path.read_bytes()).hexdigest()==notice['sha256']
+          assert 'GPL-2.0-or-later' in notice_path.read_text()
+          assert 'video-reverse' in notice_path.read_text()
+          assert 'x264' in notice_path.read_text()
+          for variant in ('single-thread','multi-thread'):
+              binary = root/f'ffmpeg-wasm-video-reverse-{variant}-v1.10.6.zip'
+              with zipfile.ZipFile(binary) as z:
+                  legacy=z.read('THIRD_PARTY_NOTICES.md').decode()
+                  build=z.read('BUILDINFO.txt').decode()
+                  assert 'video-reverse' not in legacy, 'Existing binary notice unexpectedly changed'
+                  assert 'Profile: video-reverse' in build
+                  assert 'Generated core license: GPL-2.0-or-later' in build
+                  assert 'x264 linked into this profile: yes' in build
+          print('PASS original ST/MT bytes unchanged + GPL addendum correctly discloses missing legacy video-reverse profile')
           PY
       - name: Retain audited review candidate for 30 days (NOT permanent GPL distribution)
         uses: actions/upload-artifact@v7
@@ -90,7 +111,7 @@ jobs:
             echo '## Review-only Reverse Clip Builder candidate'
             echo '- Five byte-identical binary/source/BUILDINFO artifacts rechecked.'
             echo '- Proposed separate tag: `video-reverse-v1.10.6` (not created).'
-            echo '- Additional SHA256SUMS and promotion manifest attached as temporary CI artifact.'
+            echo '- Original SHA256SUMS, an independently hashed GPL video-reverse notice addendum and promotion manifest are attached as temporary CI artifact.'
             echo '- Still required: legal/source review; owner approval; permanent GitHub Release; public SHA recheck; app release lock update; final ST/MT browser QA.'
             echo '- Do not merge/tag/publish from this workflow.'
           } >> "$GITHUB_STEP_SUMMARY"
