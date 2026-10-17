@@ -73,6 +73,47 @@ The updated [promotion CI #39008016046](https://github.com/ttomohisa/htmlapps-ff
 
 **After an authorized permanent public Builder Release exists**, independently fetch and check every public asset and tag/source commit. *Only then* may the owner-approved candidate values be copied into the live app lock with `kind: github-release-st-mt` and `status: release-approved`, followed by ST/MT rebuild, file/HTTP hosted QA and final release acceptance. A generated proposal by itself never authorizes publication or a lock change.
 
+## 2026-10-17 — importer positive and negative proof before publication
+
+Reverse Clip Draft PR #2 now exercises the **real PowerShell Release importer**
+against both positive **local mocked GitHub Release files** and negative
+staging/invalid metadata. Windows [CI #39008453901](https://github.com/ttomohisa/htmlapps-reverse-clip/actions/runs/39008453901)
+passed its importer build job:
+
+- The current exact ST and MT JS/WASM/loader cache was copied into local
+  **synthetic transport fixture ZIPs**. The PowerShell `Invoke-WebRequest`
+  function was intercepted to copy only explicitly permitted local files.
+  No real public GitHub Release was queried or created.
+- Both variants accepted correctly pinned ZIP hashes, a synthetic
+  corresponding-source payload and a separately pinned GPL notice. The
+  generated per-variant `verified-release-archive.json` markers matched
+  source, notice, tag and binary archive SHA-256 values.
+- A subsequent ST import passed using a verified **offline cached** release,
+  with network calls explicitly forbidden by the test wrapper.
+- The same CI also confirmed the importer rejects unrecognized draft-only
+  lock kind, nonapproved release status and invalid GPL notice SHA **before
+  any network call**.
+
+The synthetic source and notice used in this transport test **are not valid
+GPL publication artifacts**; this test proves the importer plumbing and
+hash/caching mechanics, not source completeness, production access or
+license compliance. The actual source-complete Builder package and
+independent hash audit remain separate evidence.
+
+**What the owner needs to decide at the later release gate, not now:**
+
+1. Accept or revise the proposed distinct `video-reverse-v1.10.6`
+   tag/source-commit and its build-info naming disclosure.
+2. Review and approve the GPL/x264 corresponding-source archive,
+   supplemental notice, and source availability plan (seek a qualified
+   license review if needed).
+3. Explicitly authorize the creation/publication of that profile Release
+   after checking its manifest; then review the final app QA before manually
+   merging PRs.
+
+Until those decisions are made, the staging proposal stays non-activatable.
+**There is no action required from the owner for ongoing Draft-PR tests.**
+
 ## Required explicit sign-offs before a public Release
 
 1. **Corresponding-source/licensing review:** verify applicable FFmpeg/x264 GPL terms and the actual source archive's completeness (including all scripts/patches needed for this WASM build), notices and upstream licenses. The automated source-*presence* check is not a legal opinion or proof of reproducible compilation.
