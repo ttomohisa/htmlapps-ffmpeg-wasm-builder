@@ -46,6 +46,8 @@ INFO_ASSETS = (
 )
 CHECKSUM_ASSET = "SHA256SUMS.txt"
 ASSETS = (*BINARY_ASSETS, SOURCE_ASSET, *INFO_ASSETS)
+SUPPLEMENT_NAME = "VIDEO_REVERSE_LICENSE_ADDENDUM.md"
+SUPPLEMENT_PATH = Path(__file__).resolve().parents[1] / "docs" / SUPPLEMENT_NAME
 
 
 def sha256_file(path: Path) -> str:
@@ -86,6 +88,14 @@ def stage(candidate: Path, target: Path) -> dict:
             if actual != declared[name]:
                 raise ValueError(f"SHA mismatch after staging {name}")
         (target / CHECKSUM_ASSET).write_bytes(original.read(CHECKSUM_ASSET))
+    # The original reviewed binary archives are immutable: their embedded
+    # notices omit the name "video-reverse". Supplement them as a separately
+    # checked, explicit disclosure, never by rewriting the signed-off ZIPs.
+    supplement = SUPPLEMENT_PATH.read_bytes()
+    if b"GPL-2.0-or-later" not in supplement or b"video-reverse" not in supplement or b"x264" not in supplement:
+        raise ValueError("Supplemental GPL/x264 profile notice is incomplete")
+    with (target / SUPPLEMENT_NAME).open("xb") as output:
+        output.write(supplement)
     result = {
         "schemaVersion": 1,
         "status": "review-only-not-published",
@@ -100,6 +110,12 @@ def stage(candidate: Path, target: Path) -> dict:
         "originalActionsReviewArchiveSha256": sha256_file(candidate),
         "originalActionsReviewArtifactId": 11920042823,
         "sourceArchive": SOURCE_ASSET,
+        "additionalNotice": {
+            "name": SUPPLEMENT_NAME,
+            "sha256": sha256_file(target / SUPPLEMENT_NAME),
+            "bytes": (target / SUPPLEMENT_NAME).stat().st_size,
+            "purpose": "Clarify video-reverse GPL/x264 and profile tag; does not rewrite audited binary archives",
+        },
         "assets": [
             {"name": name, "sha256": declared[name], "bytes": (target / name).stat().st_size}
             for name in ASSETS
@@ -116,6 +132,7 @@ def stage(candidate: Path, target: Path) -> dict:
     (target / "VIDEO_REVERSE_PROMOTION_MANIFEST.json").write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"[PASS] Staged {len(ASSETS)} unmodified checked binaries, source and BUILDINFO")
+    print(f"[PASS] Separate GPL/x264 video-reverse disclosure {SUPPLEMENT_NAME} ({result['additionalNotice']['sha256']})")
     print(f"[REVIEW ONLY] Proposed separate tag: {PROFILE_TAG} (NOT created)")
     return result
 
