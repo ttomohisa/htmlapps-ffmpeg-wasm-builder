@@ -100,6 +100,25 @@ authorization. The temporary source artifact still expires on
 **2026-10-21T18:41Z**; a local retained copy does not by itself satisfy
 ongoing public corresponding-source availability.
 
+## 2026-10-17 — supplemental license profile notice review
+
+Inspection of the exact original audited binary ZIP found a documentation
+gap: `THIRD_PARTY_NOTICES.md` mentioned other FFmpeg/x264 GPL
+profiles, **not the dedicated `video-reverse` profile**, although each
+original `BUILDINFO.txt` explicitly identifies `GPL-2.0-or-later`
+and `x264 linked into this profile: yes`.
+
+Added [standalone supplemental GPL/x264 notice](VIDEO_REVERSE_LICENSE_ADDENDUM.md)
+without modifying the pinned ST/MT binary ZIPs or original corresponding-source
+tarball. The updated
+[staging CI #39006344474](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39006344474)
+**SUCCESS**, validates the actual original notice gap, requires the
+supplemental notice, hashes it separately in the review manifest, and
+retains review-only artifact ID **12090973204** to
+**2026-11-16T05:28:00Z**. The source-presence audit remains distinct from
+a legal GPL completeness or publication decision. See
+[publication handoff](VIDEO_REVERSE_PUBLICATION_HANDOFF.md).
+
 ## Next owner-reviewed release tasks
 
 1. Review the run artifact **before its expiry**, `SHA256SUMS.txt`,
