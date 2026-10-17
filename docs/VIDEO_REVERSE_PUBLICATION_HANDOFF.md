@@ -158,6 +158,20 @@ URL/hash validation, approved app-lock promotion and final acceptance are
 still outstanding. Never interpret a refreshed Actions artifact as a
 published Release or authorisation to merge.
 
+## 2026-10-17 — final review-package input hardening
+
+[`scripts/verify-video-reverse-staged-promotion.py`](../scripts/verify-video-reverse-staged-promotion.py)
+also rejects **unexpected file names, directories or symbolic links**
+inside the review input. This is important for future publishing scripts:
+no unaudited executable or substitute payload may ride along via a
+wildcard file upload. All original ST/MT, source and notice SHA-256 pins
+remain enforced.
+
+[Final verification CI #39010376409](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39010376409)
+**SUCCESS**, using the existing reviewed candidate. Latest review-only
+artifact **12092676288** (expires **2026-11-16T06:34:08Z**). No binary
+recompilation, public tag, GitHub Release or app runtime modification.
+
 ## Required explicit sign-offs before a public Release
 
 1. **Corresponding-source/licensing review:** verify applicable FFmpeg/x264 GPL terms and the actual source archive's completeness (including all scripts/patches needed for this WASM build), notices and upstream licenses. The automated source-*presence* check is not a legal opinion or proof of reproducible compilation.
