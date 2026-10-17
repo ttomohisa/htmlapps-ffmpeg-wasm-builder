@@ -1,0 +1,96 @@
+name: Stage pinned Reverse Clip source + binary release review (no publication)
+
+# This intentionally prepares only a temporary, audited promotion package.
+# NEVER creates a GitHub tag or Release; requires owner/legal review first.
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - "scripts/stage-video-reverse-promotion.py"
+      - "scripts/verify-video-reverse-review-bundle.py"
+      - ".github/workflows/stage-video-reverse-promotion.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  stage:
+    name: Byte-identical promotion candidate, review ONLY
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Builder Draft branch
+        uses: actions/checkout@v7
+      - name: Validate Python syntax (no FFmpeg rebuild)
+        run: |
+          python3 -m py_compile \
+            scripts/verify-video-reverse-review-bundle.py \
+            scripts/stage-video-reverse-promotion.py
+      - name: Download exact originally audited review artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --retry-delay 2 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/11920042823/zip" \
+            -o /tmp/rc-review-artifact.zip
+          test "$(wc -c </tmp/rc-review-artifact.zip)" -gt 70000000
+      - name: Ensure proposed profile-specific tag has NOT been published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          http_code="$(curl -sSL -o /tmp/rc-tag-check.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/tags/video-reverse-v1.10.6")"
+          if [[ "$http_code" != 404 ]]; then
+            echo "::error::Expected unused profile-specific tag, got HTTP $http_code"
+            exit 1
+          fi
+          echo 'No existing video-reverse-v1.10.6 tag; publication still requires owner approval.'
+      - name: Independently audit and stage exact ST/MT binaries and corresponding source
+        shell: bash
+        run: |
+          python3 scripts/stage-video-reverse-promotion.py \
+            /tmp/rc-review-artifact.zip --output release-candidate
+          cd release-candidate
+          sha256sum -c SHA256SUMS.txt
+          python3 - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'VIDEO_REVERSE_PROMOTION_MANIFEST.json').read_text())
+          assert manifest['publicReleaseApproved'] is False
+          assert manifest['gplLegalReviewApproved'] is False
+          assert manifest['reproducedCompilation'] is False
+          assert manifest['proposedDistinctReleaseTag']=='video-reverse-v1.10.6'
+          assert len(manifest['assets']) == 5
+          for asset in manifest['assets']:
+              assert (root/asset['name']).stat().st_size == asset['bytes']
+          print('PASS staged five exact release files + original SHA256SUMS and independent review manifest')
+          PY
+      - name: Retain audited review candidate for 30 days (NOT permanent GPL distribution)
+        uses: actions/upload-artifact@v7
+        with:
+          name: reviewed-video-reverse-v1.10.6-promotion-${{ github.sha }}
+          path: release-candidate/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Summarize publication blockers
+        shell: bash
+        run: |
+          {
+            echo '## Review-only Reverse Clip Builder candidate'
+            echo '- Five byte-identical binary/source/BUILDINFO artifacts rechecked.'
+            echo '- Proposed separate tag: `video-reverse-v1.10.6` (not created).'
+            echo '- Additional SHA256SUMS and promotion manifest attached as temporary CI artifact.'
+            echo '- Still required: legal/source review; owner approval; permanent GitHub Release; public SHA recheck; app release lock update; final ST/MT browser QA.'
+            echo '- Do not merge/tag/publish from this workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"
