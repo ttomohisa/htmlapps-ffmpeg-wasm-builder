@@ -114,6 +114,50 @@ independent hash audit remain separate evidence.
 Until those decisions are made, the staging proposal stays non-activatable.
 **There is no action required from the owner for ongoing Draft-PR tests.**
 
+## 2026-10-17 — review-archive expiry resilience (verified)
+
+The original source-complete Actions artifact **11920042823** expires on
+**2026-10-21T18:41:00Z**. Earlier review workflow revisions depended on
+that expiring ZIP for every fresh audit stage. This is now corrected without
+changing the compiled binaries or weakening SHA checks:
+
+- New offline verifier:
+  [`scripts/verify-video-reverse-staged-promotion.py`](../scripts/verify-video-reverse-staged-promotion.py).
+  It independently pins the **whole** ST and MT ZIPs and corresponding
+  source archive to their original audited SHA-256, rechecks inner FFmpeg
+  JS/WASM/loader digests, per-variant BUILDINFO, source tree members, the
+  independently pinned GPL/x264 disclosure and the non-activatable app
+  Release-lock proposal. It rejects missing files, altered bytes, modified
+  approval flags and stale or inconsistent lock metadata.
+- [Restaging CI #39010016614](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39010016614)
+  **SUCCESS**: used preserved review artifact **12091513054** instead of the
+  original expiring review ZIP. Byte validation passed, and review-only
+  artifact **12093015125** was preserved through
+  **2026-11-16T06:28:25Z**.
+- [Latest rerun #39010150306](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39010150306)
+  **SUCCESS**: automatically selected the latest unexpired matching review
+  artifact (ID **12093015125**) and only then re-validated it against the
+  same hard-pinned original JS/WASM/ZIP/source/addendum checksums. New
+  review-only artifact **12093045270**, expires
+  **2026-11-16T06:30:40Z**.
+- Source selection is not a trust decision: the newest candidate is
+  **rejected if its bytes differ** from original independent checksums.
+  Re-staging only copies the verified files and refreshes a
+  `REVIEW_RESTAGING_PROVENANCE.json` pointer; it never modifies or
+  republishes compiled binaries, corresponding source, license addendum,
+  `SHA256SUMS.txt` or the proposed app release lock.
+- The lightweight workflow still only runs on relevant Builder Draft
+  branch changes or manual dispatch. No periodic background job or public
+  GitHub Release has been created. GitHub Actions artifacts **remain
+  temporary and require another run while an unexpired candidate exists**;
+  they do not satisfy permanent public GPL source availability.
+
+**Release gate remains unchanged:** corresponding-source/legal review,
+public immutable binary+source+notice distribution, unauthenticated public
+URL/hash validation, approved app-lock promotion and final acceptance are
+still outstanding. Never interpret a refreshed Actions artifact as a
+published Release or authorisation to merge.
+
 ## Required explicit sign-offs before a public Release
 
 1. **Corresponding-source/licensing review:** verify applicable FFmpeg/x264 GPL terms and the actual source archive's completeness (including all scripts/patches needed for this WASM build), notices and upstream licenses. The automated source-*presence* check is not a legal opinion or proof of reproducible compilation.
