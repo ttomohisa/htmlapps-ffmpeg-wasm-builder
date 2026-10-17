@@ -41,10 +41,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Find the newest unexpired candidate, but NEVER trust its identity:
+          # every checked core ZIP, matching source and GPL notice still must
+          # pass the separately pinned hashes in the offline audit script.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.created_at,.id,.name,.expired] | @tsv' \
+            > /tmp/rc-review-artifacts.tsv
+          python3 - <<'PY'
+          from pathlib import Path
+          prefix = 'reviewed-video-reverse-v1.10.6-promotion-'
+          choices=[]
+          for line in Path('/tmp/rc-review-artifacts.tsv').read_text().splitlines():
+              fields=line.split('\t')
+              if len(fields) != 4:
+                  continue
+              created, id_text, name, expired = fields
+              if name.startswith(prefix) and expired.lower() == 'false':
+                  choices.append((created, int(id_text)))
+          if not choices:
+              raise SystemExit('No retained review artifact exists. Do NOT silently rebuild/replace audited WASM.')
+          selected=max(choices)[1]
+          Path('/tmp/rc-selected-artifact-id.txt').write_text(str(selected))
+          print('[REVIEW ONLY] Unexpired review source artifact selected:', selected)
+          PY
+          selected_id="$(cat /tmp/rc-selected-artifact-id.txt)"
           curl -fLsS --retry 3 --retry-delay 2 \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/12091513054/zip" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_id/zip" \
             -o /tmp/rc-preserved-review.zip
           test "$(wc -c </tmp/rc-preserved-review.zip)" -gt 70000000
           mkdir -p /tmp/rc-preserved-review
@@ -78,18 +102,15 @@ jobs:
           meta={
               'schemaVersion': 1,
               'status': 'review-only-not-published',
-              'sourceStageArtifactId': 12091513054,
+              'sourceStageArtifactId': int(Path('/tmp/rc-selected-artifact-id.txt').read_text()),
               'originalBuilderSourceCommit': '8e60da7cf9de644ce3f6cce9c007b17e6a385c53',
               'tagPublished': False,
               'artifactRetainedForReviewOnly': True
           }
           target=root/'REVIEW_RESTAGING_PROVENANCE.json'
-          if target.exists():
-              existing=json.loads(target.read_text())
-              if existing!=meta:
-                  raise ValueError('Previous restaging provenance differs; review required')
-          else:
-              target.write_text(json.dumps(meta,indent=2,sort_keys=True)+'\n')
+          # Only the restaging source pointer changes. All original checked
+          # payload bytes, the checksum list, notice and app lock remain exact.
+          target.write_text(json.dumps(meta,indent=2,sort_keys=True)+'\n')
           PY
           python3 scripts/verify-video-reverse-staged-promotion.py release-candidate
           cd release-candidate
@@ -178,8 +199,8 @@ jobs:
             echo '## Review-only Reverse Clip Builder candidate'
             echo '- Five byte-identical binary/source/BUILDINFO artifacts rechecked.'
             echo '- Proposed separate tag: `video-reverse-v1.10.6` (not created).'
-            echo '- Original ZIP/source SHA pins, GPL addendum and non-installable app lock verified from preserved staging artifact 12091513054.'
-            echo '- Original Actions artifact 11920042823 is NOT required for this review-stage refresh.'
+            echo '- Original ZIP/source SHA pins, GPL addendum and non-installable app lock rechecked from selected preserved review artifact.'
+            echo '- Original expiring Actions artifact 11920042823 is NOT required; selected source and its ID are verified in logs.'
             echo '- The proposal has intentionally unsupported kind/status; it cannot be used to activate a release.'
             echo '- Still required: legal/source review; owner approval; permanent GitHub Release; public SHA recheck; app release lock update; final ST/MT browser QA.'
             echo '- Do not merge/tag/publish from this workflow.'

@@ -164,8 +164,13 @@ def verify(directory):
     # a replacement for the immutable pins checked above.
     if (directory / OPTIONAL_RESTAGE_METADATA).is_file():
         restage = json.loads((directory / OPTIONAL_RESTAGE_METADATA).read_text())
-        require(restage.get("status") == "review-only-not-published" and
-                restage.get("sourceStageArtifactId") == 12091513054,
+        source_id = restage.get("sourceStageArtifactId")
+        require(restage.get("schemaVersion") == 1 and
+                restage.get("status") == "review-only-not-published" and
+                type(source_id) is int and source_id > 0 and
+                restage.get("originalBuilderSourceCommit") == stager.BUILDER_SOURCE_COMMIT and
+                restage.get("tagPublished") is False and
+                restage.get("artifactRetainedForReviewOnly") is True,
                 "Unexpected restaging provenance")
     print("PASS staged bytes, corresponding sources, GPL addendum and unapproved app lock")
     print("REVIEW ONLY: no tag, Release, GPL legal signoff or official app lock change")
