@@ -61,6 +61,18 @@ downloadable Release asset* and explicitly link it in proposed release
 notes, or approve a replacement independently rebuilt/reviewed
 distribution with the corrected notice inside its new binaries.
 
+## 2026-10-17 — ready-to-review app lock proposal generated (NOT activatable)
+
+The updated [promotion CI #39008016046](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39008016046) **SUCCESS** independently verified the same five unchanged Builder v1.10.6 ST/MT/source/BUILDINFO payloads and separate GPL notice. It generated **`REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json`** from the actual staged files and inner `ffmpeg.js`/`ffmpeg.wasm` hashes instead of copying proposed SHA values by hand.
+
+- New review-only Actions artifact: **12091513054**, expires **2026-11-16T05:55:36Z**. The previous stages remain historical audit evidence; this is the latest verified handoff package.
+- Generator: [`scripts/propose-video-reverse-app-lock.py`](../scripts/propose-video-reverse-app-lock.py). It validates staged bytes and returns a document containing `proposedLock` with correct Builder revision, proposed profile-specific tag, ST/MT binary ZIP hashes, corresponding-source SHA, GPL addendum SHA, browser wrapper SHA, and existing `pingpong`/`audio-mux` feature flags.
+- **The proposal intentionally uses `kind: review-only-proposed-github-release-st-mt` and `status: review-only-not-published`.** These values are not accepted by Reverse Clip's production importer. The manifest explicitly records `releasePublished: false`, `legalApprovalRecorded: false`, and `sourceBinaryReproductionEstablished: false`.
+- The app importer now additionally requires an explicit **`status: release-approved`** for the actual `kind: github-release-st-mt` path. The app's *current* `reverse-runtime.lock.json` remains the old experimental temporary-artifact configuration.
+- In Windows CI, actual PowerShell importer tests reject: (1) the staging-only kind, (2) a public-shaped kind with unapproved status, and (3) an approved-shaped record with an invalid GPL notice SHA. All three are rejected **before any network fetch**.
+
+**After an authorized permanent public Builder Release exists**, independently fetch and check every public asset and tag/source commit. *Only then* may the owner-approved candidate values be copied into the live app lock with `kind: github-release-st-mt` and `status: release-approved`, followed by ST/MT rebuild, file/HTTP hosted QA and final release acceptance. A generated proposal by itself never authorizes publication or a lock change.
+
 ## Required explicit sign-offs before a public Release
 
 1. **Corresponding-source/licensing review:** verify applicable FFmpeg/x264 GPL terms and the actual source archive's completeness (including all scripts/patches needed for this WASM build), notices and upstream licenses. The automated source-*presence* check is not a legal opinion or proof of reproducible compilation.
