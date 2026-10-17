@@ -8,6 +8,7 @@ on:
       - feat/video-reverse-poc
     paths:
       - "scripts/stage-video-reverse-promotion.py"
+      - "scripts/propose-video-reverse-app-lock.py"
       - "scripts/verify-video-reverse-review-bundle.py"
       - "docs/VIDEO_REVERSE_LICENSE_ADDENDUM.md"
       - "THIRD_PARTY_NOTICES.md"
@@ -30,7 +31,8 @@ jobs:
         run: |
           python3 -m py_compile \
             scripts/verify-video-reverse-review-bundle.py \
-            scripts/stage-video-reverse-promotion.py
+            scripts/stage-video-reverse-promotion.py \
+            scripts/propose-video-reverse-app-lock.py
       - name: Download exact originally audited review artifact
         shell: bash
         env:
@@ -97,6 +99,43 @@ jobs:
                   assert 'x264 linked into this profile: yes' in build
           print('PASS original ST/MT bytes unchanged + GPL addendum correctly discloses missing legacy video-reverse profile')
           PY
+      - name: Produce non-installable Reverse Clip Release-lock proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/propose-video-reverse-app-lock.py release-candidate \
+            --output release-candidate/REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('release-candidate')
+          candidate = json.loads((root/'REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json').read_text())
+          staged = json.loads((root/'VIDEO_REVERSE_PROMOTION_MANIFEST.json').read_text())
+          lock = candidate['proposedLock']
+          assert candidate['releasePublished'] is False
+          assert candidate['legalApprovalRecorded'] is False
+          assert candidate['sourceBinaryReproductionEstablished'] is False
+          assert lock['status']=='review-only-not-published'
+          assert lock['kind']=='review-only-proposed-github-release-st-mt'
+          assert lock['builderCommit']==staged['exactCompiledBuilderSourceCommit']
+          assert lock['builderTag']==staged['proposedDistinctReleaseTag']
+          assert lock['supplementalNoticeSha256']==staged['additionalNotice']['sha256']
+          assert lock['supplementalNoticeAsset']==staged['additionalNotice']['name']
+          original={a['name']:a['sha256'] for a in staged['assets']}
+          assert lock['correspondingSourceSha256']==original[lock['correspondingSourceAsset']]
+          for variant, entry in lock['variants'].items():
+              assert entry['releaseArchiveSha256']==original[entry['releaseAsset']]
+              assert entry['assets']['ffmpeg.wasm']!=entry['assets']['ffmpeg.js']
+          assert lock['variants']['single-thread']['assets']['ffmpeg.wasm'] != \
+                 lock['variants']['multi-thread']['assets']['ffmpeg.wasm']
+          print('[PASS] Actual corresponding-source, notice and both binary ZIP hashes map to non-activatable app lock')
+          PY
+          if python3 scripts/propose-video-reverse-app-lock.py release-candidate \
+             --output release-candidate/REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json; then
+            echo '::error::A review proposal must not overwrite previous evidence.'
+            exit 1
+          fi
+          echo '[PASS] Proposal overwrite protection'
       - name: Retain audited review candidate for 30 days (NOT permanent GPL distribution)
         uses: actions/upload-artifact@v7
         with:
@@ -111,7 +150,8 @@ jobs:
             echo '## Review-only Reverse Clip Builder candidate'
             echo '- Five byte-identical binary/source/BUILDINFO artifacts rechecked.'
             echo '- Proposed separate tag: `video-reverse-v1.10.6` (not created).'
-            echo '- Original SHA256SUMS, an independently hashed GPL video-reverse notice addendum and promotion manifest are attached as temporary CI artifact.'
+            echo '- Original SHA256SUMS, independently hashed GPL addendum and proposed app Release-lock metadata attached.'
+            echo '- The proposal has intentionally unsupported kind/status; it cannot be used to activate a release.'
             echo '- Still required: legal/source review; owner approval; permanent GitHub Release; public SHA recheck; app release lock update; final ST/MT browser QA.'
             echo '- Do not merge/tag/publish from this workflow.'
           } >> "$GITHUB_STEP_SUMMARY"
