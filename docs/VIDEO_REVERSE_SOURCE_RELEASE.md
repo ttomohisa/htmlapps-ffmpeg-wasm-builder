@@ -65,9 +65,11 @@ available to downstream users. Technical checks only:
   The sources' README lists the exact third-party upstream commits.
 
 **Conclusion: technical package/hash/source-presence audit PASS.**
-This does **not** establish legal source completeness, reproduced
-compilation from the sources, or permanent downloadable publication;
-these remain separate P0 tasks. No original media or user data was
+This does **not** establish legal source completeness, a usable full
+compilation/installation process, or permanent downloadable publication;
+those still require review before release. A bit-identical independent
+rebuild is optional technical assurance, not an automatic additional GPLv2
+Section 3 release condition. No reproduced build is claimed. No original media or user data was
 involved, and no release/tag/merge was performed.
 
 ## 2026-10-17 — independent repeatable archive verification (PASS; still NOT published)
