@@ -11,6 +11,7 @@ on:
       - "scripts/propose-video-reverse-app-lock.py"
       - "scripts/verify-video-reverse-review-bundle.py"
       - "scripts/verify-video-reverse-staged-promotion.py"
+      - "scripts/verify-video-reverse-compiled-source.py"
       - "docs/VIDEO_REVERSE_LICENSE_ADDENDUM.md"
       - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/stage-video-reverse-promotion.yml"
@@ -34,7 +35,8 @@ jobs:
             scripts/verify-video-reverse-review-bundle.py \
             scripts/stage-video-reverse-promotion.py \
             scripts/propose-video-reverse-app-lock.py \
-            scripts/verify-video-reverse-staged-promotion.py
+            scripts/verify-video-reverse-staged-promotion.py \
+            scripts/verify-video-reverse-compiled-source.py
       - name: Download preserved audited review stage (original artifact may expire)
         shell: bash
         env:
@@ -74,6 +76,9 @@ jobs:
           mkdir -p /tmp/rc-preserved-review
           unzip -q /tmp/rc-preserved-review.zip -d /tmp/rc-preserved-review
           python3 scripts/verify-video-reverse-staged-promotion.py /tmp/rc-preserved-review
+          # Validate real archived Builder build inputs against independent
+          # Git blob IDs from the exact compiled source commit (no rebuild).
+          python3 scripts/verify-video-reverse-compiled-source.py /tmp/rc-preserved-review
       - name: Ensure proposed profile-specific tag has NOT been published
         shell: bash
         env:
