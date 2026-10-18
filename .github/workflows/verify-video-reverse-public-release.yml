@@ -31,3 +31,30 @@ jobs:
             scripts/verify-video-reverse-public-release.py
       - name: Verify fail-closed release metadata and tag checks offline
         run: python3 -m unittest discover -s tests -p 'test_video_reverse_public_release.py' -v
+      - name: Validate Builder main reconciliation without WASM rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-release.sh
+          node --check runtime/browser-ffmpeg.js
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("scripts/prepare-release.sh").read_text()
+          marker = 'if [[ -z "${RELEASE_PROFILE_SELECTION:-}" ]]; then'
+          assert marker in script, "Normal release compatibility aliases not guarded"
+          aliases = script.split(marker, 1)[1].split("\nfi", 1)[0]
+          for name in (
+              "ffmpeg-wasm-video-compressor-single-thread",
+              "ffmpeg-wasm-video-compressor-v",
+              "ffmpeg-wasm-video-speed-changer-single-thread",
+              "ffmpeg-wasm-video-speed-changer-v",
+              "BUILDINFO-video-speed-changer-single-thread.txt",
+              "BUILDINFO-video-speed-changer.txt",
+          ):
+              assert name in aliases, f"Missing normal-release alias: {name}"
+          assert 'RELEASE_PROFILES=(video-reverse)' in script
+          assert "'- video-reverse (single-thread + multi-thread)'" in script
+          assert "legacy name aliases single-thread" in script
+          assert "video-reverse" not in Path("scripts/check-repository.ps1").read_text().splitlines()[0]
+          print("PASS Builder standard speed/compressor aliases and isolated video-reverse bundle")
+          PY
