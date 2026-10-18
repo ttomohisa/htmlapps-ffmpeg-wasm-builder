@@ -30,7 +30,7 @@ A new [offline archived-source verifier](../scripts/verify-video-reverse-compile
 
 [Actual retained-archive CI #39151222248](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39151222248) **PASS**: logs explicitly report `PASS 17 exact compiled-commit Builder recipe Git blob IDs` while restaging the unchanged ST/MT/source package. Updated review-only candidate **12145680508** expires **2026-11-17T17:48:11Z**. [Small independent six-test identity CI #39151202156](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39151202156) **PASS**. These results strengthen source-to-recipe identity evidence without recompiling binaries or attesting complete GPL corresponding source.
 
-**Still open:** full corresponding-source/licensing inspection, reproducible/toolchain compilation, Docker image digest availability, durable public distribution and owner sign-off. The stored artifact remains temporary.
+**Still open:** full corresponding-source/licensing inspection, verification that the supplied build scripts and required toolchain/dependencies are sufficiently usable, durable public distribution, and owner sign-off. A bit-identical recompilation or Docker image digest proof is useful extra assurance, but is not by itself an explicit GPLv2 Section 3 requirement. The stored artifact remains temporary.
 
 ## Technical evidence already verified
 
@@ -58,11 +58,13 @@ corresponding-source completeness or an independently reproduced build.
   control compilation and installation for both ST and MT. Check
   Builder build.sh, scripts/build-ffmpeg.sh, profile flags and
   the specialized video-reverse C/JS glue.
-- [ ] **Exact build provenance:** Confirm availability of the toolchain,
-  compiler flags, dependencies and build procedure. The repository records
-  the emscripten/emsdk:6.0.6 container tag, but a container image digest
-  has not been established in this review. A tagged image alone is
-  not evidence of a bit-identical reproducible build.
+- [ ] **Usable build instructions and provenance:** Confirm that the supplied
+  build scripts, dependency revisions, compiler flags and instructions are
+  sufficient to compile/install the corresponding ST/MT code with an
+  obtainable toolchain. The original recipe references
+  emscripten/emsdk:6.0.6 without a recorded image digest. Document that
+  limitation, but do **not** turn independent bit-for-bit reproduction
+  or an image digest into a new unconditional release blocker.
 - [ ] **Licensing/notice assessment:** Independently assess actual FFmpeg,
   x264 and Emscripten terms, GPL corresponding-source obligations,
   license files and whether the separate notice is sufficient.
@@ -76,6 +78,8 @@ corresponding-source completeness or an independently reproduced build.
   available for the applicable period. GitHub Actions artifacts expire.
 - [ ] **Owner publication approval:** Explicit approval of the exact tag,
   source commit, seven assets and Release notes is required before publish.
+
+**Scope of GPLv2 review:** Section 3 covers complete corresponding source, including the scripts used to control compilation and installation; it does not explicitly require a byte-identical independently reproduced binary. [GNU GPL v2 §3](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) and [FFmpeg legal guidance](https://www.ffmpeg.org/legal.html). This is an engineering prioritization, not a legal clearance. Any missing required inputs remain a blocker.
 
 ## Post-publication procedure — do not execute yet
 
@@ -95,13 +99,12 @@ corresponding-source completeness or an independently reproduced build.
 ## Review sign-offs — deliberately blank
 
 - Corresponding-source/license reviewer, date, decision:
-- Build provenance/reproduction reviewer, date, decision:
+- Build-instructions/toolchain availability reviewer, date, decision:
 - Owner release-naming and publication approval, date:
 - Public download/hash evidence report:
 - Reverse Clip final distribution QA and G3 decision:
 
-**State: source/legal review PENDING, reproducible build NOT ESTABLISHED,
-public Release NOT PUBLISHED, G3 NOT PASSED.**
+**State: source/legal review PENDING, usability of build inputs still to be signed off, public Release NOT PUBLISHED, G3 NOT PASSED.**
 
 See [publication handoff](VIDEO_REVERSE_PUBLICATION_HANDOFF.md),
 [source audit](VIDEO_REVERSE_SOURCE_RELEASE.md),
