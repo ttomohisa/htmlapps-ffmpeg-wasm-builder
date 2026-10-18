@@ -5,8 +5,11 @@ COMMIT=8e60da7cf9de644ce3f6cce9c007b17e6a385c53
 REPO=ttomohisa/htmlapps-ffmpeg-wasm-builder
 [[ "$GITHUB_REPOSITORY" == "$REPO" && "$GITHUB_REF" == "refs/heads/feat/video-reverse-poc" ]] || exit 1
 if gh release view "$TAG" >/dev/null 2>&1; then echo 'Already exists; refusing overwrite' >&2; exit 1; fi
-status="$(curl -sS -o /tmp/rc-tag.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/git/ref/tags/$TAG")"
-[[ "$status" == 404 ]] || { echo "Tag unavailable/not absent: HTTP $status" >&2; exit 1; }
+# Owner's tag must pre-exist and point exactly at the ORIGINAL compiled source.
+# The Actions GITHUB_TOKEN has contents:write, but GitHub rejects creating a
+# tag on a historical commit containing workflow file differences (403).
+tag_sha="$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.sha')"
+[[ "$tag_sha" == "$COMMIT" ]] || { echo "Tag $TAG must point to compiled Builder source $COMMIT" >&2; exit 1; }
 curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/actions/artifacts/12145680508/zip" -o /tmp/rc.zip
 [[ $(wc -c </tmp/rc.zip) -gt 70000000 ]]
 mkdir -p /tmp/rc-stage /tmp/rc-public
@@ -29,7 +32,7 @@ assert len(list(root.iterdir()))==7
 for name,pin in pins.items(): assert hashlib.sha256((root/name).read_bytes()).hexdigest()==pin, name
 print('PASS original asset checksums')
 PY
-gh release create "$TAG" /tmp/rc-public/* --draft --latest=false --target "$COMMIT" --title 'FFmpeg WASM video-reverse ST + MT (Builder v1.10.6)' --notes-file docs/VIDEO_REVERSE_GITHUB_RELEASE_NOTES.md
+gh release create "$TAG" /tmp/rc-public/* --draft --latest=false --verify-tag --title 'FFmpeg WASM video-reverse ST + MT (Builder v1.10.6)' --notes-file docs/VIDEO_REVERSE_GITHUB_RELEASE_NOTES.md
 [[ "$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq .object.sha)" == "$COMMIT" ]] || { echo 'Incorrect source tag' >&2; exit 1; }
 gh release view "$TAG" --json assets,isDraft >/tmp/rc-draft.json
 python3 - <<'PY'
