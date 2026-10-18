@@ -191,3 +191,23 @@ recompilation, public tag, GitHub Release or app runtime modification.
 - The regular Builder `.github/workflows/release.yml` remains unchanged and still does **not** publish this experimental profile.
 
 No automatic action will create a tag, GitHub Release or merge.
+
+## 2026-10-19 — unauthenticated public Release audit gate prepared (not published)
+
+New read-only script: [public Release verifier](../scripts/verify-video-reverse-public-release.py). It is deliberately separate from staging; **never** uses an Actions token, creates a Release or tag, or activates the app lock.
+
+- Queries the public Release by fixed proposed tag `video-reverse-v1.10.6`, rejecting draft/prerelease, absent or unexpected assets and unexpected direct-download URLs.
+- Resolves lightweight or annotated Git tags, requiring exact compiled source commit `8e60da7cf9de644ce3f6cce9c007b17e6a385c53`.
+- Requires **exactly seven** assets: two ST/MT binary ZIPs, corresponding source TAR, two BUILDINFO files, original SHA256SUMS and GPL/x264 notice addendum; downloads without authentication.
+- Pins the three original whole ST/MT/source digests and addendum independently of the Release, then checks the five original checksums, internal FFmpeg JS/WASM/loader SHA-256, ZIP notices and separate BUILDINFO bytes.
+- Optionally emits local evidence JSON with public asset links, SHA-256, byte counts, release tag and source commit; explicitly marks legal approval, reproduced build and consumer promotion as false.
+
+Run the **offline rejection tests**, without network, rebuilt WASM or large binary downloads:
+
+    python3 -m unittest discover -s tests -p 'test_video_reverse_public_release.py' -v
+
+After separately authorized publication **only**, verify real anonymous downloads:
+
+    python3 scripts/verify-video-reverse-public-release.py --evidence-json video-reverse-public-release-proof.json
+
+The script fails closed until the public Release exists, and reports when GitHub does not attest immutable publication. It cannot establish legal corresponding-source completeness, independent source-to-binary reproduction or durable retention. Those, plus owner publication decision, separate final app ST/MT QA and G3 acceptance, remain P0 gates. No Release/tag/merge/app repin is authorized by these audit additions.
