@@ -9,6 +9,8 @@ on:
     paths:
       - "scripts/verify-video-reverse-public-release.py"
       - "tests/test_video_reverse_public_release.py"
+      - "scripts/verify-video-reverse-compiled-source.py"
+      - "tests/test_video_reverse_compiled_source.py"
       - ".github/workflows/verify-video-reverse-public-release.yml"
   workflow_dispatch:
 
@@ -28,9 +30,12 @@ jobs:
             scripts/verify-video-reverse-review-bundle.py \
             scripts/stage-video-reverse-promotion.py \
             scripts/verify-video-reverse-staged-promotion.py \
-            scripts/verify-video-reverse-public-release.py
+            scripts/verify-video-reverse-public-release.py \
+            scripts/verify-video-reverse-compiled-source.py
       - name: Verify fail-closed release metadata and tag checks offline
         run: python3 -m unittest discover -s tests -p 'test_video_reverse_public_release.py' -v
+      - name: Test compiled-source identity checks without full archive
+        run: python3 -m unittest discover -s tests -p 'test_video_reverse_compiled_source.py' -v
       - name: Validate Builder main reconciliation without WASM rebuild
         shell: bash
         run: |
