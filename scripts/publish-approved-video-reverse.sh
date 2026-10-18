@@ -8,7 +8,13 @@ if gh release view "$TAG" >/dev/null 2>&1; then echo 'Already exists; refusing o
 # Owner's tag must pre-exist and point exactly at the ORIGINAL compiled source.
 # The Actions GITHUB_TOKEN has contents:write, but GitHub rejects creating a
 # tag on a historical commit containing workflow file differences (403).
+tag_type="$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.type')"
 tag_sha="$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.sha')"
+if [[ "$tag_type" == "tag" ]]; then
+  tag_sha="$(gh api "repos/$REPO/git/tags/$tag_sha" --jq '.object.sha')"
+elif [[ "$tag_type" != "commit" ]]; then
+  echo "Unsupported original Builder source tag type: $tag_type" >&2; exit 1
+fi
 [[ "$tag_sha" == "$COMMIT" ]] || { echo "Tag $TAG must point to compiled Builder source $COMMIT" >&2; exit 1; }
 curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/actions/artifacts/12145680508/zip" -o /tmp/rc.zip
 [[ $(wc -c </tmp/rc.zip) -gt 70000000 ]]
