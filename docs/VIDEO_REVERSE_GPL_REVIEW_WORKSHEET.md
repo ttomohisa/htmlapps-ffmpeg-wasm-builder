@@ -18,15 +18,24 @@ Release, merge, or Reverse Clip runtime promotion.
 | Corresponding-source TAR SHA-256 | 9ceb47a5f46fb3484f8b1f6a8fa37e6d0dc4144aa09d78939ac9d23e8ab5ce92 |
 | Separate GPL/x264 notice SHA-256 | e011d66e3451dbf5ffa5f67f26636749664a69d285a3cfc665a71e36635e15f3 |
 | Original binary metadata label | Release tag: v1.10.6 |
-| Latest review-only Actions artifact | 12092676288 (expires 2026-11-16 06:34:08 UTC) |
-| Latest review-only CI | [#39010376409](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39010376409) — PASS |
+| Latest review-only Actions artifact | 12145680508 (expires 2026-11-17 17:48:11 UTC) |
+| Latest review-only CI | [#39151222248](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39151222248) — PASS |
 
 The already-existing Builder-wide v1.10.6 Release does not ship video-reverse.
 There is no profile Release at the proposed tag.
 
+## 2026-10-19 — exact compiled-source recipe audit
+
+A new [offline archived-source verifier](../scripts/verify-video-reverse-compiled-source.py) compares the actual bytes of **17 selected Builder recipe files** inside the original SHA-256-pinned corresponding-source tarball with independent Git blob IDs read from the exact compiled Builder commit `8e60da7cf9de644ce3f6cce9c007b17e6a385c53`. The set includes the Dockerfile, build scripts, version pins, FFmpeg/x264 build helpers, video-reverse C and pthread JS runner, profile flags, shared browser loader and original notices. The verifier rejects missing, duplicated, truncated, symlink or modified selected inputs and checks declared FFmpeg/x264/Emscripten revisions.
+
+[Actual retained-archive CI #39151222248](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39151222248) **PASS**: logs explicitly report `PASS 17 exact compiled-commit Builder recipe Git blob IDs` while restaging the unchanged ST/MT/source package. Updated review-only candidate **12145680508** expires **2026-11-17T17:48:11Z**. [Small independent six-test identity CI #39151202156](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/39151202156) **PASS**. These results strengthen source-to-recipe identity evidence without recompiling binaries or attesting complete GPL corresponding source.
+
+**Still open:** full corresponding-source/licensing inspection, reproducible/toolchain compilation, Docker image digest availability, durable public distribution and owner sign-off. The stored artifact remains temporary.
+
 ## Technical evidence already verified
 
 - [x] Independently pinned full ST and MT binary ZIP digests.
+- [x] Independently compared 17 critical archived Builder source files against their exact compiled Git commit blobs on the real retained artifact.
 - [x] Original core JS/WASM, shared browser loader and threading manifests
   match the Reverse Clip runtime lock.
 - [x] The 26,555-entry source bundle includes FFmpeg, x264, Emscripten,
