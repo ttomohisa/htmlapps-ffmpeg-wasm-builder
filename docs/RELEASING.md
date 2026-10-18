@@ -107,3 +107,26 @@ A new **manual**, non-publishing `Prepare video-reverse source-complete bundle` 
 The ordinary tagged `release.yml` workflow, its existing profile list and Video Compressor compatibility alias are unchanged when `RELEASE_PROFILE_SELECTION` is unset. Unsupported override values fail closed.
 
 **This is preparation, not authorization to ship.** The manual workflow only uploads a temporary review artifact. It does *not* create a GitHub tag, publish a GitHub Release, merge a PR or update a consumer lock. An authorized immutable, versioned public release and a separate license/corresponding-source review are still required before replacing Reverse Clip's expiring Actions artifact. Do not reuse a public version/tag or alter assets in place. Reverse Clip's Browser Kitty integration is explicitly deferred until the app is finished.
+
+## Video Contact Sheet 1.10.5 release gate
+
+The bounded high-resolution change prepares Builder 1.10.5 and Contact Sheet
+runner 1.6.0. It is separate from the experimental Reverse Clip branch. After
+the owner merges the reviewed PR and all nine matrix jobs on that exact `main`
+commit succeed, an owner-approved annotated `v1.10.5` tag triggers the existing
+release workflow. Merging alone does not publish a release. Do not tag a branch
+that includes unreviewed experimental profiles.
+
+Before updating a consumer, verify `ffmpeg-wasm-video-contact-sheet-v1.10.5.zip`,
+its `BUILDINFO-video-contact-sheet.txt`, `SHA256SUMS.txt` and the matching
+`ffmpeg-wasm-sources-v1.10.5.tar.gz`. Check the manifest's 960 px / 25,000,000 px
+limits, applicable notices and exact source revisions, then pin the asset and
+source hashes in the consuming app. Temporary CI artifacts are development
+evidence, not a released dependency. This feature PR does not create a tag,
+publish a release or merge itself.
+
+## Video Speed Changer 1.10.6 compatibility
+
+The tag workflow builds and real-browser smoke-tests both Video Speed Changer variants. Publish `ffmpeg-wasm-video-speed-changer-single-thread-v1.10.6.zip`, `ffmpeg-wasm-video-speed-changer-multi-thread-v1.10.6.zip`, and their `BUILDINFO-video-speed-changer-{single-thread,multi-thread}.txt` files. The legacy `ffmpeg-wasm-video-speed-changer-v1.10.6.zip` and `BUILDINFO-video-speed-changer.txt` are byte-identical ST aliases. All files receive SHA-256 entries, and both variants share the same exact corresponding-source bundle and GPL notices.
+
+No tag or release is created by the feature PR. Release only after owner approval and successful real Docker builds/browser smoke for both variants; the consuming app must pin the genuine released bytes and their hashes.

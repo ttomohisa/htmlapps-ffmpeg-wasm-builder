@@ -72,6 +72,8 @@ jobs:
             release/ffmpeg-wasm-video-compressor-single-thread-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-compressor-multi-thread-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-speed-changer-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-video-speed-changer-single-thread-v${BUILDER_VERSION}.zip \
+            release/ffmpeg-wasm-video-speed-changer-multi-thread-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-lossless-video-cutter-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-media-inspector-v${BUILDER_VERSION}.zip \
             release/ffmpeg-wasm-video-audio-extractor-v${BUILDER_VERSION}.zip \
@@ -85,6 +87,8 @@ jobs:
             release/BUILDINFO-video-compressor-single-thread.txt \
             release/BUILDINFO-video-compressor-multi-thread.txt \
             release/BUILDINFO-video-speed-changer.txt \
+            release/BUILDINFO-video-speed-changer-single-thread.txt \
+            release/BUILDINFO-video-speed-changer-multi-thread.txt \
             release/BUILDINFO-lossless-video-cutter.txt \
             release/BUILDINFO-media-inspector.txt \
             release/BUILDINFO-video-audio-extractor.txt \

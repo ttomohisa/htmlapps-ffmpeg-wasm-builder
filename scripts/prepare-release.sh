@@ -378,6 +378,10 @@ if [[ -z "${RELEASE_PROFILE_SELECTION:-}" ]]; then
      "$RELEASE_DIR/ffmpeg-wasm-video-compressor-v${BUILDER_VERSION}.zip"
   cp "$RELEASE_DIR/BUILDINFO-video-compressor-single-thread.txt" \
      "$RELEASE_DIR/BUILDINFO-video-compressor.txt"
+  cp "$RELEASE_DIR/ffmpeg-wasm-video-speed-changer-single-thread-v${BUILDER_VERSION}.zip" \
+     "$RELEASE_DIR/ffmpeg-wasm-video-speed-changer-v${BUILDER_VERSION}.zip"
+  cp "$RELEASE_DIR/BUILDINFO-video-speed-changer-single-thread.txt" \
+     "$RELEASE_DIR/BUILDINFO-video-speed-changer.txt"
 fi
 
 SOURCE_ROOT="$WORK_DIR/source-bundle"
@@ -422,7 +426,7 @@ $(if [[ "${RELEASE_PROFILE_SELECTION:-}" == "video-reverse" ]]; then
 else
   printf '%s\n' \
     '- video-compressor' \
-    '- video-speed-changer' \
+    '- video-speed-changer (single-thread + multi-thread; legacy name aliases single-thread)' \
     '- lossless-video-cutter' \
     '- media-inspector' \
     '- video-audio-extractor' \

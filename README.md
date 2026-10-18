@@ -396,6 +396,8 @@ check-updates.bat
 
 ## Video Speed Changer
 
+Builder 1.10.6では `video-speed-changer` もST/MTを明示的に生成します。`dist/video-speed-changer/single-thread/` は従来のfile://対応を維持し、`multi-thread/` はSharedArrayBufferとcross-origin isolation（COOP/COEP）が必要です。MTはpool 8 / video decoder 2 / encoder 4 / lookahead 1、audioとfilter graphは1 threadです。従来のRelease ZIP名はSTの同一バイトaliasとして維持します。詳細は[profileのthreading仕様](profiles/video-speed-changer/README.md#threading-variants-builder-1106)を参照してください。
+
 `video-speed-changer` provides a compact H.264/AAC speed-change core using public libav APIs, WORKERFS input, `setpts` for video timing, chained `atempo` for pitch-preserving audio, `asetrate` + `aresample` for pitch-shifting audio, and optional audio removal. Browser apps should call `BrowserFFmpeg.videoSpeedChangerArgs(...)`.
 
 

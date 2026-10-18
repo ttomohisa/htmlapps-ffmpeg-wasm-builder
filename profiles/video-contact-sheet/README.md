@@ -29,7 +29,7 @@ HEVC decoding here is performed by FFmpeg in Wasm; it does not depend on whether
 --output /contact-sheet.ppm
 --metadata-output /contact-sheet.json   # optional
 --count 12                              # 12 / 24 / 48
---thumb-size 320                        # 96..640
+--thumb-size 320                        # 96..960
 --columns 4                             # optional
 --partition-count 2                     # optional: 1 (default) or 2
 --partition-index 0                     # optional: 0 (default) or 1, less than partition count
@@ -64,6 +64,25 @@ Partition support does not establish any particular speedup; measure on the targ
 ## Browser/memory behavior
 
 Input uses Emscripten WORKERFS, so a large browser `File`/`Blob` is read on demand instead of being copied wholesale into MEMFS. The output PPM is held in MEMFS and copied back to the app. With the default 320 px thumbnail long edge, even 48 thumbnails remain practical for a single-HTML app.
+
+Runner 1.6.0 accepts integer thumbnail long edges from 96 through 960 px; the
+default remains 320 px. The manifest advertises `minThumbSize: 96`,
+`maxThumbSize: 960`, and `maxSheetPixels: 25000000`. The complete PPM grid,
+including empty last-row slots and unowned partition cells, is rejected above
+25,000,000 pixels before the output buffer is allocated. This retains every
+previously valid grid at 640 px or below. Existing allocation-overflow and
+allocation-failure checks remain in place.
+
+For a PC-oriented high-resolution preset, consumers can use 960/840/660 px for
+12/24/48 samples respectively. A 24-sample, 16:9 source with the default six
+columns produces 5040×1892 px (840×473 px cells, rounded to whole pixels).
+The largest square preset is 48×660² = 20,908,800 pixels. Use one Worker for these
+large outputs: the limit applies per extraction, not to aggregate browser
+memory. A 25-million-pixel RGB buffer alone is 75 MB, before the MEMFS output,
+transfer copies, decoder, Wasm heap, Canvas and PNG/JPEG export buffers.
+This is a bounded option for capable devices, not a guarantee that it fits all
+browsers or phones. Defaults, sampling and the single-thread/file:// contract
+are unchanged; no pthread variant is added.
 
 ## Licensing
 

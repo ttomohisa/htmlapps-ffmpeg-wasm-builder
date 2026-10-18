@@ -46,6 +46,7 @@ $extractorRunner = Require-File "runners/video-audio-extractor.c"
 $contactRunner = Require-File "runners/video-contact-sheet.c"
 $contactPartitionHeader = Require-File "runners/video-contact-sheet-partition.h"
 $contactPartitionTests = Require-File "tests/contact-sheet-partition.test.cjs"
+$contactResolutionTests = Require-File "tests/contact-sheet-resolution.test.cjs"
 $videoProfile = Require-File "profiles/video-compressor/ffmpeg.flags"
 $videoProfileEnv = Require-File "profiles/video-compressor/profile.env"
 $speedProfile = Require-File "profiles/video-speed-changer/ffmpeg.flags"
@@ -269,7 +270,7 @@ foreach ($forbiddenApi in @("avcodec_send_packet", "avcodec_receive_frame", "avc
 
 $contactRunnerText = [IO.File]::ReadAllText($contactRunner)
 if ($contactRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Contact Sheet runner must not call pthread APIs." }
-Require-Text $contactRunner '#define RUNNER_VERSION "1.5.0"' "Video Contact Sheet runner version must remain 1.5.0 when unchanged."
+Require-Text $contactRunner '#define RUNNER_VERSION "1.6.0"' "Video Contact Sheet must identify its bounded high-resolution contract."
 Require-Text $contactRunner "av_seek_frame" "Video Contact Sheet must seek between sample points."
 Require-Text $contactRunner "avcodec_send_packet" "Video Contact Sheet must decode selected frames."
 Require-Text $contactRunner "avcodec_receive_frame" "Video Contact Sheet decode loop is missing."
@@ -289,7 +290,7 @@ Require-Text $speedRunner "--rate" "Video Speed Changer runner must expose a bou
 Require-Text $runtime "videoSpeedChangerArgs" "Browser runtime must expose Video Speed Changer helper."
 $speedRunnerText = [IO.File]::ReadAllText($speedRunner)
 if ($speedRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Speed Changer runner must not call pthread APIs." }
-Require-Text $speedRunner '#define RUNNER_VERSION "1.8.0"' "Video Speed Changer runner remains 1.8.0; Builder v1.9.x keeps the Video Speed Changer runner unchanged while evolving the Filter Builder runtime architecture."
+Require-Text $speedRunner '#define RUNNER_VERSION "1.10.6"' "Video Speed Changer runner must identify its explicit ST/MT contract."
 Require-Text $speedRunner "setpts=PTS/" "Video Speed Changer runner must adjust video timestamps."
 Require-Text $speedRunner "stream->enc_ctx->time_base = input_stream->time_base" "Video Speed Changer must preserve a high-resolution input time base when available."
 Require-Text $speedRunner "frame_rate = av_mul_q(source_frame_rate, speed_q)" "Video Speed Changer must scale encoder frame rate with playback rate to avoid duplicate PTS."
@@ -707,7 +708,7 @@ if ($node) {
     & node --check $timingScript
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $timingScript" }
   }
-  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") $contactPartitionTests
+  & node --test $timingReaderTests $filterTimingOracleTests (Join-Path $Root "tests/compressor-threading.test.cjs") (Join-Path $Root "tests/speed-changer-threading.test.cjs") $contactPartitionTests $contactResolutionTests
   if ($LASTEXITCODE -ne 0) { throw "Timing reader tests failed." }
   & node --check $runtime
   if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: runtime/browser-ffmpeg.js" }

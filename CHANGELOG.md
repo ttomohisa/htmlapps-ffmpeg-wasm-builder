@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.6 - unreleased
+
+- Add explicit Video Speed Changer single-thread and multi-thread cores with the existing public-libav speed/audio/inspect API.
+- Bound the MT pthread pool to 8, video decoding to 2, H.264 encoding to 4, and x264 lookahead to 1; audio and filter graphs stay single-threaded.
+- Observe actual shared memory and nested pthread workers in both browser smoke variants; cancel a live initialized core and verify successful retry, all preset rates and audio modes.
+- Publish explicit ST/MT ZIPs and BUILDINFO while retaining the legacy ZIP/BUILDINFO as byte-identical ST aliases, with unchanged GPL notices and matching corresponding-source packaging.
+
 ## 1.10.6 — experimental video-reverse pthread lifetime cleanup (development; not released)
 
 - Fix a second issue exposed by real isolated Chrome ST/MT regression:

@@ -25,7 +25,7 @@ let min = 255, max = 0;
 for (let i = 0; i < ppm.pixels.length; i += 97) { min = Math.min(min, ppm.pixels[i]); max = Math.max(max, ppm.pixels[i]); }
 if (max <= min) throw new Error("Contact sheet appears to contain no image variation");
 if (meta.schemaVersion !== 1) throw new Error("Unexpected metadata schema: " + meta.schemaVersion);
-if (meta.runnerVersion !== "1.5.0") throw new Error("Unexpected runner version: " + meta.runnerVersion);
+if (meta.runnerVersion !== "1.6.0") throw new Error("Unexpected runner version: " + meta.runnerVersion);
 if (meta.count !== 12 || meta.columns !== 4 || meta.rows !== 3) throw new Error("Unexpected grid metadata");
 if (meta.cellWidth !== 160 || meta.cellHeight !== 90) throw new Error("Unexpected cell dimensions");
 if (meta.sheetWidth !== 640 || meta.sheetHeight !== 270) throw new Error("Unexpected sheet dimensions");
@@ -36,8 +36,8 @@ for (let i = 1; i < meta.samples.length; i++) {
 }
 // The same global targets must produce byte-identical output in either mode.
 const sharedInput = new Blob([input], { type: "video/mp4" });
-async function extract(count, partitionIndex) {
-  const options = { input:"/workerfs/input.mp4", output:ppmPath, metadataOutput:jsonPath, count, thumbSize:160 };
+async function extract(count, partitionIndex, thumbSize = 160) {
+  const options = { input:"/workerfs/input.mp4", output:ppmPath, metadataOutput:jsonPath, count, thumbSize };
   if (partitionIndex !== undefined) Object.assign(options, {partitionCount:2, partitionIndex});
   const progress = [];
   const output = await runner.run({
@@ -90,5 +90,50 @@ for (const count of [12,24,48]) {
     if (merged[byte] !== full.ppm.pixels[byte]) throw new Error("Merged RGB byte differs at " + byte + " for count " + count);
   append("Partition parity: " + count + " samples, every RGB byte and timestamp matched");
 }
+// Exercise real high-resolution pixels rather than accepting the arguments only.
+for (const [count,thumbSize,width,height] of [[12,640,2560,1080],[12,960,3840,1620],[24,840,5040,1892],[48,660,5280,2226]]) {
+  const high = await extract(count, undefined, thumbSize);
+  if (high.ppm.width !== width || high.ppm.height !== height || high.ppm.pixels.length !== width*height*3)
+    throw new Error("High-resolution PPM geometry differs for " + count + "/" + thumbSize);
+  if (high.meta.cellWidth !== thumbSize || high.meta.cellHeight !== Math.round(thumbSize*9/16) ||
+      high.meta.sheetWidth !== width || high.meta.sheetHeight !== height || high.meta.samples.length !== count)
+    throw new Error("High-resolution metadata geometry differs");
+  const low = await extract(count);
+  if (JSON.stringify(high.meta.samples) !== JSON.stringify(low.meta.samples))
+    throw new Error("Resolution changed global sample timestamps");
+  // All requested cells must contain actual decoded image content.
+  for (let index=0;index<count;index++) {
+    const x=(index%high.meta.columns)*high.meta.cellWidth;
+    const y=Math.floor(index/high.meta.columns)*high.meta.cellHeight;
+    let minimum=255,maximum=0;
+    for (let row=0;row<high.meta.cellHeight;row+=17) {
+      for (let col=0;col<high.meta.cellWidth;col+=17) {
+        const offset=((y+row)*width+x+col)*3;
+        for (let channel=0;channel<3;channel++) {
+          minimum=Math.min(minimum,high.ppm.pixels[offset+channel]);
+          maximum=Math.max(maximum,high.ppm.pixels[offset+channel]);
+        }
+      }
+    }
+    if (maximum-minimum < 10) throw new Error("High-resolution tile lacks decoded content: " + index);
+  }
+  append("Resolution: " + count + " x " + thumbSize + " = " + width + "x" + height + ", pixels and timestamps verified");
+}
+// Bypass the JS helper to prove the C boundary and allocation guard are effective.
+for (const [label,extra,expected] of [
+  ["thumbnail limit",["--thumb-size","961"],/--thumb-size must be between 96 and 960/],
+  ["sheet budget",["--count","48","--columns","15","--thumb-size","960"],/25000000 pixel limit/]
+]) {
+  let rejected=false;
+  try {
+    await runner.run({files:[{name:"/workerfs/input.mp4",data:sharedInput,workerfs:true}],outputs:[ppmPath],
+      args:["--input","/workerfs/input.mp4","--output",ppmPath,...extra]});
+  } catch (error) {
+    if (!expected.test(error.message)) throw error;
+    rejected=true;
+  }
+  if (!rejected) throw new Error("Runner accepted an invalid " + label);
+  append("Rejected " + label + " before output allocation");
+}
 runner.dispose();
-pass("samples=" + meta.samples.length + "_size=" + ppm.width + "x" + ppm.height + "_partition_parity=12-24-48");
+pass("samples=" + meta.samples.length + "_size=" + ppm.width + "x" + ppm.height + "_partition_parity=12-24-48_ultra=960-840-660");
