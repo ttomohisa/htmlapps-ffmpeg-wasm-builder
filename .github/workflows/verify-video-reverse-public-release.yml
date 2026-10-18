@@ -1,0 +1,33 @@
+name: Verify Reverse Clip public Release audit gate (offline)
+
+# Lightweight structural/negative tests only. Does NOT query or publish a Release,
+# download large binaries, rebuild WASM, or refresh retention artifacts.
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - "scripts/verify-video-reverse-public-release.py"
+      - "tests/test_video_reverse_public_release.py"
+      - ".github/workflows/verify-video-reverse-public-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-gate:
+    name: Local public Release gate regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compile audit scripts
+        run: |
+          python3 -m py_compile \
+            scripts/verify-video-reverse-review-bundle.py \
+            scripts/stage-video-reverse-promotion.py \
+            scripts/verify-video-reverse-staged-promotion.py \
+            scripts/verify-video-reverse-public-release.py
+      - name: Verify fail-closed release metadata and tag checks offline
+        run: python3 -m unittest discover -s tests -p 'test_video_reverse_public_release.py' -v
