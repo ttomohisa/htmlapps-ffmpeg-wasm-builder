@@ -211,3 +211,5 @@ After separately authorized publication **only**, verify real anonymous download
     python3 scripts/verify-video-reverse-public-release.py --evidence-json video-reverse-public-release-proof.json
 
 The script fails closed until the public Release exists, and reports when GitHub does not attest immutable publication. It cannot establish legal corresponding-source completeness, independent source-to-binary reproduction or durable retention. Those, plus owner publication decision, separate final app ST/MT QA and G3 acceptance, remain P0 gates. No Release/tag/merge/app repin is authorized by these audit additions.
+
+For the remaining corresponding-source/licensing and build-provenance decisions, use the [separate review worksheet](VIDEO_REVERSE_GPL_REVIEW_WORKSHEET.md). It records verified byte/source-presence evidence and intentionally leaves reviewer and owner sign-offs blank. Do not interpret the worksheet as legal clearance.
