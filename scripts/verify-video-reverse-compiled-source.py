@@ -46,7 +46,7 @@ def require(condition, error):
 
 def git_blob_sha(data):
     """Hash a regular source file as Git hashed it in the fixed source commit."""
-    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
 
 
 def verify_member(member, data, expected):
