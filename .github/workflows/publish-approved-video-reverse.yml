@@ -1,6 +1,7 @@
 name: Publish owner-approved video-reverse WASM profile Release
 
 # One-shot publish, permitted by owner 2026-10-19.
+# Owner-created exact-source tag verified 2026-10-19; trigger publication.
 # Builds no WASM, merges no PR, changes no original bytes.
 on:
   push:
