@@ -1,0 +1,212 @@
+name: Stage pinned Reverse Clip source + binary release review (no publication)
+
+# This intentionally prepares only a temporary, audited promotion package.
+# NEVER creates a GitHub tag or Release; requires owner/legal review first.
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - "scripts/stage-video-reverse-promotion.py"
+      - "scripts/propose-video-reverse-app-lock.py"
+      - "scripts/verify-video-reverse-review-bundle.py"
+      - "scripts/verify-video-reverse-staged-promotion.py"
+      - "scripts/verify-video-reverse-compiled-source.py"
+      - "docs/VIDEO_REVERSE_LICENSE_ADDENDUM.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - ".github/workflows/stage-video-reverse-promotion.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  stage:
+    name: Byte-identical promotion candidate, review ONLY
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Builder Draft branch
+        uses: actions/checkout@v7
+      - name: Validate Python syntax (no FFmpeg rebuild)
+        run: |
+          python3 -m py_compile \
+            scripts/verify-video-reverse-review-bundle.py \
+            scripts/stage-video-reverse-promotion.py \
+            scripts/propose-video-reverse-app-lock.py \
+            scripts/verify-video-reverse-staged-promotion.py \
+            scripts/verify-video-reverse-compiled-source.py
+      - name: Download preserved audited review stage (original artifact may expire)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Find the newest unexpired candidate, but NEVER trust its identity:
+          # every checked core ZIP, matching source and GPL notice still must
+          # pass the separately pinned hashes in the offline audit script.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.created_at,.id,.name,.expired] | @tsv' \
+            > /tmp/rc-review-artifacts.tsv
+          python3 - <<'PY'
+          from pathlib import Path
+          prefix = 'reviewed-video-reverse-v1.10.6-promotion-'
+          choices=[]
+          for line in Path('/tmp/rc-review-artifacts.tsv').read_text().splitlines():
+              fields=line.split('\t')
+              if len(fields) != 4:
+                  continue
+              created, id_text, name, expired = fields
+              if name.startswith(prefix) and expired.lower() == 'false':
+                  choices.append((created, int(id_text)))
+          if not choices:
+              raise SystemExit('No retained review artifact exists. Do NOT silently rebuild/replace audited WASM.')
+          selected=max(choices)[1]
+          Path('/tmp/rc-selected-artifact-id.txt').write_text(str(selected))
+          print('[REVIEW ONLY] Unexpired review source artifact selected:', selected)
+          PY
+          selected_id="$(cat /tmp/rc-selected-artifact-id.txt)"
+          curl -fLsS --retry 3 --retry-delay 2 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_id/zip" \
+            -o /tmp/rc-preserved-review.zip
+          test "$(wc -c </tmp/rc-preserved-review.zip)" -gt 70000000
+          mkdir -p /tmp/rc-preserved-review
+          unzip -q /tmp/rc-preserved-review.zip -d /tmp/rc-preserved-review
+          python3 scripts/verify-video-reverse-staged-promotion.py /tmp/rc-preserved-review
+          # Validate real archived Builder build inputs against independent
+          # Git blob IDs from the exact compiled source commit (no rebuild).
+          python3 scripts/verify-video-reverse-compiled-source.py /tmp/rc-preserved-review
+      - name: Ensure proposed profile-specific tag has NOT been published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          http_code="$(curl -sSL -o /tmp/rc-tag-check.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/tags/video-reverse-v1.10.6")"
+          if [[ "$http_code" != 404 ]]; then
+            echo "::error::Expected unused profile-specific tag, got HTTP $http_code"
+            exit 1
+          fi
+          echo 'No existing video-reverse-v1.10.6 tag; publication still requires owner approval.'
+      - name: Independently re-stage exact preserved binary, source, GPL notice and lock proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-candidate
+          cp -a /tmp/rc-preserved-review/. release-candidate/
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('release-candidate')
+          meta={
+              'schemaVersion': 1,
+              'status': 'review-only-not-published',
+              'sourceStageArtifactId': int(Path('/tmp/rc-selected-artifact-id.txt').read_text()),
+              'originalBuilderSourceCommit': '8e60da7cf9de644ce3f6cce9c007b17e6a385c53',
+              'tagPublished': False,
+              'artifactRetainedForReviewOnly': True
+          }
+          target=root/'REVIEW_RESTAGING_PROVENANCE.json'
+          # Only the restaging source pointer changes. All original checked
+          # payload bytes, the checksum list, notice and app lock remain exact.
+          target.write_text(json.dumps(meta,indent=2,sort_keys=True)+'\n')
+          PY
+          python3 scripts/verify-video-reverse-staged-promotion.py release-candidate
+          cd release-candidate
+          sha256sum -c SHA256SUMS.txt
+          python3 - <<'PY'
+          import hashlib, io, json, pathlib, zipfile
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'VIDEO_REVERSE_PROMOTION_MANIFEST.json').read_text())
+          assert manifest['publicReleaseApproved'] is False
+          assert manifest['gplLegalReviewApproved'] is False
+          assert manifest['reproducedCompilation'] is False
+          assert manifest['proposedDistinctReleaseTag']=='video-reverse-v1.10.6'
+          assert len(manifest['assets']) == 5
+          for asset in manifest['assets']:
+              path=root/asset['name']
+              assert path.stat().st_size == asset['bytes']
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == asset['sha256']
+          notice=manifest['additionalNotice']
+          notice_path=root/notice['name']
+          assert notice_path.name=='VIDEO_REVERSE_LICENSE_ADDENDUM.md'
+          assert notice_path.stat().st_size==notice['bytes']
+          assert hashlib.sha256(notice_path.read_bytes()).hexdigest()==notice['sha256']
+          assert 'GPL-2.0-or-later' in notice_path.read_text()
+          assert 'video-reverse' in notice_path.read_text()
+          assert 'x264' in notice_path.read_text()
+          for variant in ('single-thread','multi-thread'):
+              binary = root/f'ffmpeg-wasm-video-reverse-{variant}-v1.10.6.zip'
+              with zipfile.ZipFile(binary) as z:
+                  legacy=z.read('THIRD_PARTY_NOTICES.md').decode()
+                  build=z.read('BUILDINFO.txt').decode()
+                  assert 'video-reverse' not in legacy, 'Existing binary notice unexpectedly changed'
+                  assert 'Profile: video-reverse' in build
+                  assert 'Generated core license: GPL-2.0-or-later' in build
+                  assert 'x264 linked into this profile: yes' in build
+          print('PASS original ST/MT bytes unchanged + GPL addendum correctly discloses missing legacy video-reverse profile')
+          PY
+      - name: Produce non-installable Reverse Clip Release-lock proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The original proposal was generated from immutable audited bytes.
+          # This rerun must be identical. Do NOT activate a release status.
+          python3 scripts/verify-video-reverse-staged-promotion.py release-candidate
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('release-candidate')
+          candidate = json.loads((root/'REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json').read_text())
+          staged = json.loads((root/'VIDEO_REVERSE_PROMOTION_MANIFEST.json').read_text())
+          lock = candidate['proposedLock']
+          assert candidate['releasePublished'] is False
+          assert candidate['legalApprovalRecorded'] is False
+          assert candidate['sourceBinaryReproductionEstablished'] is False
+          assert lock['status']=='review-only-not-published'
+          assert lock['kind']=='review-only-proposed-github-release-st-mt'
+          assert lock['builderCommit']==staged['exactCompiledBuilderSourceCommit']
+          assert lock['builderTag']==staged['proposedDistinctReleaseTag']
+          assert lock['supplementalNoticeSha256']==staged['additionalNotice']['sha256']
+          assert lock['supplementalNoticeAsset']==staged['additionalNotice']['name']
+          original={a['name']:a['sha256'] for a in staged['assets']}
+          assert lock['correspondingSourceSha256']==original[lock['correspondingSourceAsset']]
+          for variant, entry in lock['variants'].items():
+              assert entry['releaseArchiveSha256']==original[entry['releaseAsset']]
+              assert entry['assets']['ffmpeg.wasm']!=entry['assets']['ffmpeg.js']
+          assert lock['variants']['single-thread']['assets']['ffmpeg.wasm'] != \
+                 lock['variants']['multi-thread']['assets']['ffmpeg.wasm']
+          print('[PASS] Actual corresponding-source, notice and both binary ZIP hashes map to non-activatable app lock')
+          PY
+          if python3 scripts/propose-video-reverse-app-lock.py release-candidate \
+             --output release-candidate/REVERSE_CLIP_RELEASE_LOCK_PROPOSAL.json; then
+            echo '::error::A review proposal must not overwrite previous evidence.'
+            exit 1
+          fi
+          echo '[PASS] Proposal overwrite protection'
+      - name: Retain audited review candidate for 30 days (NOT permanent GPL distribution)
+        uses: actions/upload-artifact@v7
+        with:
+          name: reviewed-video-reverse-v1.10.6-promotion-${{ github.sha }}
+          path: release-candidate/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Summarize publication blockers
+        shell: bash
+        run: |
+          {
+            echo '## Review-only Reverse Clip Builder candidate'
+            echo '- Five byte-identical binary/source/BUILDINFO artifacts rechecked.'
+            echo '- Proposed separate tag: `video-reverse-v1.10.6` (not created).'
+            echo '- Original ZIP/source SHA pins, GPL addendum and non-installable app lock rechecked from selected preserved review artifact.'
+            echo '- Original expiring Actions artifact 11920042823 is NOT required; selected source and its ID are verified in logs.'
+            echo '- The proposal has intentionally unsupported kind/status; it cannot be used to activate a release.'
+            echo '- Still required: legal/source review; owner approval; permanent GitHub Release; public SHA recheck; app release lock update; final ST/MT browser QA.'
+            echo '- Do not merge/tag/publish from this workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"

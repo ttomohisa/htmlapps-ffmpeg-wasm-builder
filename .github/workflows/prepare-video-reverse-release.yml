@@ -1,0 +1,148 @@
+name: Prepare pinned 1.10.6 video-reverse GPL review bundle
+
+# Source-complete candidate created in run #38617100332.
+# This workflow is MANUAL and produces review artifacts only: no tag,
+# GitHub Release, merge, or publication. The pinned binary may expire;
+# set reuse_verified_wasm=false for an explicitly approved expensive rebuild.
+# Retain review assets longer than seven days so the owner can inspect them.
+on:
+  workflow_dispatch:
+    inputs:
+      reuse_verified_wasm:
+        description: 'Reuse 1.10.6 ST/MT artifact (expires Oct 21); disable to rebuild'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout exact Builder source used for pinned ST/MT WASM
+        uses: actions/checkout@v7
+        with:
+          ref: 8e60da7cf9de644ce3f6cce9c007b17e6a385c53
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        if: ${{ !inputs.reuse_verified_wasm }}
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up Chrome
+        if: ${{ !inputs.reuse_verified_wasm }}
+        id: chrome
+        uses: browser-actions/setup-chrome@v2.2.0
+
+      - name: Validate source and release script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-release.sh
+          test -s profiles/video-reverse/profile.env
+          test -s profiles/video-reverse/ffmpeg.flags
+          test -s runners/video-reverse.c
+          test -s runners/video-reverse-join.inc
+
+      - name: Check Builder source
+        shell: pwsh
+        run: ./scripts/check-repository.ps1
+
+      - name: Rebuild and browser-smoke ST/MT from exact pinned source
+        if: ${{ !inputs.reuse_verified_wasm }}
+        shell: bash
+        env:
+          FFMPEG_WASM_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          chmod +x ./build.sh ./scripts/*.sh
+          ./build.sh video-reverse
+
+      - name: Download real ST/MT browser-smoke artifact (temporary)
+        if: ${{ inputs.reuse_verified_wasm }}
+        uses: actions/download-artifact@v4
+        with:
+          repository: ttomohisa/htmlapps-ffmpeg-wasm-builder
+          run-id: 38603383794
+          name: experimental-video-reverse-wasm-8e60da7cf9de644ce3f6cce9c007b17e6a385c53
+          github-token: ${{ github.token }}
+          path: dist/video-reverse
+
+      - name: Fail closed unless source, threading and all four WASM assets match reviewed lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 8e60da7cf9de644ce3f6cce9c007b17e6a385c53
+          printf '%s  %s\n' \
+            4a85934acca9afb09ec90be83958002040d100674fee7c7903e5a59ed1d8a74c dist/video-reverse/single-thread/ffmpeg.js \
+            b12598c46d9e98f4f46f5c510476261b9d226ae0de01dc8bd8859d9eeacb108b dist/video-reverse/single-thread/ffmpeg.wasm \
+            0f41f937b6535d92159bfafbe063735286e8c693475c4ede856f0df7e8168fa4 dist/video-reverse/multi-thread/ffmpeg.js \
+            8a9e45ce28d06d9dfde734d41d9af022d1158798b4967bb1e05ee41c20cd193c dist/video-reverse/multi-thread/ffmpeg.wasm \
+            | sha256sum -c -
+          printf '%s  %s\n' \
+            32edec91e98e93ef10496a4daaed7e42cabf33ab705df4ca287376ab96cf1ce4 runtime/browser-ffmpeg.js \
+            | sha256sum -c -
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for variant in ('single-thread', 'multi-thread'):
+              directory=Path('dist/video-reverse')/variant
+              meta=json.loads((directory/'manifest.json').read_text())
+              assert meta['profile']=='video-reverse'
+              assert meta['builderVersion']=='1.10.6'
+              run=meta['runtime']
+              assert run['threading']==variant
+              assert bool(run['requiresCrossOriginIsolation']) == (variant=='multi-thread')
+              assert bool(run['requiresSharedArrayBuffer']) == (variant=='multi-thread')
+              for path in ('ffmpeg.js','ffmpeg.wasm','ffmpeg.js.gz','ffmpeg.wasm.gz','smoke-test.html'):
+                  assert (directory/path).stat().st_size>0, (variant,path)
+              print('Verified',variant,'original ST/MT smoke files')
+          PY
+
+      - name: Prepare matching binary and GPL corresponding-source archives
+        shell: bash
+        env:
+          RELEASE_PROFILE_SELECTION: video-reverse
+        run: |
+          set -euo pipefail
+          source ./versions.env
+          chmod +x ./scripts/prepare-release.sh
+          ./scripts/prepare-release.sh "v${BUILDER_VERSION}"
+
+      - name: Validate all prepared files and notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          source ./versions.env
+          cd release
+          sha256sum -c SHA256SUMS.txt
+          test -s "ffmpeg-wasm-video-reverse-single-thread-v${BUILDER_VERSION}.zip"
+          test -s "ffmpeg-wasm-video-reverse-multi-thread-v${BUILDER_VERSION}.zip"
+          test -s "ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz"
+          test -s BUILDINFO-video-reverse-single-thread.txt
+          test -s BUILDINFO-video-reverse-multi-thread.txt
+          for name in single-thread multi-thread; do
+            zip="ffmpeg-wasm-video-reverse-${name}-v${BUILDER_VERSION}.zip"
+            unzip -Z1 "${zip}" > "list-${name}.txt"
+            for expected in ffmpeg.wasm ffmpeg.js browser-ffmpeg.js \
+                LICENSES/x264-COPYING LICENSES/FFmpeg-COPYING.GPLv2 \
+                LICENSES/Emscripten-LICENSE BUILDINFO.txt; do
+              grep -Fx "${expected}" "list-${name}.txt"
+            done
+            rm "list-${name}.txt"
+          done
+          tar -tzf "ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz" > source-list.txt
+          grep -Fx 'source-bundle/README.txt' source-list.txt
+          rm source-list.txt
+          echo "Source-complete candidate verified. No GitHub Release created."
+
+      - name: Upload review-only release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: video-reverse-source-complete-candidate-${{ github.sha }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 30

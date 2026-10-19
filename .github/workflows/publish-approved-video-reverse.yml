@@ -1,0 +1,34 @@
+name: Publish owner-approved video-reverse WASM profile Release
+
+# One-shot publish, permitted by owner 2026-10-19.
+# Owner-created exact-source tag verified 2026-10-19; trigger publication.
+# Builds no WASM, merges no PR, changes no original bytes.
+on:
+  push:
+    branches: [feat/video-reverse-poc]
+    paths:
+      - ".github/workflows/publish-approved-video-reverse.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: video-reverse-profile-release-v1.10.6
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'ttomohisa/htmlapps-ffmpeg-wasm-builder' && github.ref == 'refs/heads/feat/video-reverse-poc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate script syntax before publishing
+        shell: bash
+        run: bash -n scripts/publish-approved-video-reverse.sh
+      - name: Publish seven exact pinned assets, verify public source and integrity
+        shell: bash
+        run: bash scripts/publish-approved-video-reverse.sh

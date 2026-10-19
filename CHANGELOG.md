@@ -7,12 +7,49 @@
 - Observe actual shared memory and nested pthread workers in both browser smoke variants; cancel a live initialized core and verify successful retry, all preset rates and audio modes.
 - Publish explicit ST/MT ZIPs and BUILDINFO while retaining the legacy ZIP/BUILDINFO as byte-identical ST aliases, with unchanged GPL notices and matching corresponding-source packaging.
 
-## 1.10.5 - 2026-10-13
+## 1.10.6 — experimental video-reverse pthread lifetime cleanup (development; not released)
 
-- Expand Video Contact Sheet thumbnail long edges to 960 px, preserving the 320 px default and all existing <=640 px grid configurations.
-- Bound each complete RGB sheet to 25,000,000 pixels before allocation; recommend one Worker for PC-oriented 960/840/660 px presets at 12/24/48 samples.
-- Advertise the limits and update the Contact Sheet runner to 1.6.0, with native boundary/geometry tests and real-browser high-resolution extraction checks.
-- Keep dependency pins, release profile set, ST/MT behavior and corresponding-source packaging unchanged.
+- Fix a second issue exposed by real isolated Chrome ST/MT regression:
+  after the 1.10.5 sparse-frame timeline fix, an MT conversion of a
+  39-frame/37.806s H.264 High input at source 1920×1080 failed in
+  chunk 3/5 with `WebAssembly.Memory(): could not allocate memory`
+  when the same browser session had converted many prior clips.
+- The video-reverse MT core now exposes an Emscripten post-JS
+  `shutdownPthreadWorkers` entry point scoped inside the MODULARIZE
+  factory; the embedded browser wrapper calls it **after reading
+  MP4 bytes and before notifying its parent that a chunk succeeded**.
+  Also attempt teardown on decoder errors. Retain all frame and quality
+  guards. No worker/network API changes for ST.
+- The post-JS hook is compiled only for the `video-reverse` MT
+  profile, not other FFmpeg profiles; this build also changes the common
+  browser wrapper and will require a fresh SHA-pinned importer.
+- **Do not claim memory-leak resolution until the rebuilt MT browser
+  performs the 10-second HD sparse-VFR regression and repeat runs.**
+  Existing permanent GPL source/release gates remain open.
+
+
+## 1.10.5 — experimental video-reverse sparse-VFR frame-window fix (development; not released)
+
+- For video-reverse chunks supplied with an exact frame count, first normalize
+  the original source presentation timeline to the target FPS; only then select
+  the requested `start_frame:end_frame` window and reverse those bounded
+  frames. This fixes cutting a sparse WebCodecs frame span before FPS sampling.
+  A source with ~39 encoded frames across 37.806 seconds can legitimately
+  represent many seconds of static content; pre-trimming to a partial window
+  may lose the preceding frame and produce fewer than the expected output.
+- Decode only through the requested segment end (+existing demux reorder guard),
+  while retaining the existing 2-second / 120-frame and 96MiB *estimated
+  reverse-buffer* limits and independent strict output-frame-count verification.
+  Unframed legacy video-reverse usage retains its original processing path.
+- Native FFmpeg exact-filter trials of a 39-sample, 37.806s, H.264 High
+  VFR sample with long per-sample durations yielded the correct 30-frame
+  first segment, 28-frame nonzero-start return segment, and 30-frame
+  subsequent static interval. Actual rebuilt ST/MT browser results must be
+  checked before treating this experimental change as fixed on devices.
+- Existing 1.10.4 binary/source review artifact is **not** a versioned
+  release for this 1.10.5 code. A fresh rebuild, app binary pins, regression
+  suite and matching GPL corresponding sources are mandatory.
+
 
 ## 1.10.4 - 2026-10-11
 

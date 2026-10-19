@@ -10,6 +10,25 @@ The repository does not vendor FFmpeg, x264, libwebp, LAME, or Emscripten source
 
 `runners/video-compressor.c` and `runners/video-speed-changer.c` preserve the MIT notice for FFmpeg's `doc/examples/transcode.c`-derived structure. The speed changer uses public libavfilter/libavformat/libavcodec APIs with `setpts` and chained `atempo`. `runners/lossless-video-cutter.c` uses the public remuxing pattern and public libav APIs; it does not decode or encode media. `runners/media-inspector.c` uses public libavformat/libavcodec/libavutil inspection APIs and emits a structured JSON report without decoding frames. `runners/video-audio-extractor.c` uses public libavformat/libavcodec APIs to inventory/copy one selected track and to transcode supported audio to AAC/M4A, PCM16/WAV, or MP3. `runners/video-contact-sheet.c` uses public libavformat/libavcodec/libswscale APIs to seek/decode selected frames and write an RGB PPM without linking an image encoder. `runners/video-to-animation-common.inc` uses public libavformat/libavcodec/libavfilter APIs for trim/fps/rotation/scale; the GIF profile performs `palettegen` then `paletteuse`, while the WebP profile uses FFmpeg's `libwebp_anim` wrapper. These browser input paths use Emscripten WORKERFS so File/Blob data can be read from a Worker without first copying the entire input into MEMFS.
 
+## video-reverse (Reverse Clip)
+
+The dedicated `video-reverse` profile links GPL-enabled FFmpeg with x264.
+Both its single-thread and multi-thread WebAssembly variants are
+**GPL-2.0-or-later**, not MIT or LGPL. The multi-thread variant also
+uses Emscripten pthread support. FFmpeg/x264 upstream license texts
+accompany the compiled binary ZIP, and exact corresponding sources,
+Builder recipe and other applicable notices must accompany any
+authorized public distribution.
+
+The original audited Builder **1.10.6** binary ZIPs predate this explicit
+profile note; those exact bytes are preserved without repackaging, and
+the separate [video-reverse supplemental license notice](docs/VIDEO_REVERSE_LICENSE_ADDENDUM.md)
+must accompany any proposed profile-specific publication. The existing
+Builder-wide `v1.10.6` Release does **not** include this profile.
+See the [publication handoff](docs/VIDEO_REVERSE_PUBLICATION_HANDOFF.md).
+For a future newly compiled version, rebuild and review new binary
+checksums before replacing the original in-ZIP notice.
+
 ## x264
 
 x264 is pinned in `versions.env` because the `video-compressor`, `video-speed-changer`, and `ffmpeg-filter-builder` profiles link it. The `lossless-video-cutter`, `media-inspector`, `video-contact-sheet`, `video-to-gif`, and `video-to-webp` profiles set `PROFILE_USE_X264=0`; x264 is not linked into those generated Wasm cores.

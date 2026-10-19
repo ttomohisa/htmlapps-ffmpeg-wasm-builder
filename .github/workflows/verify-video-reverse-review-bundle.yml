@@ -1,0 +1,39 @@
+name: Independently verify pinned Reverse Clip GPL review archive
+
+# One small integrity check; no Docker, WASM rebuild, tag, release, or publish.
+# Existing artifact expires 2026-10-21; the test cannot claim permanence.
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - scripts/verify-video-reverse-review-bundle.py
+      - .github/workflows/verify-video-reverse-review-bundle.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - name: Python syntax check
+        run: python3 -m py_compile scripts/verify-video-reverse-review-bundle.py
+      - name: Download original review candidate ZIP bytes without rebuilding
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --retry-delay 2 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/11920042823/zip" \
+            -o /tmp/video-reverse-review.zip
+          test "$(wc -c < /tmp/video-reverse-review.zip)" -gt 70000000
+      - name: Independently verify original ZIP, inner binaries, manifest and source presence
+        run: python3 scripts/verify-video-reverse-review-bundle.py /tmp/video-reverse-review.zip

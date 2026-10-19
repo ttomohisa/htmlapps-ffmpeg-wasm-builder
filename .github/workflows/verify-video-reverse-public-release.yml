@@ -1,0 +1,65 @@
+name: Verify Reverse Clip public Release audit gate (offline)
+
+# Lightweight structural/negative tests only. Does NOT query or publish a Release,
+# download large binaries, rebuild WASM, or refresh retention artifacts.
+on:
+  push:
+    branches:
+      - feat/video-reverse-poc
+    paths:
+      - "scripts/verify-video-reverse-public-release.py"
+      - "tests/test_video_reverse_public_release.py"
+      - "scripts/verify-video-reverse-compiled-source.py"
+      - "tests/test_video_reverse_compiled_source.py"
+      - ".github/workflows/verify-video-reverse-public-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-gate:
+    name: Local public Release gate regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compile audit scripts
+        run: |
+          python3 -m py_compile \
+            scripts/verify-video-reverse-review-bundle.py \
+            scripts/stage-video-reverse-promotion.py \
+            scripts/verify-video-reverse-staged-promotion.py \
+            scripts/verify-video-reverse-public-release.py \
+            scripts/verify-video-reverse-compiled-source.py
+      - name: Verify fail-closed release metadata and tag checks offline
+        run: python3 -m unittest discover -s tests -p 'test_video_reverse_public_release.py' -v
+      - name: Test compiled-source identity checks without full archive
+        run: python3 -m unittest discover -s tests -p 'test_video_reverse_compiled_source.py' -v
+      - name: Validate Builder main reconciliation without WASM rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-release.sh
+          node --check runtime/browser-ffmpeg.js
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("scripts/prepare-release.sh").read_text()
+          marker = 'if [[ -z "${RELEASE_PROFILE_SELECTION:-}" ]]; then'
+          assert marker in script, "Normal release compatibility aliases not guarded"
+          aliases = script.split(marker, 1)[1].split("\nfi", 1)[0]
+          for name in (
+              "ffmpeg-wasm-video-compressor-single-thread",
+              "ffmpeg-wasm-video-compressor-v",
+              "ffmpeg-wasm-video-speed-changer-single-thread",
+              "ffmpeg-wasm-video-speed-changer-v",
+              "BUILDINFO-video-speed-changer-single-thread.txt",
+              "BUILDINFO-video-speed-changer.txt",
+          ):
+              assert name in aliases, f"Missing normal-release alias: {name}"
+          assert 'RELEASE_PROFILES=(video-reverse)' in script
+          assert "'- video-reverse (single-thread + multi-thread)'" in script
+          assert "legacy name aliases single-thread" in script
+          assert "video-reverse" not in Path("scripts/check-repository.ps1").read_text().splitlines()[0]
+          print("PASS Builder standard speed/compressor aliases and isolated video-reverse bundle")
+          PY

@@ -1,5 +1,19 @@
 # Releasing
 
+> The experimental Reverse Clip `video-reverse` profile has a separate,
+> **unpublished** ST/MT corresponding-source distribution gate. See
+> [Video Reverse release review](VIDEO_REVERSE_RELEASE_REVIEW.md). Do not
+> mistake an expiring Actions binary for a permanent, source-complete GPL
+> release. Both Draft PRs remain unmerged.
+
+The video-reverse **review-only corresponding-source archive**
+was successfully generated in [Builder Actions #38494235345](https://github.com/ttomohisa/htmlapps-ffmpeg-wasm-builder/actions/runs/38494235345),
+artifact `11862943520` (expires 2026-10-21). Its checksums, ST/MT
+binary hashes, license notices and pinned source trees were verified;
+**no public immutable Release, approval or tagged release occurred**.
+The temporary one-time branch-push trigger was removed immediately
+after success. See [the exact candidate audit](VIDEO_REVERSE_RELEASE_REVIEW.md).
+
 `main` builds and smoke-tests every profile listed in `.github/workflows/build.yml`. Do not tag a release until all matrix jobs are green.
 
 v1.10.2 is a patch release for the merged Filter Builder frame-duration and half-open preview repair in both ST and MT runtimes. It keeps the v1.10.1 profile set and dependency pins.
@@ -76,6 +90,23 @@ A local Builder checkout remains useful for development, but production/release 
 ## Video Compressor 1.10.3 compatibility
 
 Publish both `ffmpeg-wasm-video-compressor-single-thread-v1.10.3.zip` and `ffmpeg-wasm-video-compressor-multi-thread-v1.10.3.zip`, with their BUILDINFO files. The packer retains `ffmpeg-wasm-video-compressor-v1.10.3.zip` as a byte-identical ST alias so old consuming apps can update their version pin without changing asset names. Check both variants' actual browser smoke results before an owner-approved `git tag -a v1.10.3` release. No tag or release is created by the feature PR.
+
+
+## Review-only Reverse Clip video-reverse ST/MT packaging
+
+The existing `video-reverse` profile is experimental and ships separate ST and MT WebAssembly binaries. Before moving Reverse Clip off an expiring Actions runtime, use the existing `prepare-release.sh` machinery to build corresponding-source archives and attach the relevant FFmpeg/x264/Emscripten license notices.
+
+A new **manual**, non-publishing `Prepare video-reverse source-complete bundle` workflow (`.github/workflows/prepare-video-reverse-release.yml`) builds and browser-tests just `video-reverse`, then uses `RELEASE_PROFILE_SELECTION=video-reverse ./scripts/prepare-release.sh "v$BUILDER_VERSION"`. This selects the dedicated profile only and generates:
+
+- `ffmpeg-wasm-video-reverse-single-thread-v<VERSION>.zip`
+- `ffmpeg-wasm-video-reverse-multi-thread-v<VERSION>.zip`
+- `BUILDINFO-video-reverse-single-thread.txt` and `BUILDINFO-video-reverse-multi-thread.txt`
+- `ffmpeg-wasm-sources-v<VERSION>.tar.gz` containing the matching Builder recipe and pinned third-party source trees
+- `SHA256SUMS.txt`
+
+The ordinary tagged `release.yml` workflow, its existing profile list and Video Compressor compatibility alias are unchanged when `RELEASE_PROFILE_SELECTION` is unset. Unsupported override values fail closed.
+
+**This is preparation, not authorization to ship.** The manual workflow only uploads a temporary review artifact. It does *not* create a GitHub tag, publish a GitHub Release, merge a PR or update a consumer lock. An authorized immutable, versioned public release and a separate license/corresponding-source review are still required before replacing Reverse Clip's expiring Actions artifact. Do not reuse a public version/tag or alter assets in place. Reverse Clip's Browser Kitty integration is explicitly deferred until the app is finished.
 
 ## Video Contact Sheet 1.10.5 release gate
 
