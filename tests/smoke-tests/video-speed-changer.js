@@ -82,6 +82,7 @@ const runRate = async (rate, options = {}) => {
   const mode = noAudio ? "drop-audio" : (preservePitch ? "preserve-pitch" : "shift-pitch");
   const label = `${rate}x/${mode}${options.labelSuffix ? "/" + options.labelSuffix : ""}`;
   let lastProgress = 0;
+  const progressUpdates = [];
   append("case=" + label + " start");
   let result;
   threadLogs.length = 0;
@@ -101,6 +102,7 @@ const runRate = async (rate, options = {}) => {
       }),
       onProgress: (value) => {
         lastProgress = value;
+        progressUpdates.push(value);
         append("case=" + label + " progress=" + value.toFixed(3));
       },
       onLog: entry => {
@@ -128,7 +130,7 @@ const runRate = async (rate, options = {}) => {
   const duration = await durationOf(output);
   assertDuration(sourceDuration, rate, duration, label);
   append("case=" + label + " duration=" + duration.toFixed(3));
-  return { bytes: output, duration, label };
+  return { bytes: output, duration, label, progressUpdates };
 };
 
 append("case=inspect start");
@@ -182,6 +184,9 @@ if (speedEdgeFixture) {
       preservePitch,
       labelSuffix: "offset-sar-" + mode
     });
+    if (!converted.progressUpdates.length || converted.progressUpdates[0] >= 0.5) {
+      throw new Error(mode + " progress completed too early for a video starting at 7 seconds");
+    }
     const resultInfo = await inspectFixture(new File([converted.bytes], "converted.mp4", { type: "video/mp4" }), mode);
     const outputOffset = resultInfo.audio?.startSeconds - resultInfo.video?.startSeconds;
     const expectedOffset = sourceOffset / 2;

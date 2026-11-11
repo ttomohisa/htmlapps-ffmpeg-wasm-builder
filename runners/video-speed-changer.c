@@ -1132,8 +1132,12 @@ static void report_progress(RunnerContext *ctx, const AVPacket *packet)
         return;
 
     stream = ctx->ifmt_ctx->streams[packet->stream_index];
-    progress = (double)av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q) /
-               (double)ctx->duration_us;
+    // Progress is relative to media start, not the absolute timestamp origin.
+    // MPEG-TS and externally trimmed MP4 can begin seconds into the timeline.
+    int64_t elapsed_us = av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q);
+    if (ctx->ifmt_ctx->start_time != AV_NOPTS_VALUE)
+        elapsed_us -= ctx->ifmt_ctx->start_time;
+    progress = (double)elapsed_us / (double)ctx->duration_us;
     progress = FFMIN(1.0, FFMAX(0.0, progress));
     if (progress - ctx->last_progress >= 0.005) {
         printf(PROGRESS_PREFIX " %.6f\n", progress);
