@@ -114,3 +114,30 @@ test('release publishes explicit speed ZIPs and BUILDINFO alongside legacy ST al
   assert.ok(packer.includes('ffmpeg-wasm-sources-v${BUILDER_VERSION}.tar.gz'));
   assert.ok(packer.includes('"$X264_SRC/COPYING" "$binary_dir/LICENSES/x264-COPYING"'));
 });
+
+test('fast audio inspection, synchronized A/V offsets and SAR are implemented', () => {
+  const c = read('runners/video-speed-changer.c');
+  const runtime = read('runtime/browser-ffmpeg.js');
+  const flags = read('profiles/video-speed-changer/ffmpeg.flags');
+  assert.ok(c.includes('if (!options->inspect_fast)'));
+  assert.ok(c.includes('setpts=(PTS-'));
+  assert.ok(c.includes('asetpts=(PTS-'));
+  assert.ok(c.includes('const double pts_rate = ctx->options.preserve_pitch'));
+  assert.ok(c.includes('av_guess_sample_aspect_ratio'));
+  assert.ok(c.includes('av_inv_q(source_sar)'));
+  assert.ok(c.includes('setsar=%d/%d'));
+  assert.ok(runtime.includes('options.fast === true'));
+  assert.ok(runtime.includes('args.push("--inspect-fast")'));
+  assert.ok(flags.includes('--enable-filter=asetpts'));
+});
+
+test('all MT profiles export the pthread cleanup hook before returning output', () => {
+  const build = read('scripts/build-ffmpeg.sh');
+  const generic = read('runners/pthread-shutdown.post.js');
+  const runtime = read('runtime/browser-ffmpeg.js');
+  assert.ok(build.includes('if [[ "$THREADING_MODE" == "multi-thread" ]]'));
+  assert.ok(build.includes('runners/pthread-shutdown.post.js'));
+  assert.ok(build.includes('post_js_flags=(--post-js "$pthread_cleanup_post_js")'));
+  assert.ok(generic.includes('PThread.terminateAllThreads()'));
+  assert.ok(runtime.includes('core.shutdownPthreadWorkers()'));
+});

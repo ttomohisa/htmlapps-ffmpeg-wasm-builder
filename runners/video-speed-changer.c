@@ -56,7 +56,7 @@
 #include <libavutil/rational.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.10.6"
+#define RUNNER_VERSION "1.10.7"
 
 #ifndef FFMPEG_WASM_PTHREADS
 #define FFMPEG_WASM_PTHREADS 0
@@ -86,6 +86,7 @@ typedef struct RunnerOptions {
     double fps;
     int no_audio;
     int preserve_pitch;
+    int inspect_fast;
     int allow_upscale;
     int faststart;
     double playback_rate;
@@ -151,6 +152,7 @@ static void print_usage(const char *program)
         "  --pitch-shift          Change pitch together with playback speed\n"
         "  --no-faststart         Do not move MP4 metadata to the front\n"
         "  --inspect-output PATH  Measure source stream information and write JSON\n"
+        "  --inspect-fast         Read stream metadata without scanning every packet\n"
         "  --version              Print runner/FFmpeg version\n"
         "  --help                 Show this help\n",
         RUNNER_VERSION, program, program);
@@ -207,6 +209,10 @@ static int parse_options(int argc, char **argv, RunnerOptions *options)
         if (!strcmp(arg, "--version")) {
             printf("ffmpeg-wasm-runner %s / FFmpeg %s\n", RUNNER_VERSION, av_version_info());
             return 1;
+        }
+        if (!strcmp(arg, "--inspect-fast")) {
+            options->inspect_fast = 1;
+            continue;
         }
         if (!strcmp(arg, "--no-audio")) {
             options->no_audio = 1;
@@ -265,6 +271,10 @@ invalid:
 
     if (!options->input_path || (!options->output_path && !options->inspect_output_path)) {
         fprintf(stderr, "--input and either --output or --inspect-output are required.\n");
+        return -1;
+    }
+    if (options->inspect_fast && !options->inspect_output_path) {
+        fprintf(stderr, "--inspect-fast requires --inspect-output.\n");
         return -1;
     }
     if (options->output_path && options->inspect_output_path) {
@@ -517,6 +527,7 @@ static int setup_video_output(RunnerContext *ctx)
     int width;
     int height;
     char crf_text[16];
+    AVRational source_sar;
 
     if (!encoder) {
         av_log(NULL, AV_LOG_ERROR, "%s encoder is not available in this WASM build\n", encoder_name);
@@ -566,7 +577,16 @@ static int setup_video_output(RunnerContext *ctx)
         stream->enc_ctx->time_base = input_stream->time_base;
     else
         stream->enc_ctx->time_base = av_inv_q(frame_rate);
-    stream->enc_ctx->sample_aspect_ratio = (AVRational){1, 1};
+    // Preserve the display aspect ratio of non-square-pixel sources.
+    // Rotating by 90/270 degrees exchanges the pixel axes and the SAR.
+    source_sar = av_guess_sample_aspect_ratio(ctx->ifmt_ctx, input_stream, NULL);
+    if (source_sar.num <= 0 || source_sar.den <= 0)
+        source_sar = stream->dec_ctx->sample_aspect_ratio;
+    if (source_sar.num <= 0 || source_sar.den <= 0)
+        source_sar = (AVRational){1, 1};
+    if (rotation_swaps_dimensions(stream))
+        source_sar = av_inv_q(source_sar);
+    stream->enc_ctx->sample_aspect_ratio = source_sar;
     stream->enc_ctx->gop_size = FFMAX(12, (int)av_q2d(frame_rate) * 2);
     stream->enc_ctx->max_b_frames = use_vp9 ? 0 : 2;
     stream->enc_ctx->thread_count = FFMPEG_WASM_PTHREADS ? FFMPEG_WASM_ENCODER_THREAD_COUNT : 1;
@@ -917,14 +937,18 @@ static int init_filters(RunnerContext *ctx)
     char video_filter[768] = {0};
     char part[256];
     char audio_filter[512] = {0};
+    // Normalize audio and video against the same source-container origin.
+    const double origin = ctx->ifmt_ctx->start_time != AV_NOPTS_VALUE
+        ? ctx->ifmt_ctx->start_time / (double)AV_TIME_BASE : 0.0;
     int ret;
 
     ret = append_autorotate_filter(&ctx->video, video_filter, sizeof(video_filter));
     if (ret < 0)
         return ret;
 
-    if (fabs(ctx->options.playback_rate - 1.0) > 1e-9) {
-        snprintf(part, sizeof(part), "setpts=PTS/%.9f", ctx->options.playback_rate);
+    if (fabs(ctx->options.playback_rate - 1.0) > 1e-9 || fabs(origin) > 1e-9) {
+        snprintf(part, sizeof(part), "setpts=(PTS-(%.9f)/TB)/%.9f",
+                 origin, ctx->options.playback_rate);
         ret = append_filter(video_filter, sizeof(video_filter), part);
         if (ret < 0) return ret;
     }
@@ -938,7 +962,10 @@ static int init_filters(RunnerContext *ctx)
     if (ret < 0) return ret;
     ret = append_filter(video_filter, sizeof(video_filter), "format=pix_fmts=yuv420p");
     if (ret < 0) return ret;
-    ret = append_filter(video_filter, sizeof(video_filter), "setsar=1");
+    snprintf(part, sizeof(part), "setsar=%d/%d",
+             ctx->video.enc_ctx->sample_aspect_ratio.num,
+             ctx->video.enc_ctx->sample_aspect_ratio.den);
+    ret = append_filter(video_filter, sizeof(video_filter), part);
     if (ret < 0) return ret;
 
     ret = init_filter(&ctx->video, video_filter);
@@ -948,6 +975,15 @@ static int init_filters(RunnerContext *ctx)
     }
 
     if (ctx->have_audio) {
+        if (fabs(origin) > 1e-9 || fabs(ctx->options.playback_rate - 1.0) > 1e-9) {
+            // asetrate changes the sample clock itself. Scaling its PTS as
+            // well would shrink pitch-shifted audio twice.
+            const double pts_rate = ctx->options.preserve_pitch
+                ? ctx->options.playback_rate : 1.0;
+            snprintf(part, sizeof(part), "asetpts=(PTS-(%.9f)/TB)/%.9f", origin, pts_rate);
+            ret = append_filter(audio_filter, sizeof(audio_filter), part);
+            if (ret < 0) return ret;
+        }
         if (fabs(ctx->options.playback_rate - 1.0) > 1e-9) {
             if (ctx->options.preserve_pitch) {
                 ret = append_atempo_chain(ctx->options.playback_rate, audio_filter, sizeof(audio_filter));
@@ -1096,8 +1132,12 @@ static void report_progress(RunnerContext *ctx, const AVPacket *packet)
         return;
 
     stream = ctx->ifmt_ctx->streams[packet->stream_index];
-    progress = (double)av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q) /
-               (double)ctx->duration_us;
+    // Progress is relative to media start, not the absolute timestamp origin.
+    // MPEG-TS and externally trimmed MP4 can begin seconds into the timeline.
+    int64_t elapsed_us = av_rescale_q(timestamp, stream->time_base, AV_TIME_BASE_Q);
+    if (ctx->ifmt_ctx->start_time != AV_NOPTS_VALUE)
+        elapsed_us -= ctx->ifmt_ctx->start_time;
+    progress = (double)elapsed_us / (double)ctx->duration_us;
     progress = FFMIN(1.0, FFMAX(0.0, progress));
     if (progress - ctx->last_progress >= 0.005) {
         printf(PROGRESS_PREFIX " %.6f\n", progress);
@@ -1161,6 +1201,15 @@ static int64_t measured_kbps(const PacketMeasure *measure, double duration_secon
     return (int64_t)llround((measure->bytes * 8.0) / duration_seconds / 1000.0);
 }
 
+// Expose per-stream offsets for accurate A/V sync checks, including nonzero
+// container start timestamps. Missing stream timestamps are reported as zero.
+static double stream_start_seconds_or_zero(const AVStream *stream)
+{
+    if (!stream || stream->start_time == AV_NOPTS_VALUE)
+        return 0.0;
+    return stream->start_time * av_q2d(stream->time_base);
+}
+
 static int inspect_media(const RunnerOptions *options)
 {
     AVFormatContext *format = NULL;
@@ -1185,6 +1234,7 @@ static int inspect_media(const RunnerOptions *options)
     int display_width;
     int display_height;
     AVRational fps;
+    AVRational sar;
 
     ret = avformat_open_input(&format, options->input_path, NULL, NULL);
     if (ret < 0) goto end;
@@ -1199,15 +1249,19 @@ static int inspect_media(const RunnerOptions *options)
     video_stream = format->streams[video_index];
     if (audio_index >= 0) audio_stream = format->streams[audio_index];
 
-    packet = av_packet_alloc();
-    if (!packet) { ret = AVERROR(ENOMEM); goto end; }
-    while ((ret = av_read_frame(format, packet)) >= 0) {
-        measure_packet(&video, packet, video_stream);
-        if (audio_stream) measure_packet(&audio, packet, audio_stream);
-        av_packet_unref(packet);
+    // Stream-existence checks must not scan a large media file in full.
+    // Keep full packet measurements for ordinary detailed inspections.
+    if (!options->inspect_fast) {
+        packet = av_packet_alloc();
+        if (!packet) { ret = AVERROR(ENOMEM); goto end; }
+        while ((ret = av_read_frame(format, packet)) >= 0) {
+            measure_packet(&video, packet, video_stream);
+            if (audio_stream) measure_packet(&audio, packet, audio_stream);
+            av_packet_unref(packet);
+        }
+        if (ret == AVERROR_EOF) ret = 0;
+        if (ret < 0) goto end;
     }
-    if (ret == AVERROR_EOF) ret = 0;
-    if (ret < 0) goto end;
 
     duration = format->duration > 0 ? format->duration / (double)AV_TIME_BASE : NAN;
     video_duration = stream_duration_seconds(format, video_stream, &video);
@@ -1230,23 +1284,29 @@ static int inspect_media(const RunnerOptions *options)
         }
     }
     fps = av_guess_frame_rate(format, video_stream, NULL);
+    sar = av_guess_sample_aspect_ratio(format, video_stream, NULL);
+    if (sar.num <= 0 || sar.den <= 0)
+        sar = (AVRational){1, 1};
 
     out = fopen(options->inspect_output_path, "wb");
     if (!out) { ret = AVERROR(errno); goto end; }
     fprintf(out,
             "{\"duration\":%.6f,\"video\":{\"codec\":\"%s\",\"width\":%d,\"height\":%d,"
             "\"displayWidth\":%d,\"displayHeight\":%d,\"rotation\":%.0f,\"hasDisplayMatrix\":%s,"
-            "\"fps\":%.6f,\"bitRateKbps\":%lld,\"packetBytes\":%lld},\"audio\":",
+            "\"fps\":%.6f,\"sarNum\":%d,\"sarDen\":%d,\"startSeconds\":%.6f,"
+            "\"bitRateKbps\":%lld,\"packetBytes\":%lld},\"audio\":",
             isfinite(duration) ? duration : 0.0,
             avcodec_get_name(video_stream->codecpar->codec_id),
             video_stream->codecpar->width, video_stream->codecpar->height,
             display_width, display_height, rotation, has_matrix ? "true" : "false",
             (fps.num > 0 && fps.den > 0) ? av_q2d(fps) : 0.0,
+            sar.num, sar.den, stream_start_seconds_or_zero(video_stream),
             (long long)video_kbps, (long long)video.bytes);
     if (audio_stream) {
         fprintf(out,
-                "{\"codec\":\"%s\",\"bitRateKbps\":%lld,\"packetBytes\":%lld}",
+                "{\"codec\":\"%s\",\"startSeconds\":%.6f,\"bitRateKbps\":%lld,\"packetBytes\":%lld}",
                 avcodec_get_name(audio_stream->codecpar->codec_id),
+                stream_start_seconds_or_zero(audio_stream),
                 (long long)audio_kbps, (long long)audio.bytes);
     } else {
         fputs("null", out);

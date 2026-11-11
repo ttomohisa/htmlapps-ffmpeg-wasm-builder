@@ -62,6 +62,14 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@v2.2.0
 
+      - name: Generate synthetic speed-change regression fixture
+        if: ${{ matrix.profile == 'video-speed-changer' }}
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          bash tests/fixtures/generate-speed-edge-fixtures.sh
+
       - name: Source checks
         shell: pwsh
         run: ./scripts/check-repository.ps1

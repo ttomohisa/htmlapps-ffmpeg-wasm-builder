@@ -47,6 +47,7 @@
 --enable-filter=format
 --enable-filter=setsar
 --enable-filter=setpts
+--enable-filter=asetpts
 --enable-filter=atempo
 --enable-filter=asetrate
 --enable-filter=aresample

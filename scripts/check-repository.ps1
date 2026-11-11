@@ -168,6 +168,7 @@ Require-Text $buildScript 'PTHREAD_POOL_SIZE' "Multi-thread builds must declare 
 Require-Text $buildScript "--disable-programs" "WASM build must not link the upstream ffmpeg CLI."
 Require-Text $buildScript "-sEXPORT_NAME=createFFmpegCore" "WASM factory name must stay stable."
 Require-Text $buildScript "mainScriptUrlOrBlob" "WASM build must allow Blob-hosted main script URLs for pthread workers."
+Require-Text $buildScript "runners/pthread-shutdown.post.js" "All MT variants must include the common pthread cleanup hook."
 Require-Text $buildScript "-sUSE_ZLIB=1" "Profiles that request zlib must use the pinned Emscripten zlib system port."
 Require-Text $buildScript "-sUSE_FREETYPE=1" "Profiles that request drawtext must link the pinned Emscripten FreeType port."
 Require-Text $buildScript "-sUSE_HARFBUZZ=1" "Profiles that request drawtext must link the pinned Emscripten HarfBuzz port."
@@ -290,8 +291,10 @@ Require-Text $speedRunner "--rate" "Video Speed Changer runner must expose a bou
 Require-Text $runtime "videoSpeedChangerArgs" "Browser runtime must expose Video Speed Changer helper."
 $speedRunnerText = [IO.File]::ReadAllText($speedRunner)
 if ($speedRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Speed Changer runner must not call pthread APIs." }
-Require-Text $speedRunner '#define RUNNER_VERSION "1.10.6"' "Video Speed Changer runner must identify its explicit ST/MT contract."
-Require-Text $speedRunner "setpts=PTS/" "Video Speed Changer runner must adjust video timestamps."
+Require-Text $speedRunner '#define RUNNER_VERSION "1.10.7"' "Video Speed Changer runner must identify its explicit ST/MT contract."
+Require-Text $speedRunner "setpts=(PTS-" "Video Speed Changer runner must normalize video timestamps."
+Require-Text $speedRunner "asetpts=(PTS-" "Video Speed Changer runner must normalize audio timestamps."
+Require-Text $speedProfile "--enable-filter=asetpts" "Video Speed Changer must enable asetpts."
 Require-Text $speedRunner "stream->enc_ctx->time_base = input_stream->time_base" "Video Speed Changer must preserve a high-resolution input time base when available."
 Require-Text $speedRunner "frame_rate = av_mul_q(source_frame_rate, speed_q)" "Video Speed Changer must scale encoder frame rate with playback rate to avoid duplicate PTS."
 Require-Text $runtime "Recent FFmpeg log" "Browser runtime must preserve recent FFmpeg logs on runner failure."
@@ -589,7 +592,7 @@ Require-Text $readme "ffmpeg-filter-builder" "Japanese README must document the 
 Require-Text $readmeEn "ffmpeg-filter-builder" "English README must document the FFmpeg Filter Builder profile."
 
 $versionsText = [IO.File]::ReadAllText($versions)
-if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.6$') { throw "Builder version must be 1.10.6." }
+if ($versionsText -notmatch '(?m)^BUILDER_VERSION=1\.10\.7$') { throw "Builder version must be 1.10.7." }
 foreach ($requiredPin in @(
   'EMSDK_VERSION', 'EMSCRIPTEN_REPOSITORY', 'EMSCRIPTEN_REF', 'EMSCRIPTEN_COMMIT',
   'FFMPEG_REPOSITORY', 'FFMPEG_REF', 'FFMPEG_COMMIT',

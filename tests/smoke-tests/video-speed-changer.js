@@ -82,6 +82,7 @@ const runRate = async (rate, options = {}) => {
   const mode = noAudio ? "drop-audio" : (preservePitch ? "preserve-pitch" : "shift-pitch");
   const label = `${rate}x/${mode}${options.labelSuffix ? "/" + options.labelSuffix : ""}`;
   let lastProgress = 0;
+  const progressUpdates = [];
   append("case=" + label + " start");
   let result;
   threadLogs.length = 0;
@@ -101,6 +102,7 @@ const runRate = async (rate, options = {}) => {
       }),
       onProgress: (value) => {
         lastProgress = value;
+        progressUpdates.push(value);
         append("case=" + label + " progress=" + value.toFixed(3));
       },
       onLog: entry => {
@@ -128,7 +130,7 @@ const runRate = async (rate, options = {}) => {
   const duration = await durationOf(output);
   assertDuration(sourceDuration, rate, duration, label);
   append("case=" + label + " duration=" + duration.toFixed(3));
-  return { bytes: output, duration, label };
+  return { bytes: output, duration, label, progressUpdates };
 };
 
 append("case=inspect start");
@@ -142,6 +144,64 @@ assertRuntimeObserved();
 const inspectReport = BrowserFFmpeg.decodeJsonOutput(inspectResult, "/inspect.json");
 if (!inspectReport?.video?.width || !inspectReport?.video?.height || !inspectReport?.audio) throw new Error("Video Speed Changer inspect helper returned incomplete media information.");
 append("case=inspect ok");
+const fastResult = await runner.run({
+  files: [{ name: "/workerfs/input.mp4", data: inputFile, workerfs: true }],
+  outputs: ["/inspect-fast.json"],
+  args: BrowserFFmpeg.videoSpeedChangerInspectArgs({ input: "/workerfs/input.mp4", output: "/inspect-fast.json", fast: true }),
+  onLog: recordLog
+});
+const fastReport = BrowserFFmpeg.decodeJsonOutput(fastResult, "/inspect-fast.json");
+if (!fastReport?.video?.width || !fastReport?.audio) throw new Error("Fast audio inspection failed.");
+append("case=inspect-fast ok");
+
+
+if (speedEdgeFixture) {
+  append("case=offset-sar start");
+  const offsetSource = new File([speedEdgeFixture], "speed-offset-sar.mp4", { type: "video/mp4" });
+  const inspectFixture = async (media, label) => {
+    const result = await runner.run({
+      files: [{ name: "/workerfs/input.mp4", data: media, workerfs: true }],
+      outputs: ["/inspect-edge.json"],
+      args: BrowserFFmpeg.videoSpeedChangerInspectArgs({ input: "/workerfs/input.mp4", output: "/inspect-edge.json", fast: true })
+    });
+    if (result.exitCode !== 0) throw new Error(label + " inspection failed");
+    return BrowserFFmpeg.decodeJsonOutput(result, "/inspect-edge.json");
+  };
+  const sourceInfo = await inspectFixture(offsetSource, "source");
+  const sourceOffset = sourceInfo.audio?.startSeconds - sourceInfo.video?.startSeconds;
+  const sourceSar = sourceInfo.video?.sarNum / sourceInfo.video?.sarDen;
+  if (!Number.isFinite(sourceOffset) || Math.abs(sourceOffset - 0.378) > 0.08) {
+    throw new Error("Synthetic fixture lost its explicit audio offset: " + sourceOffset);
+  }
+  if (Math.abs(sourceInfo.video.startSeconds - 7) > 0.1 || Math.abs(sourceSar - 4 / 3) > 0.02) {
+    throw new Error("Synthetic fixture lost nonzero timestamps or non-square pixels");
+  }
+  for (const preservePitch of [true, false]) {
+    const mode = preservePitch ? "preserve" : "shift";
+    const converted = await runRate(2, {
+      inputFile: offsetSource,
+      sourceDuration: 2.399,
+      preservePitch,
+      labelSuffix: "offset-sar-" + mode
+    });
+    if (!converted.progressUpdates.length || converted.progressUpdates[0] >= 0.5) {
+      throw new Error(mode + " progress completed too early for a video starting at 7 seconds");
+    }
+    const resultInfo = await inspectFixture(new File([converted.bytes], "converted.mp4", { type: "video/mp4" }), mode);
+    const outputOffset = resultInfo.audio?.startSeconds - resultInfo.video?.startSeconds;
+    const expectedOffset = sourceOffset / 2;
+    if (!Number.isFinite(outputOffset) || Math.abs(outputOffset - expectedOffset) > 0.10) {
+      throw new Error(mode + " A/V offset mismatch: " + outputOffset + " expected " + expectedOffset);
+    }
+    const outputSar = resultInfo.video?.sarNum / resultInfo.video?.sarDen;
+    if (!Number.isFinite(outputSar) || Math.abs(outputSar - sourceSar) > 0.02) {
+      throw new Error(mode + " display aspect ratio changed: SAR=" + outputSar + " expected " + sourceSar);
+    }
+    append("case=offset-sar-" + mode + " ok;offset=" + outputOffset.toFixed(3) + ";sar=" + outputSar.toFixed(3));
+  }
+} else {
+  append("case=offset-sar SKIPPED (optional native FFmpeg fixture absent in local build)");
+}
 
 append("case=abort start");
 const abortController = new AbortController();

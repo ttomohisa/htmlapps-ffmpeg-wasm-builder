@@ -196,9 +196,15 @@ else
 fi
 
 post_js_flags=()
-if [[ "$PROFILE" == "video-reverse" && "$THREADING_MODE" == "multi-thread" ]]; then
-  pthread_cleanup_post_js="/workspace/runners/video-reverse-pthread-shutdown.post.js"
-  [[ -s "$pthread_cleanup_post_js" ]] || fail "Video-reverse pthread cleanup post-JS is missing."
+if [[ "$THREADING_MODE" == "multi-thread" ]]; then
+  # The common browser runner requires this cleanup hook for every MT variant.
+  # Keep the pre-existing reverse source path unchanged for provenance checks.
+  if [[ "$PROFILE" == "video-reverse" ]]; then
+    pthread_cleanup_post_js="/workspace/runners/video-reverse-pthread-shutdown.post.js"
+  else
+    pthread_cleanup_post_js="/workspace/runners/pthread-shutdown.post.js"
+  fi
+  [[ -s "$pthread_cleanup_post_js" ]] || fail "MT pthread cleanup post-JS is missing."
   post_js_flags=(--post-js "$pthread_cleanup_post_js")
 fi
 
