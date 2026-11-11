@@ -130,3 +130,14 @@ test('fast audio inspection, synchronized A/V offsets and SAR are implemented', 
   assert.ok(runtime.includes('args.push("--inspect-fast")'));
   assert.ok(flags.includes('--enable-filter=asetpts'));
 });
+
+test('all MT profiles export the pthread cleanup hook before returning output', () => {
+  const build = read('scripts/build-ffmpeg.sh');
+  const generic = read('runners/pthread-shutdown.post.js');
+  const runtime = read('runtime/browser-ffmpeg.js');
+  assert.ok(build.includes('if [[ "$THREADING_MODE" == "multi-thread" ]]'));
+  assert.ok(build.includes('runners/pthread-shutdown.post.js'));
+  assert.ok(build.includes('post_js_flags=(--post-js "$pthread_cleanup_post_js")'));
+  assert.ok(generic.includes('PThread.terminateAllThreads()'));
+  assert.ok(runtime.includes('core.shutdownPthreadWorkers()'));
+});
