@@ -75,6 +75,7 @@ __TIMING_HELPERS__
         if (threadingMode === "multi-thread" && !crossOriginIsolated) throw new Error("Multi-thread smoke test requires cross-origin isolation.");
         const input = decodeBase64("smoke-input");
 __TIMING_FIXTURES__
+__SPEED_EDGE_FIXTURE__
 __SMOKE_TEST_BODY__
       } catch (error) {
         fail(error);

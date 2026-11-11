@@ -1197,6 +1197,15 @@ static int64_t measured_kbps(const PacketMeasure *measure, double duration_secon
     return (int64_t)llround((measure->bytes * 8.0) / duration_seconds / 1000.0);
 }
 
+// Expose per-stream offsets for accurate A/V sync checks, including nonzero
+// container start timestamps. Missing stream timestamps are reported as zero.
+static double stream_start_seconds_or_zero(const AVStream *stream)
+{
+    if (!stream || stream->start_time == AV_NOPTS_VALUE)
+        return 0.0;
+    return stream->start_time * av_q2d(stream->time_base);
+}
+
 static int inspect_media(const RunnerOptions *options)
 {
     AVFormatContext *format = NULL;
@@ -1221,6 +1230,7 @@ static int inspect_media(const RunnerOptions *options)
     int display_width;
     int display_height;
     AVRational fps;
+    AVRational sar;
 
     ret = avformat_open_input(&format, options->input_path, NULL, NULL);
     if (ret < 0) goto end;
@@ -1270,23 +1280,29 @@ static int inspect_media(const RunnerOptions *options)
         }
     }
     fps = av_guess_frame_rate(format, video_stream, NULL);
+    sar = av_guess_sample_aspect_ratio(format, video_stream, NULL);
+    if (sar.num <= 0 || sar.den <= 0)
+        sar = (AVRational){1, 1};
 
     out = fopen(options->inspect_output_path, "wb");
     if (!out) { ret = AVERROR(errno); goto end; }
     fprintf(out,
             "{\"duration\":%.6f,\"video\":{\"codec\":\"%s\",\"width\":%d,\"height\":%d,"
             "\"displayWidth\":%d,\"displayHeight\":%d,\"rotation\":%.0f,\"hasDisplayMatrix\":%s,"
-            "\"fps\":%.6f,\"bitRateKbps\":%lld,\"packetBytes\":%lld},\"audio\":",
+            "\"fps\":%.6f,\"sarNum\":%d,\"sarDen\":%d,\"startSeconds\":%.6f,"
+            "\"bitRateKbps\":%lld,\"packetBytes\":%lld},\"audio\":",
             isfinite(duration) ? duration : 0.0,
             avcodec_get_name(video_stream->codecpar->codec_id),
             video_stream->codecpar->width, video_stream->codecpar->height,
             display_width, display_height, rotation, has_matrix ? "true" : "false",
             (fps.num > 0 && fps.den > 0) ? av_q2d(fps) : 0.0,
+            sar.num, sar.den, stream_start_seconds_or_zero(video_stream),
             (long long)video_kbps, (long long)video.bytes);
     if (audio_stream) {
         fprintf(out,
-                "{\"codec\":\"%s\",\"bitRateKbps\":%lld,\"packetBytes\":%lld}",
+                "{\"codec\":\"%s\",\"startSeconds\":%.6f,\"bitRateKbps\":%lld,\"packetBytes\":%lld}",
                 avcodec_get_name(audio_stream->codecpar->codec_id),
+                stream_start_seconds_or_zero(audio_stream),
                 (long long)audio_kbps, (long long)audio.bytes);
     } else {
         fputs("null", out);

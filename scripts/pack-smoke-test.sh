@@ -75,6 +75,15 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         done
       fi
       ;;
+    __SPEED_EDGE_FIXTURE__)
+      if [[ "$PROFILE" == "video-speed-changer" && -s "/workspace/tests/fixtures/speed-offset-sar.mp4" ]]; then
+        printf 'const speedEdgeFixture = Uint8Array.from(atob("' >> "$OUTPUT"
+        base64_one_line /workspace/tests/fixtures/speed-offset-sar.mp4 >> "$OUTPUT"
+        printf '"), c => c.charCodeAt(0));\n' >> "$OUTPUT"
+      else
+        printf 'const speedEdgeFixture = null;\n' >> "$OUTPUT"
+      fi
+      ;;
     __SMOKE_TEST_BODY__)
       sed 's/^/        /' "$SMOKE_BODY" >> "$OUTPUT"
       printf '\n' >> "$OUTPUT"
@@ -89,7 +98,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done < "$TEMPLATE"
 
-if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__TIMING_(HELPERS|FIXTURES)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|TEST_BODY)__' "$OUTPUT"; then
+if grep -Eq '__FFMPEG_(JS_GZIP_BASE64|WASM_GZIP_BASE64|RUNTIME)__|__TIMING_(HELPERS|FIXTURES)__|__THREADING_MODE__|__SMOKE_(INPUT_BASE64|TEST_BODY)__|__SPEED_EDGE_FIXTURE__' "$OUTPUT"; then
   fail "A smoke-test packaging placeholder remains in $OUTPUT"
 fi
 [[ -s "$OUTPUT" ]] || fail "Smoke-test HTML was not produced"
