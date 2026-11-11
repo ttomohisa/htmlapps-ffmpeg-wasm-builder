@@ -65,7 +65,10 @@ jobs:
       - name: Generate synthetic speed-change regression fixture
         if: ${{ matrix.profile == 'video-speed-changer' }}
         shell: bash
-        run: bash tests/fixtures/generate-speed-edge-fixtures.sh
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          bash tests/fixtures/generate-speed-edge-fixtures.sh
 
       - name: Source checks
         shell: pwsh
