@@ -321,10 +321,12 @@
     return args;
   };
 
-  const videoSpeedChangerInspectArgs = (options = {}) => [
-    "--input", options.input || "/workerfs/input.bin",
-    "--inspect-output", options.output || "/inspect.json"
-  ];
+  const videoSpeedChangerInspectArgs = (options = {}) => {
+    const args = ["--input", options.input || "/workerfs/input.bin",
+      "--inspect-output", options.output || "/inspect.json"];
+    if (options.fast === true) args.push("--inspect-fast");
+    return args;
+  };
 
   const videoCompressorInspectArgs = (options = {}) => [
     "--input", options.input || "/workerfs/input.bin",
