@@ -16,7 +16,7 @@ Build note: `buffer`, `buffersink`, `abuffer`, and `abuffersink` are public liba
 
 `v0.4.0` of the consuming app uses the full 0.25x to 4.00x range and all three audio modes through the same narrow public API.
 
-## Threading variants (Builder 1.10.6)
+## Threading variants (Builder 1.10.7)
 
 `./build.sh video-speed-changer` (or `build-video-speed-changer.bat`) builds and real-browser smoke-tests both explicit variants:
 
@@ -25,4 +25,6 @@ Build note: `buffer`, `buffersink`, `abuffer`, and `abuffersink` are public liba
 
 The MT budget matches Compressor: 8 prewarmed pthread Workers, 2 video decoder threads, 4 H.264 encoder threads and 1 x264 lookahead thread. Audio codecs and both filter graphs remain single-threaded. Nested Workers reuse the generated `ffmpeg.js`; no separate pthread worker asset is needed. This is a bounded concurrency contract, not a guaranteed speedup for every input/device.
 
-Tagged releases include `ffmpeg-wasm-video-speed-changer-single-thread-v1.10.6.zip` and `ffmpeg-wasm-video-speed-changer-multi-thread-v1.10.6.zip`, plus matching BUILDINFO. `ffmpeg-wasm-video-speed-changer-v1.10.6.zip` and `BUILDINFO-video-speed-changer.txt` remain byte-identical ST aliases. Both variants retain GPL-2.0-or-later notices and the matching corresponding-source archive.
+Tagged releases include `ffmpeg-wasm-video-speed-changer-single-thread-v1.10.7.zip` and `ffmpeg-wasm-video-speed-changer-multi-thread-v1.10.7.zip`, plus matching BUILDINFO. `ffmpeg-wasm-video-speed-changer-v1.10.7.zip` and `BUILDINFO-video-speed-changer.txt` remain byte-identical ST aliases. Both variants retain GPL-2.0-or-later notices and the matching corresponding-source archive.
+
+Fast metadata-only audio checks are available as `BrowserFFmpeg.videoSpeedChangerInspectArgs({ ..., fast: true })`; full inspection still scans packets for bitrate estimates. Video and audio use a common start-time origin, and the resulting MP4 preserves non-square-pixel display aspect ratios (including rotated sources).
