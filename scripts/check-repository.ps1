@@ -168,6 +168,7 @@ Require-Text $buildScript 'PTHREAD_POOL_SIZE' "Multi-thread builds must declare 
 Require-Text $buildScript "--disable-programs" "WASM build must not link the upstream ffmpeg CLI."
 Require-Text $buildScript "-sEXPORT_NAME=createFFmpegCore" "WASM factory name must stay stable."
 Require-Text $buildScript "mainScriptUrlOrBlob" "WASM build must allow Blob-hosted main script URLs for pthread workers."
+Require-Text $buildScript "runners/pthread-shutdown.post.js" "All MT variants must include the common pthread cleanup hook."
 Require-Text $buildScript "-sUSE_ZLIB=1" "Profiles that request zlib must use the pinned Emscripten zlib system port."
 Require-Text $buildScript "-sUSE_FREETYPE=1" "Profiles that request drawtext must link the pinned Emscripten FreeType port."
 Require-Text $buildScript "-sUSE_HARFBUZZ=1" "Profiles that request drawtext must link the pinned Emscripten HarfBuzz port."
