@@ -291,7 +291,9 @@ Require-Text $runtime "videoSpeedChangerArgs" "Browser runtime must expose Video
 $speedRunnerText = [IO.File]::ReadAllText($speedRunner)
 if ($speedRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Video Speed Changer runner must not call pthread APIs." }
 Require-Text $speedRunner '#define RUNNER_VERSION "1.10.7"' "Video Speed Changer runner must identify its explicit ST/MT contract."
-Require-Text $speedRunner "setpts=PTS/" "Video Speed Changer runner must adjust video timestamps."
+Require-Text $speedRunner "setpts=(PTS-" "Video Speed Changer runner must normalize video timestamps."
+Require-Text $speedRunner "asetpts=(PTS-" "Video Speed Changer runner must normalize audio timestamps."
+Require-Text $speedProfile "--enable-filter=asetpts" "Video Speed Changer must enable asetpts."
 Require-Text $speedRunner "stream->enc_ctx->time_base = input_stream->time_base" "Video Speed Changer must preserve a high-resolution input time base when available."
 Require-Text $speedRunner "frame_rate = av_mul_q(source_frame_rate, speed_q)" "Video Speed Changer must scale encoder frame rate with playback rate to avoid duplicate PTS."
 Require-Text $runtime "Recent FFmpeg log" "Browser runtime must preserve recent FFmpeg logs on runner failure."
