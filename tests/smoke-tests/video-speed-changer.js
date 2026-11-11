@@ -142,6 +142,15 @@ assertRuntimeObserved();
 const inspectReport = BrowserFFmpeg.decodeJsonOutput(inspectResult, "/inspect.json");
 if (!inspectReport?.video?.width || !inspectReport?.video?.height || !inspectReport?.audio) throw new Error("Video Speed Changer inspect helper returned incomplete media information.");
 append("case=inspect ok");
+const fastResult = await runner.run({
+  files: [{ name: "/workerfs/input.mp4", data: inputFile, workerfs: true }],
+  outputs: ["/inspect-fast.json"],
+  args: BrowserFFmpeg.videoSpeedChangerInspectArgs({ input: "/workerfs/input.mp4", output: "/inspect-fast.json", fast: true }),
+  onLog: recordLog
+});
+const fastReport = BrowserFFmpeg.decodeJsonOutput(fastResult, "/inspect-fast.json");
+if (!fastReport?.video?.width || !fastReport?.audio) throw new Error("Fast audio inspection failed.");
+append("case=inspect-fast ok");
 
 append("case=abort start");
 const abortController = new AbortController();
