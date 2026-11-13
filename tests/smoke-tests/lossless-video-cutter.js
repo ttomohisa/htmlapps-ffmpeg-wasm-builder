@@ -11,7 +11,33 @@ const result = await runner.run({
   }),
   onLog: ({ message }) => { messages.push(String(message)); append(message); }
 });
+// Keep the runtime alive for an independent end-of-range packet regression.
+const sourceVideo = TimingReaders.readMp4(input).video;
+if (!sourceVideo.pts.some((pts, index) =>
+  index > 0 && pts < sourceVideo.pts[index - 1])) {
+  throw new Error("The cutter smoke fixture must contain reordered B frames");
+}
+const boundary = 0.52;
+const tailResult = await runner.run({
+  files: [{ name: "/workerfs/boundary.mp4", data: new Blob([input], { type: "video/mp4" }), workerfs: true }],
+  outputs: ["/boundary.mp4"],
+  args: BrowserFFmpeg.losslessVideoCutterArgs({
+    input: "/workerfs/boundary.mp4", output: "/boundary.mp4", start: 0, end: boundary
+  })
+});
 runner.dispose();
+if (tailResult.exitCode !== 0 || tailResult.files?.length !== 1)
+  throw new Error("Reordered-frame boundary cut failed");
+const cutVideo = TimingReaders.readMp4(tailResult.files[0].data).video;
+const inputPts = sourceVideo.pts.map(value => value / sourceVideo.timescale);
+const outputPts = cutVideo.pts.map(value => value / cutVideo.timescale);
+const offset = Math.min(...outputPts) - Math.min(...inputPts);
+for (const sourcePts of inputPts.filter(value => value < boundary - 0.0001)) {
+  if (!outputPts.some(value => Math.abs(value - offset - sourcePts) < .002)) {
+    throw new Error("Cut dropped a pre-end B frame at " + sourcePts.toFixed(3) + "s");
+  }
+}
+
 
 if (result.exitCode !== 0) throw new Error("Runner exit code was " + result.exitCode);
 if (!result.files || result.files.length !== 1) throw new Error("Expected exactly one output file");
@@ -36,4 +62,4 @@ const actualStart = Number(actualStartMatch[1]);
 if (!Number.isFinite(actualStart) || actualStart < 0 || actualStart > 0.201) {
   throw new Error("Keyframe-aligned start must not move after the requested 0.20 s start: " + startLine);
 }
-pass("bytes=" + output.byteLength + "_actualStart=" + actualStart.toFixed(6));
+pass("bytes=" + output.byteLength + "_actualStart=" + actualStart.toFixed(6) + "_frames=" + cutVideo.sampleCount);
