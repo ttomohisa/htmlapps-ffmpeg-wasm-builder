@@ -1,7 +1,7 @@
 // Inspect the actual MP4 tracks and sample counts, not just codec-name strings.
 // The synthetic input has two AAC streams, and the old cutter dropped both
 // the second stream and the final audio packets near a B-frame boundary.
-function mp4AudioCounts(buffer) {
+function mp4StreamCounts(buffer, handler) {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const ascii = (offset) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
@@ -26,7 +26,7 @@ function mp4AudioCounts(buffer) {
     const mdia = find(boxes(track.start, track.end), 'mdia');
     const parts = boxes(mdia.start, mdia.end);
     const hdlr = find(parts, 'hdlr');
-    if (ascii(hdlr.start + 8) !== 'soun') return [];
+    if (ascii(hdlr.start + 8) !== handler) return [];
     const minf = find(parts, 'minf');
     const stbl = find(boxes(minf.start, minf.end), 'stbl');
     const stsz = find(boxes(stbl.start, stbl.end), 'stsz');
@@ -64,8 +64,8 @@ runner.dispose();
 if (tailResult.exitCode !== 0 || tailResult.files?.length !== 1)
   throw new Error("Reordered-frame boundary cut failed");
 const cutVideo = TimingReaders.readMp4(tailResult.files[0].data).video;
-const inputAudio = mp4AudioCounts(input);
-const cutAudio = mp4AudioCounts(tailResult.files[0].data);
+const inputAudio = mp4StreamCounts(input, 'soun');
+const cutAudio = mp4StreamCounts(tailResult.files[0].data, 'soun');
 if (inputAudio.length !== 2 || cutAudio.length !== 2)
   throw new Error('The cut must preserve both AAC tracks: ' + inputAudio + ' -> ' + cutAudio);
 // 48 kHz AAC packets are 1024 samples (~21.33ms); for a cut ending
@@ -73,6 +73,11 @@ if (inputAudio.length !== 2 || cutAudio.length !== 2)
 // 0.000..0.512s must remain. The old video-triggered break kept only 21-22.
 if (cutAudio.some(count => count < 25))
   throw new Error('Cut lost trailing AAC packets: sample counts=' + cutAudio.join(','));
+
+const cutSubtitles = mp4StreamCounts(tailResult.files[0].data, 'sbtl');
+if (mp4StreamCounts(input, 'sbtl').length !== 1 || cutSubtitles.length !== 1 ||
+    cutSubtitles[0] < 1)
+  throw new Error('Cut must preserve a supported mov_text subtitle track');
 
 const noAudioResult = await BrowserFFmpeg.loadEmbedded({coreJsText, wasmBytes});
 const noAudioCut = await noAudioResult.run({
@@ -84,7 +89,8 @@ const noAudioCut = await noAudioResult.run({
 });
 noAudioResult.dispose();
 if (noAudioCut.exitCode !== 0 || noAudioCut.files?.length !== 1 ||
-    mp4AudioCounts(noAudioCut.files[0].data).length !== 0)
+    mp4StreamCounts(noAudioCut.files[0].data, 'soun').length !== 0 ||
+    mp4StreamCounts(noAudioCut.files[0].data, 'sbtl').length !== 1)
   throw new Error('--no-audio must remove every audio track');
 
 const inputPts = sourceVideo.pts.map(value => value / sourceVideo.timescale);
@@ -128,4 +134,4 @@ const actualStart = Number(actualStartMatch[1]);
 if (!Number.isFinite(actualStart) || actualStart < 0 || actualStart > 0.201) {
   throw new Error("Keyframe-aligned start must not move after the requested 0.20 s start: " + startLine);
 }
-pass("bytes=" + output.byteLength + "_actualStart=" + actualStart.toFixed(6) + "_frames=" + cutVideo.sampleCount + "_audios=" + cutAudio.length);
+pass("bytes=" + output.byteLength + "_actualStart=" + actualStart.toFixed(6) + "_frames=" + cutVideo.sampleCount + "_audios=" + cutAudio.length + "_subtitles=" + cutSubtitles.length);
