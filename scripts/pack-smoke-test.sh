@@ -50,6 +50,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       if [[ "$PROFILE" == "video-compressor" || "$PROFILE" == "video-to-gif" || "$PROFILE" == "video-to-webp" ]]; then
         cat /workspace/tests/timing-readers.js /workspace/tests/timing-regressions.js >> "$OUTPUT"
         printf '\n' >> "$OUTPUT"
+      elif [[ "$PROFILE" == "lossless-video-cutter" ]]; then
+        cat /workspace/tests/timing-readers.js >> "$OUTPUT"
+        printf '\n' >> "$OUTPUT"
       elif [[ "$PROFILE" == "ffmpeg-filter-builder" ]]; then
         cat /workspace/tests/timing-readers.js /workspace/tests/filter-builder-timing-regressions.js >> "$OUTPUT"
         printf '\n' >> "$OUTPUT"
