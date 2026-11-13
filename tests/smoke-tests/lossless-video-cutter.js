@@ -30,11 +30,19 @@ if (tailResult.exitCode !== 0 || tailResult.files?.length !== 1)
   throw new Error("Reordered-frame boundary cut failed");
 const cutVideo = TimingReaders.readMp4(tailResult.files[0].data).video;
 const inputPts = sourceVideo.pts.map(value => value / sourceVideo.timescale);
+const inputDts = sourceVideo.dts.map(value => value / sourceVideo.timescale);
 const outputPts = cutVideo.pts.map(value => value / cutVideo.timescale);
 const offset = Math.min(...outputPts) - Math.min(...inputPts);
-for (const sourcePts of inputPts.filter(value => value < boundary - 0.0001)) {
+// A reference P picture can be shown beyond the end but decoded BEFORE
+// trailing B pictures. Checking only pre-end PTS would miss this corruption.
+if (!inputPts.some((value, index) => value >= boundary && inputDts[index] < boundary))
+  throw new Error("The B-frame fixture lacks a post-end reference packet");
+for (let index = 0; index < inputPts.length; index++) {
+  const sourcePts = inputPts[index];
+  if (sourcePts >= boundary - 0.0001 && inputDts[index] >= boundary - 0.0001)
+    continue;
   if (!outputPts.some(value => Math.abs(value - offset - sourcePts) < .002)) {
-    throw new Error("Cut dropped a pre-end B frame at " + sourcePts.toFixed(3) + "s");
+    throw new Error("Cut dropped a pre-end B frame or its reference at " + sourcePts.toFixed(3) + "s");
   }
 }
 
