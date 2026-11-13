@@ -4,17 +4,29 @@ cd "$(dirname "$0")/../.."
 output="tests/fixtures/lossless-bframes.mp4"
 command -v ffmpeg >/dev/null || { echo "Native ffmpeg with libx264 is required for the lossless cutter regression fixture" >&2; exit 1; }
 command -v ffprobe >/dev/null || { echo "Native ffprobe is required for fixture validation" >&2; exit 1; }
+subtitle_file="$(mktemp --suffix=.srt)"
+trap 'rm -f "$subtitle_file"' EXIT
+cat > "$subtitle_file" <<'SRT'
+1
+00:00:00,000 --> 00:00:00,480
+Synthetic subtitle
+
+2
+00:00:01,000 --> 00:00:02,000
+Second synthetic subtitle
+SRT
 ffmpeg -hide_banner -loglevel error -y \
   -f lavfi -i 'testsrc2=size=128x72:rate=25:duration=3' \
   -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=3' \
   -f lavfi -i 'sine=frequency=660:sample_rate=48000:duration=3' \
-  -map 0:v:0 -map 1:a:0 -map 2:a:0 \
+  -f srt -i "$subtitle_file" \
+  -map 0:v:0 -map 1:a:0 -map 2:a:0 -map 3:s:0 \
   -c:v libx264 -preset veryfast -crf 35 -pix_fmt yuv420p \
   -x264-params 'bframes=3:b-adapt=0:keyint=50:min-keyint=50:scenecut=0' \
-  -c:a aac -b:a 40k -shortest -movflags +faststart "$output"
+  -c:a aac -b:a 40k -c:s mov_text -movflags +faststart "$output"
 if ! ffprobe -v error -select_streams v:0 -show_entries frame=pict_type \
     -of csv=p=0 "$output" | grep -q 'B'; then
   echo "Synthetic cutter input must contain reordered B frames" >&2
   exit 1
 fi
-echo "Generated $output with H.264 B frames + two AAC audio tracks"
+echo "Generated $output with H.264 B frames + two AAC tracks + mov_text subtitles"
