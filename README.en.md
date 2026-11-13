@@ -32,6 +32,13 @@ The Filter Builder runner exposes `BrowserFFmpeg.ffmpegFilterBuilderArgs(...)` a
 
 For embedded MT use, `BrowserFFmpeg.loadEmbedded(...)` accepts `threading: "multi-thread"`. Emscripten 6.x reuses the generated main JS as its pthread Worker program, so the runtime passes the Blob-hosted `ffmpeg.js` through `mainScriptUrlOrBlob` and refuses MT startup when cross-origin isolation is unavailable.
 
+## v1.10.8 Lossless Video Cutter
+
+Addresses truncated trailing H.264 B-frame and AAC packets by respecting
+decode order, while preserving compatible additional audio/subtitle streams.
+Output starts at a decodable keyframe and may retain necessary end references.
+The runtime remains a local WORKERFS-based, LGPL stream-copy profile.
+
 ## Public releases
 
 v1.10.2 fixes final video-frame durations and half-open preview endpoints in FFmpeg Filter Builder, for both single-thread and multi-thread runtimes. It covers original/VFR, one-frame, explicit-FPS and app-generated constant-speed chains, while keeping the v1.10.1 profile set and dependency pins, including **Video Audio Extractor**. The tag workflow rebuilds and real-browser smoke-tests every release profile before publishing.

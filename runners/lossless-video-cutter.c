@@ -45,7 +45,7 @@
 #include <libavutil/mem.h>
 
 #define PROGRESS_PREFIX "__FFMPEG_WASM_PROGRESS__"
-#define RUNNER_VERSION "1.5.0"
+#define RUNNER_VERSION "1.5.1"
 
 typedef struct RunnerOptions {
     const char *input_path;
@@ -151,6 +151,39 @@ static int64_t packet_time_us(const AVPacket *packet, const AVStream *stream)
     return av_rescale_q(ts, stream->time_base, AV_TIME_BASE_Q);
 }
 
+/* A video packet may be presented later than it is decoded (B frames).
+ * Only decode timestamps can prove that every earlier presentation packet
+ * has already been read. Missing DTS means we must continue until EOF. */
+static int64_t packet_decode_time_us(const AVPacket *packet, const AVStream *stream)
+{
+    if (packet->dts == AV_NOPTS_VALUE)
+        return AV_NOPTS_VALUE;
+    return av_rescale_q(packet->dts, stream->time_base, AV_TIME_BASE_Q);
+}
+
+static int all_media_streams_past_end(const AVFormatContext *input,
+                                      const int *stream_map,
+                                      const int64_t *decode_watermarks,
+                                      int64_t requested_end_abs_us)
+{
+    unsigned int i;
+    if (requested_end_abs_us <= 0)
+        return 0;
+    for (i = 0; i < input->nb_streams; i++) {
+        enum AVMediaType type;
+        if (stream_map[i] < 0)
+            continue;
+        type = input->streams[i]->codecpar->codec_type;
+        /* Subtitles can be sparse; audio/video DTS determines the stop. */
+        if (type != AVMEDIA_TYPE_VIDEO && type != AVMEDIA_TYPE_AUDIO)
+            continue;
+        if (decode_watermarks[i] == AV_NOPTS_VALUE ||
+            decode_watermarks[i] < requested_end_abs_us)
+            return 0;
+    }
+    return 1;
+}
+
 static int add_output_stream(AVFormatContext *output,
                              AVStream *input_stream,
                              int input_index,
@@ -231,7 +264,7 @@ static int run_cut(const RunnerOptions *options)
     AVDictionary *mux_options = NULL;
     int *stream_map = NULL;
     int video_index = -1;
-    int audio_index = -1;
+    int64_t *decode_watermarks = NULL;
     int64_t input_origin_us = 0;
     int64_t requested_start_us = seconds_to_us(options->start_seconds);
     int64_t requested_end_us = options->end_seconds > 0.0 ? seconds_to_us(options->end_seconds) : 0;
@@ -262,12 +295,6 @@ static int run_cut(const RunnerOptions *options)
         av_log(NULL, AV_LOG_ERROR, "No video stream was found.\n");
         goto end;
     }
-    if (!options->no_audio) {
-        int found_audio = av_find_best_stream(input, AVMEDIA_TYPE_AUDIO, -1, video_index, NULL, 0);
-        if (found_audio >= 0)
-            audio_index = found_audio;
-    }
-
     if (input->start_time != AV_NOPTS_VALUE)
         input_origin_us = input->start_time;
     requested_start_abs_us = input_origin_us + requested_start_us;
@@ -349,18 +376,33 @@ static int run_cut(const RunnerOptions *options)
         ret = AVERROR(ENOMEM);
         goto end;
     }
-    for (i = 0; i < input->nb_streams; i++)
-        stream_map[i] = -1;
-
-    ret = add_output_stream(output, input->streams[video_index], video_index, stream_map);
-    if (ret < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Could not create the output video stream: %s\n", av_err2str(ret));
+    decode_watermarks = av_malloc_array(input->nb_streams, sizeof(*decode_watermarks));
+    if (!decode_watermarks) {
+        ret = AVERROR(ENOMEM);
         goto end;
     }
-    if (audio_index >= 0) {
-        ret = add_output_stream(output, input->streams[audio_index], audio_index, stream_map);
+    for (i = 0; i < input->nb_streams; i++) {
+        enum AVMediaType type = input->streams[i]->codecpar->codec_type;
+        stream_map[i] = -1;
+        decode_watermarks[i] = AV_NOPTS_VALUE;
+        if ((int)i != video_index &&
+            type != AVMEDIA_TYPE_AUDIO && type != AVMEDIA_TYPE_SUBTITLE)
+            continue;
+        if ((int)i != video_index && type == AVMEDIA_TYPE_AUDIO && options->no_audio)
+            continue;
+        /* Unmappable subtitle codecs must not make an otherwise valid video
+         * cut fail. Report omissions explicitly rather than silently dropping. */
+        if (type == AVMEDIA_TYPE_SUBTITLE &&
+            avformat_query_codec(output->oformat, input->streams[i]->codecpar->codec_id,
+                                 FF_COMPLIANCE_NORMAL) == 0) {
+            av_log(NULL, AV_LOG_WARNING,
+                   "lossless-cut: omitted-subtitle-stream=%u (unsupported by output container)\n", i);
+            continue;
+        }
+        ret = add_output_stream(output, input->streams[i], i, stream_map);
         if (ret < 0) {
-            av_log(NULL, AV_LOG_ERROR, "Could not create the output audio stream: %s\n", av_err2str(ret));
+            av_log(NULL, AV_LOG_ERROR, "Could not copy stream %u: %s\n",
+                   i, av_err2str(ret));
             goto end;
         }
     }
@@ -391,7 +433,8 @@ static int run_cut(const RunnerOptions *options)
         int64_t packet_abs_us;
         int64_t anchor_ts;
         int mapped_index;
-        int should_break = 0;
+        int64_t packet_decode_abs_us;
+        int reached_end;
 
         if (packet->stream_index < 0 || (unsigned int)packet->stream_index >= input->nb_streams) {
             av_packet_unref(packet);
@@ -405,16 +448,29 @@ static int run_cut(const RunnerOptions *options)
 
         in_stream = input->streams[packet->stream_index];
         packet_abs_us = packet_time_us(packet, in_stream);
+        packet_decode_abs_us = packet_decode_time_us(packet, in_stream);
+        if (packet_decode_abs_us != AV_NOPTS_VALUE &&
+            (in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ||
+             in_stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO))
+            decode_watermarks[packet->stream_index] = packet_decode_abs_us;
+        reached_end = all_media_streams_past_end(input, stream_map, decode_watermarks,
+                                                  requested_end_abs_us);
 
         if (packet_abs_us != AV_NOPTS_VALUE && packet_abs_us < actual_start_abs_us) {
             av_packet_unref(packet);
+            if (reached_end)
+                break;
             continue;
         }
-        if (requested_end_abs_us > 0 && packet_abs_us != AV_NOPTS_VALUE && packet_abs_us >= requested_end_abs_us) {
-            if (packet->stream_index == video_index)
-                should_break = 1;
+        if (requested_end_abs_us > 0 && packet_abs_us != AV_NOPTS_VALUE &&
+            packet_abs_us >= requested_end_abs_us &&
+            !(packet->stream_index == video_index &&
+              packet_decode_abs_us != AV_NOPTS_VALUE &&
+              packet_decode_abs_us < requested_end_abs_us)) {
+            /* Retain reference video packets decoded before the end, even if
+             * presented afterwards; trailing B frames need these references. */
             av_packet_unref(packet);
-            if (should_break)
+            if (reached_end)
                 break;
             continue;
         }
@@ -438,6 +494,8 @@ static int run_cut(const RunnerOptions *options)
         packets_written++;
         emit_progress(packet_abs_us, requested_start_abs_us, requested_end_abs_us,
                       input->duration, &last_progress);
+        if (reached_end)
+            break;
     }
 
     if (ret == AVERROR_EOF)
@@ -466,6 +524,7 @@ end:
         av_write_trailer(output);
     av_packet_free(&packet);
     av_freep(&stream_map);
+    av_freep(&decode_watermarks);
     av_dict_free(&mux_options);
     if (input)
         avformat_close_input(&input);
