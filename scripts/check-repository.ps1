@@ -245,7 +245,10 @@ foreach ($deprecated in @('"pix_fmts"', '"sample_fmts"', '"sample_rates"', '"ch_
 
 $cutterRunnerText = [IO.File]::ReadAllText($cutterRunner)
 if ($cutterRunnerText -match 'pthread_(create|join|mutex|cond)') { throw "Cutter runner must not call pthread APIs." }
-Require-Text $cutterRunner '#define RUNNER_VERSION "1.5.0"' "Cutter runner version must remain 1.5.0 when unchanged."
+Require-Text $cutterRunner '#define RUNNER_VERSION "1.5.1"' "Cutter runner version must be 1.5.1 for reordered packet boundary fixes."
+Require-Text $cutterRunner "all_media_streams_past_end" "Cutter must not stop on first presentation timestamp past end."
+Require-Text $cutterRunner "packet_decode_time_us" "Cutter must use DTS for safe read termination."
+Require-Text $cutterSmoke "Cut dropped a pre-end B frame" "Cutter smoke must check B-frame tail packets."
 Require-Text $cutterRunner "av_seek_frame" "Cutter must seek to a keyframe."
 Require-Text $cutterRunner "AV_PKT_FLAG_KEY" "Cutter must anchor output to a keyframe."
 Require-Text $cutterRunner "avcodec_parameters_copy" "Cutter must stream-copy codec parameters."
