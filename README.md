@@ -9,6 +9,16 @@
 
 Browser apps use `BrowserFFmpeg.videoAudioExtractorInspectArgs(...)` and `BrowserFFmpeg.videoAudioExtractorCopyArgs(...)`. The smoke test also keeps MKV multi-audio metadata/selection, MPEG-TS AAC -> M4A, and video-only coverage. AC-3, E-AC-3, and PCM/WAV remain deferred until dedicated browser compatibility cases are added.
 
+## v1.10.8 Lossless Video Cutter packet fix
+
+The lossless-video-cutter runner keeps the reordered H.264 reference frames
+needed to decode B frames at the end of a cut instead of stopping at the
+first video packet whose presentation time exceeds the selected end.
+Compatible additional AAC audio and subtitle streams are preserved.
+The final duration can extend slightly for necessary reference frames.
+Chrome smoke tests now use synthetic B frames and two AAC tracks.
+The profile remains stream copy, LGPL and WORKERFS-based, with MEMFS output.
+
 ## v1.9.9 Filter Builder multiple input
 
 `ffmpeg-filter-builder` now supports a dedicated 2-8 input complex-graph runner contract. Existing one-input Graphs continue to use the proven single-input path; multiple inputs use named libavfilter sources and explicit graph output labels. Both ST and MT variants are covered by the same real-browser smoke test.
