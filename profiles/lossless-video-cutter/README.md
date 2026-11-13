@@ -41,3 +41,13 @@ B frames. Test the saved file if exact frame boundaries matter.
 ## Large input files
 
 This profile exports Emscripten WORKERFS. In browser integrations pass the selected `File`/`Blob` with `workerfs: true` under a path such as `/workerfs/input.mp4`. WORKERFS is read-only and slice-backed, so the whole input does not need to be copied to MEMFS before FFmpeg starts. The output is still created in MEMFS in the current runtime.
+
+## Reproducible B-frame regression test
+
+The real-browser smoke must run with a synthetic H.264 input containing
+reordered B frames and AAC audio; the old one-second fixture contains no
+reordered frames. The CI job generates `tests/fixtures/lossless-bframes.mp4`
+using `tests/fixtures/generate-lossless-bframes.sh` and verifies that B frames
+are present. For a local `./build.sh lossless-video-cutter`, install native
+`ffmpeg` and `ffprobe` first. The script creates only synthetic media; it
+does not fetch files or use user videos.
