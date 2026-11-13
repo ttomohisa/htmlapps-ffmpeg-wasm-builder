@@ -7,6 +7,10 @@ PROFILE="${1:-video-compressor}"
 source "$ROOT/versions.env"
 [[ -f "$ROOT/profiles/$PROFILE/ffmpeg.flags" ]] || { echo "Missing profile: $PROFILE/ffmpeg.flags" >&2; exit 1; }
 [[ -f "$ROOT/profiles/$PROFILE/profile.env" ]] || { echo "Missing profile metadata: $PROFILE/profile.env" >&2; exit 1; }
+if [[ "$PROFILE" == "lossless-video-cutter" && ! -s "$ROOT/tests/fixtures/lossless-bframes.mp4" ]]; then
+  echo "Generating B-frame regression fixture (requires native ffmpeg + ffprobe on the host)"
+  bash "$ROOT/tests/fixtures/generate-lossless-bframes.sh"
+fi
 [[ -f "$ROOT/runners/$PROFILE.c" ]] || { echo "Missing runner: runners/$PROFILE.c" >&2; exit 1; }
 
 PROFILE_USE_X264="$(grep '^PROFILE_USE_X264=' "$ROOT/profiles/$PROFILE/profile.env" | tail -n 1 | cut -d= -f2- | tr -d '\r[:space:]')"
