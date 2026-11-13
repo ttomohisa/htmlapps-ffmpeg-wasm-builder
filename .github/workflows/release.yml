@@ -37,6 +37,13 @@ jobs:
           source ./versions.env
           test "${GITHUB_REF_NAME}" = "v${BUILDER_VERSION}"
 
+      - name: Generate synthetic B-frame and AAC regression fixture
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          bash tests/fixtures/generate-lossless-bframes.sh
+
       - name: Build and smoke-test release profiles
         shell: bash
         env:
